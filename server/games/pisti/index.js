@@ -1,0 +1,12 @@
+const express = require('express'); const crypto = require('crypto'); const { runtimeStore } = require('../../core/runtimeStore'); const { joinQueue, leaveQueue } = require('../../matchmaking/matchmakingService');
+const router = express.Router();
+const suits=['S','H','D','C'], ranks=['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+function deck(){return suits.flatMap(s=>ranks.map(r=>({s,r,id:`${r}${s}`}))).sort(()=>Math.random()-.5)}
+function cardScore(c){ if(c.r==='A')return 1;if(c.r==='J')return 1;if(c.r==='2'&&c.s==='C')return 2;if(c.r==='10'&&c.s==='D')return 3;return 0; }
+function createRoom(players){const d=deck();const roomId=`pisti_${crypto.randomUUID()}`;const room={roomId,players:players.map(p=>p.uid),turn:players[0].uid,deck:d.slice(8),hands:{[players[0].uid]:d.slice(0,4),[players[1].uid]:d.slice(4,8)},pile:[],scores:{[players[0].uid]:0,[players[1].uid]:0},createdAt:Date.now()};runtimeStore.rooms.set(roomId,room,2*3600000);return room;}
+function play(room,uid,cardId){if(room.turn!==uid)throw new Error('NOT_YOUR_TURN');const hand=room.hands[uid]||[];const idx=hand.findIndex(c=>c.id===cardId);if(idx<0)throw new Error('CARD_NOT_IN_HAND');const [card]=hand.splice(idx,1);const top=room.pile.at(-1);let captured=false,pisti=false;if(top&&(top.r===card.r||card.r==='J')){captured=true;pisti=room.pile.length===1;room.scores[uid]+=room.pile.reduce((a,c)=>a+cardScore(c),0)+cardScore(card)+(pisti?10:0);room.pile=[];}else room.pile.push(card);const other=room.players.find(p=>p!==uid);room.turn=other;if(!room.hands[uid].length&&!room.hands[other].length&&room.deck.length){for(const p of room.players)room.hands[p]=room.deck.splice(0,4)}return {captured,pisti,room};}
+router.post('/queue', (req,res)=>{const uid=String(req.body.uid||req.headers['x-playmatrix-user']||crypto.randomUUID());const result=joinQueue({game:'pisti',uid});if(result.matched) result.room=createRoom(result.players);res.json({ok:true,...result});});
+router.post('/queue/leave',(req,res)=>res.json(leaveQueue(String(req.body.uid||''))));
+router.get('/rooms/:id',(req,res)=>res.json({ok:true,room:runtimeStore.rooms.get(req.params.id)}));
+router.post('/rooms/:id/play',(req,res)=>{try{const room=runtimeStore.rooms.get(req.params.id);if(!room)return res.status(404).json({ok:false,error:'ROOM_NOT_FOUND'});const out=play(room,String(req.body.uid||''),String(req.body.cardId||''));runtimeStore.rooms.set(room.roomId,room,2*3600000);res.json({ok:true,...out});}catch(e){res.status(400).json({ok:false,error:e.message});}});
+module.exports={ router, createRoom, play };
