@@ -1,4 +1,0 @@
-const express=require('express');const { runOnce }=require('../../core/idempotencyService');const { initFirebaseAdmin }=require('../../config/firebaseAdmin');
-function createClassicRouter(game,{maxScore=10000,rewardPerPoint=0}={}){const router=express.Router();router.post('/submit',async(req,res)=>{const score=Math.max(0,Math.min(maxScore,Math.floor(Number(req.body.score)||0)));const uid=String(req.body.uid||req.headers['x-playmatrix-user']||'guest');const runId=String(req.body.runId||`${game}_${Date.now()}`);const {db}=initFirebaseAdmin();const result=await runOnce({key:`classic:${game}:${uid}:${runId}`,db,execute:async()=>({game,score,reward:Math.floor(score*rewardPerPoint)})});res.json({ok:true,game,score,...result});});return router;}module.exports={createClassicRouter};
-
-module.exports.router = module.exports.createClassicRouter('space',{maxScore:50000,rewardPerPoint:0});

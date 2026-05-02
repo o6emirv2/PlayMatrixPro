@@ -1,6 +1,0 @@
-const express = require('express'); const { requireAuth, requireAdmin } = require('../core/security'); const { initFirebaseAdmin } = require('../config/firebaseAdmin'); const { listAdminLogs, addAdminLog } = require('../admin/adminRuntimeLogStore'); const { runSafeFirestoreCleanup } = require('../core/firestoreCleanupService'); const router = express.Router();
-router.use(requireAuth, requireAdmin);
-router.get('/admin/runtime-logs', (req,res)=>res.json({ ok:true, logs:listAdminLogs() }));
-router.post('/admin/users/email', async (req,res)=>{ const uid=String(req.body.uid||''); const email=String(req.body.email||''); const { db, auth } = initFirebaseAdmin(); if (!uid || !email) return res.status(400).json({ ok:false, error:'UID_EMAIL_REQUIRED' }); if (auth) await auth.updateUser(uid,{ email }); if (db) await db.collection('users').doc(uid).set({ email, updatedAt:Date.now() }, { merge:true }); addAdminLog('email.update',{ uid }); res.json({ ok:true }); });
-router.post('/admin/cleanup/firestore', async (req,res)=>{ const { db } = initFirebaseAdmin(); const report = await runSafeFirestoreCleanup({ db, dryRun:req.body?.dryRun !== false }); addAdminLog('cleanup.firestore', report); res.json(report); });
-module.exports = router;
