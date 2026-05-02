@@ -112,7 +112,8 @@ function getEndpointCandidates() {
     }
   } catch (_) {}
 
-  if (!isProductionHost()) pushUnique(list, window.location.origin);
+  pushUnique(list, window.location.origin);
+  pushUnique(list, 'https://emirhan-siye.onrender.com');
   return list;
 }
 
@@ -240,7 +241,9 @@ export async function loadFirebaseWebConfig(options = {}) {
   try {
     runtime = await loadPublicRuntimeConfig(options);
   } catch (error) {
-    if (options.required === false) return sanitizeFirebaseConfig(readStaticRuntimeConfig()?.firebase || null);
+    if (options.required === false) return sanitizeFirebaseConfig(readStaticRuntimeConfig()?.firebase || null) || cloneCurrentFirebasePublicConfig();
+    const staticConfig = sanitizeFirebaseConfig(readStaticRuntimeConfig()?.firebase || null) || cloneCurrentFirebasePublicConfig();
+    if (staticConfig) return staticConfig;
     throw error;
   }
   const config = sanitizeFirebaseConfig(runtime?.firebase || null) || sanitizeFirebaseConfig(readStaticRuntimeConfig()?.firebase || null) || cloneCurrentFirebasePublicConfig();

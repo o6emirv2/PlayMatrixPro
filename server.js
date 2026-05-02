@@ -23,6 +23,7 @@ app.use(express.json({ limit: '512kb' }));
 app.use(apiLimiter);
 app.use(express.static(__dirname, { extensions: ['html'], maxAge: env.nodeEnv === 'production' ? '1h' : 0 }));
 app.get('/healthz', (req,res)=>res.json({ ok:true, service:'playmatrix', env:env.nodeEnv, time:Date.now() }));
+app.use('/api', require('./server/routes/compat.routes'));
 app.use('/api', require('./server/routes/auth.routes'));
 app.use('/api', require('./server/routes/user.routes'));
 app.use('/api', require('./server/routes/admin.routes'));
