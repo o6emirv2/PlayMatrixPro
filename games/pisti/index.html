@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PlayMatrix Pişti</title>
+  <link rel="stylesheet" href="/games/pisti/style.css">
+</head>
+<body>
+  <main class="game-shell">
+    <header class="game-topbar">
+      <a href="/" class="back-link">← PlayMatrix</a>
+      <div><p>Hızlı Eşleşme</p><h1>Pişti</h1></div>
+      <button id="quickMatchBtn">Hızlı Eşleş</button>
+    </header>
+    <section class="game-layout">
+      <aside class="panel">
+        <h2>Durum</h2>
+        <p id="statusText">Socket bağlantısı bekleniyor.</p>
+        <p class="muted" id="roomText">Oda yok</p>
+        <div id="scoreBox" class="score-box"></div>
+      </aside>
+      <section class="table-panel">
+        <h2>Masa</h2>
+        <div class="table-cards" id="tableCards"></div>
+        <h2>Elin</h2>
+        <div class="hand" id="handCards"></div>
+      </section>
+    </section>
+  </main>
+  <div id="toastRegion" class="toast-region"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/games/pisti/script.js" defer></script>
+</body>
+</html>

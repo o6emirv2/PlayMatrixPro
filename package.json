@@ -1,0 +1,24 @@
+{
+  "name": "playmatrix-clean",
+  "version": "4.0.0",
+  "description": "PlayMatrix clean modular production build",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check server/config/env.js && node --check server/config/firebaseAdmin.js && node --check server/core/runtimeStore.js && node --check server/core/smartDataRouter.js && node --check server/core/notificationService.js && node --check server/core/progressionService.js && node --check server/routes/auth.routes.js && node --check server/routes/user.routes.js && node --check server/routes/admin.routes.js && node --check server/routes/economy.routes.js && node --check server/routes/notification.routes.js && node --check server/matchmaking/matchmakingService.js && node --check server/games/chess/chess.module.js && node --check server/games/pisti/pisti.module.js && node --check server/games/crash/crash.module.js"
+  },
+  "dependencies": {
+    "chess.js": "^0.12.0",
+    "compression": "^1.7.4",
+    "express": "^4.18.3",
+    "express-rate-limit": "^7.2.0",
+    "firebase-admin": "^12.7.0",
+    "helmet": "^7.1.0",
+    "socket.io": "^4.7.5",
+    "xss": "^1.0.15"
+  }
+}
