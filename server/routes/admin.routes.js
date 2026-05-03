@@ -195,9 +195,12 @@ router.post('/admin/notifications/send', strictLimiter, (req, res) => {
 
 router.get('/admin/games', (_req, res) => {
   res.json({ ok: true, games: [
-    { slug:'snake', title:'Snake Pro', status:'online', backend:'/server/games/snake/index.js', data:'score-validation' },
-    { slug:'space', title:'Space Pro', status:'online', backend:'/server/games/space/index.js', data:'score-validation' },
-    { slug:'pattern-master', title:'Pattern Master', status:'online', backend:'/server/games/pattern-master/index.js', data:'score-validation' }
+    { slug:'crash', title:'Crash', status:'online', backend:'/server/games/crash/index.js', data:'in-memory-rounds-risk-table' },
+    { slug:'chess', title:'Satranç', status:'online', backend:'/server/games/chess/index.js', data:'room-state-move-validation' },
+    { slug:'pisti', title:'Pişti', status:'online', backend:'/server/games/pisti/index.js', data:'room-card-validation' },
+    { slug:'pattern-master', title:'Pattern Master', status:'online', backend:'/server/games/pattern-master/index.js', data:'score-xp-validation' },
+    { slug:'space-pro', title:'Space Pro', status:'online', backend:'/server/games/space-pro/index.js', data:'score-xp-validation' },
+    { slug:'snake-pro', title:'Snake Pro', status:'online', backend:'/server/games/snake-pro/index.js', data:'score-xp-validation' }
   ] });
 });
 
@@ -224,10 +227,5 @@ router.post('/admin/cleanup/firestore', strictLimiter, async (req,res) => {
   logAdmin(req, 'admin.cleanup.firestore', report);
   res.json(report);
 });
-
-
-router.get('/admin/market/products', (_req,res)=>{ try{ const { products } = require('../core/marketService'); res.json({ok:true,items:products()}); }catch(error){ res.status(500).json({ok:false,error:error.message}); } });
-router.get('/admin/crash/risk-table', (_req,res)=>{ res.json({ok:true,message:'Use /api/games/crash/risk-table'}); });
-router.get('/admin/support/runtime', (_req,res)=>{ const { runtimeStore } = require('../core/runtimeStore'); res.json({ok:true,messages:runtimeStore.support.values().slice(-200)}); });
 
 module.exports = router;

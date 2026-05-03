@@ -5543,13 +5543,3 @@ body, main, .app, .page, .content, .section, .modal, .modal-body, .sheet, .drawe
 button, a, input, textarea, select, [role="button"], .game-card, .nav-item { touch-action:manipulation; }
 .modal, .modal-body, .sheet, .drawer, .profile-sheet, .pm-modal, .pm-scrollable { touch-action:pan-y; max-height:min(86vh, calc(100dvh - 32px)); overflow-y:auto; }
 .progress-fill, .pm-level-progress-fill, [id$="ProgressFill"], [id*="ProgressFill"] { transition:width .65s cubic-bezier(.2,.9,.22,1), transform .65s cubic-bezier(.2,.9,.22,1); will-change:width; }
-
-
-/* PlayMatrix v7 mobile scroll hardening */
-html,body{min-height:100%;overscroll-behavior-y:none;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
-body{touch-action:pan-y;-webkit-overflow-scrolling:touch;overflow-x:hidden;}
-.main-shell,.app-shell,.page-shell,#app,.modal-body,.modal-content,.sheet-body,.social-panel,.profile-modal,.pm-scrollable{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;}
-button,a,[role="button"],.game-card{touch-action:manipulation;}
-.pm-modal-open body,body.pm-modal-open{overflow:hidden;}
-.pm-modal-open .modal-body,.pm-modal-open .modal-content,.pm-modal-open .sheet-body{overflow-y:auto;max-height:min(82vh,760px);}
-.level-fill,[data-progress],.pm-level-fill{transition:width .75s cubic-bezier(.2,.8,.2,1);will-change:width;}

@@ -751,7 +751,7 @@ function renderMessageStack(stream, messages, emptyTitle, emptyMessage, getIsSel
       }     }      async function createInviteForFriend(entry) {       try {
         if (!ensureAuthThen("Sosyal Merkez")) return;         const socket = await ensureRealtimeConnection();         if (!socket) throw new Error("Canlı bağlantı kurulamadı.");          if (!entry?.online) throw new Error("Bu oyuncu şu anda çevrimdışı.");
          const config = getSelectedInviteConfig();         let roomId = "";          if (config.gameKey === "chess") {
-          const payload = await fetchPrivate("/api/games/chess/create", "POST", {});           roomId = payload?.room?.id || "";         } else {           const payload = await fetchPrivate("/api/games/pisti/create", "POST", {             mode: config.mode,
+          const payload = await fetchPrivate("/api/chess/create", "POST", {});           roomId = payload?.room?.id || "";         } else {           const payload = await fetchPrivate("/api/pisti-online/create-private", "POST", {             mode: config.mode,
             bet: config.bet,             roomName: `${state.userData?.username || "PlayMatrix"} Özel Oda`,             password: ""           });           roomId = payload?.room?.id || "";
         }          if (!roomId) throw new Error("Davet odası hazırlanamadı.");          state.social.pendingInviteNavigation = {
           roomId,           gameKey: config.gameKey,           gameCode: config.gameKey,           gamePath: config.gameKey === "pisti" ? "/games/pisti" : "/games/chess",           targetUid: entry.uid
@@ -780,13 +780,13 @@ function renderMessageStack(stream, messages, emptyTitle, emptyMessage, getIsSel
         cancelBtn.addEventListener("click", () => cleanup(false));         confirmBtn.addEventListener("click", () => cleanup(true));         backdrop.addEventListener("click", (event) => {           if (event.target === backdrop) cleanup(false);         });
          actions.append(cancelBtn, confirmBtn);         dialog.append(titleEl, messageEl, actions);         backdrop.appendChild(dialog);         document.body.appendChild(backdrop);
       });     }      async function confirmPotentialCrashExit() {       try {
-        if (!auth.currentUser) return true;         const payload = await fetchPrivate("/api/games/crash/state");         if (!payload?.hasActiveBet) return true;         const warning = payload.hasRiskyBet           ? "Şu an otomatik çıkış tanımı olmayan aktif bir Crash turun var. Sayfadan çıkarsan tur devam eder ve sonuç riski sana ait olur. Yine de davete gitmek istiyor musun?"
+        if (!auth.currentUser) return true;         const payload = await fetchPrivate("/api/crash/active-bets");         if (!payload?.hasActiveBet) return true;         const warning = payload.hasRiskyBet           ? "Şu an otomatik çıkış tanımı olmayan aktif bir Crash turun var. Sayfadan çıkarsan tur devam eder ve sonuç riski sana ait olur. Yine de davete gitmek istiyor musun?"
           : "Şu an aktif Crash bahsin bulunuyor. Sayfadan ayrıldığında tur arka planda devam eder. Davete geçmek istediğinden emin misin?";         return await showActionDialog({           title: "Aktif Crash Bahsi Tespit Edildi",           message: warning,           confirmText: "Yine de Devam Et",
           cancelText: "Kal"         });       } catch (_) {         return true;       }
     }      function removeInviteToast(inviteId) {       const toast = state.inviteToasts.get(inviteId);       if (toast) toast.remove();
       state.inviteToasts.delete(inviteId);     }      async function handleIncomingInviteResponse(data, response) {       try {
         if (!data?.inviteId) return;         if (response === "accepted") {           const canContinue = await confirmPotentialCrashExit();           if (!canContinue) return; 
-          if (data.gameKey === "chess") {             await fetchPrivate("/api/games/chess/join", "POST", { roomId: data.roomId });           } else if (data.gameKey === "pisti") {             await fetchPrivate("/api/games/pisti/join", "POST", { roomId: data.roomId });           } else {
+          if (data.gameKey === "chess") {             await fetchPrivate("/api/chess/join", "POST", { roomId: data.roomId });           } else if (data.gameKey === "pisti") {             await fetchPrivate("/api/pisti-online/join", "POST", { roomId: data.roomId });           } else {
             throw new Error("Bilinmeyen davet türü.");           }         }          if (state.socket) {
           state.socket.emit("game:invite_response", {             inviteId: data.inviteId,             hostUid: data.hostUid,             roomId: data.roomId,             gameKey: data.gameKey,
             response           });         }          removeInviteToast(data.inviteId);

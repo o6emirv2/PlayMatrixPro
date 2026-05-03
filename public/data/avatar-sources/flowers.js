@@ -1,5 +1,5 @@
 // Generated from ÇİÇEK.JS.
-// Avatar URLs are normalized centrally in /public/data/avatar-catalog.js.
+// Avatar URLs are normalized centrally in public/data/avatar-catalog.js.
 export const FLOWER_AVATARS = Object.freeze([
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSts7yln9JS21-O6gYkcGbTQbqfLkiam1QjzipI20T04A&s=10",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT1sBhoIVU0Xxztm5-2I5-Gv8gpANd4Ue1R92gMAeQZ7g&s=10",

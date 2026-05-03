@@ -1,4 +1,242 @@
-const PMGame=(()=>{const API=(window.__PLAYMATRIX_API_URL__||location.origin).replace(/\/$/,'');const uid=localStorage.getItem('pm_uid')||localStorage.getItem('pm_user_uid')||'guest';function h(){const v={'Content-Type':'application/json','x-playmatrix-user':uid};const t=localStorage.getItem('pm_session_token');if(t)v['x-session-token']=t;return v;}async function req(path,opts={}){const r=await fetch(API+path,{cache:'no-store',credentials:'include',...opts,headers:{...h(),...(opts.headers||{})},body:opts.body&&typeof opts.body!=='string'?JSON.stringify(opts.body):opts.body});const p=await r.json().catch(()=>({ok:false,error:'BAD_JSON'}));if(!r.ok||p.ok===false)throw Object.assign(new Error(p.error||`HTTP_${r.status}`),{payload:p,status:r.status});return p;}function fmt(n){return Number(n||0).toLocaleString('tr-TR');}function toast(m){const el=document.getElementById('toast');if(!el)return;el.textContent=m;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2400)}async function sync(){try{const p=await req('/api/me');const u=p.user||p.profile||p;document.querySelectorAll('[data-balance]').forEach(e=>e.textContent=fmt(u.balance||0));document.querySelectorAll('[data-level]').forEach(e=>e.textContent=u.level||u.accountLevel||1);document.querySelectorAll('[data-pct]').forEach(e=>e.textContent=(u.progressPercent||u.accountLevelProgressPct||0).toFixed?`${(u.progressPercent||u.accountLevelProgressPct||0).toFixed(1)}%`:`${u.progressPercent||0}%`);document.querySelectorAll('[data-progress]').forEach(e=>e.style.width=`${Math.max(0,Math.min(100,Number(u.progressPercent||u.accountLevelProgressPct||0)))}%`);document.querySelectorAll('[data-avatar]').forEach(e=>{if(u.avatar)e.src=u.avatar});return u}catch(e){return null}}return{req,fmt,toast,sync,uid};})();
-document.addEventListener('DOMContentLoaded',()=>PMGame.sync());
+(() => {
+  let runId = '';
+  const createRunId = () => (crypto.randomUUID ? crypto.randomUUID() : `snake_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const api = async (score) => {
+    try {
+      const res = await fetch('/api/games/snake-pro/submit', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ runId, score: Math.max(0, Math.floor(Number(score)||0)), durationMs: Date.now() - Number(sessionStorage.pmClassicStartedAt || Date.now()) }) });
+      return await res.json();
+    } catch (error) { console.warn('[PlayMatrix] classic submit failed', error); return null; }
+  };
+  window.__PM_CLASSIC__ = {
+    canPlay: () => true,
+    redirectToLogin: () => { window.location.href = '/'; },
+    beginRun: () => { runId = createRunId(); sessionStorage.pmClassicStartedAt = String(Date.now()); },
+    finishRun: api
+  };
+})();
 
-let runId='',score=0,dir='r',playing=false,snake=[{x:10,y:10}],food={x:15,y:15};const c=document.getElementById('game'),ctx=c.getContext('2d');function draw(){ctx.fillStyle='#020617';ctx.fillRect(0,0,520,520);ctx.fillStyle='#22c55e';snake.forEach(p=>ctx.fillRect(p.x*20,p.y*20,18,18));ctx.fillStyle='#f43f5e';ctx.fillRect(food.x*20,food.y*20,18,18);document.getElementById('score').textContent=score}function tick(){if(!playing)return;let h={...snake[0]};if(dir==='r')h.x++;if(dir==='l')h.x--;if(dir==='u')h.y--;if(dir==='d')h.y++;if(h.x<0||h.y<0||h.x>=26||h.y>=26||snake.some(p=>p.x===h.x&&p.y===h.y)){playing=false;PMGame.toast('Oyun bitti');return}snake.unshift(h);if(h.x===food.x&&h.y===food.y){score+=25;food={x:Math.floor(Math.random()*26),y:Math.floor(Math.random()*26)}}else snake.pop();draw()}async function start(){runId=(await PMGame.req('/api/games/snake-pro/start',{method:'POST',body:{}})).runId;score=0;dir='r';snake=[{x:10,y:10}];playing=true;draw()}async function submit(){playing=false;try{const p=await PMGame.req('/api/games/snake-pro/submit',{method:'POST',body:{runId,score}});PMGame.toast(`+${p.xp} XP`);await PMGame.sync()}catch(e){PMGame.toast(e.message)}}window.addEventListener('keydown',e=>{if(e.key.includes('Arrow'))dir={ArrowRight:'r',ArrowLeft:'l',ArrowUp:'u',ArrowDown:'d'}[e.key]||dir});let sx=0,sy=0;c.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});c.addEventListener('touchmove',e=>{e.preventDefault();const dx=e.touches[0].clientX-sx,dy=e.touches[0].clientY-sy;if(Math.abs(dx)>Math.abs(dy))dir=dx>0?'r':'l';else dir=dy>0?'d':'u'},{passive:false});document.getElementById('start').onclick=start;document.getElementById('submit').onclick=submit;setInterval(tick,130);draw();
+
+(() => {
+  window.__PLAYMATRIX_ROUTE_NORMALIZER_DISABLED__ = true;
+})();
+
+
+(() => {
+      let lastTouchEnd = 0;
+      document.addEventListener('gesturestart', (event) => event.preventDefault(), { passive: false });
+      document.addEventListener('gesturechange', (event) => event.preventDefault(), { passive: false });
+      document.addEventListener('gestureend', (event) => event.preventDefault(), { passive: false });
+      document.addEventListener('dblclick', (event) => event.preventDefault(), { passive: false });
+      document.addEventListener('touchend', (event) => {
+        const now = Date.now();
+        if ((now - lastTouchEnd) < 320) event.preventDefault();
+        lastTouchEnd = now;
+      }, { passive: false });
+      document.addEventListener('dragstart', (event) => event.preventDefault());
+    })();
+
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const box = 15;
+const size = 300;
+
+let snake, direction, nextDirection, food, score, started = false;
+let currentSpeed, lastMoveTime, gameInterval;
+
+let audioCtx = null;
+
+function forceUnlockAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    const buffer = audioCtx.createBuffer(1, 1, 22050);
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start(0);
+}
+
+function playSound(freq, type, dur, vol = 0.1) {
+    if (!audioCtx || audioCtx.state !== 'running') return;
+    
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+}
+
+const sounds = {
+    move: () => playSound(450, 'sine', 0.04, 0.05),
+    eatGreen: () => playSound(880, 'square', 0.1, 0.1), // 🍏 sesi
+    eatRed: () => { // 🍎 sesi (çift bip)
+        playSound(1000, 'square', 0.1, 0.1);
+        setTimeout(() => playSound(1300, 'square', 0.1, 0.1), 60);
+    },
+    dead: () => {
+        playSound(220, 'sawtooth', 0.3, 0.2);
+        setTimeout(() => playSound(110, 'sawtooth', 0.5, 0.2), 150);
+    }
+};
+
+const getHigh = () => localStorage.getItem("snake_pro_best") || 0;
+document.getElementById("high").innerText = getHigh();
+
+function spawnFood() {
+    const isSpecial = Math.random() < 0.15; // %15 şansla nadir 🍎
+    food = {
+        x: Math.floor(Math.random() * (size/box)) * box,
+        y: Math.floor(Math.random() * (size/box)) * box,
+        type: isSpecial ? '🍎' : '🍏',
+        value: isSpecial ? 3 : 1
+    };
+    if(snake.some(s => s.x === food.x && s.y === food.y)) spawnFood();
+}
+
+function startGame() {
+    if (!(window.__PM_CLASSIC__ && window.__PM_CLASSIC__.canPlay())) {
+        if (window.__PM_CLASSIC__?.redirectToLogin) window.__PM_CLASSIC__.redirectToLogin();
+        return;
+    }
+    forceUnlockAudio();
+    snake = [{x: 10*box, y: 10*box}, {x: 9*box, y: 10*box}, {x: 8*box, y: 10*box}];
+    direction = "RIGHT";
+    nextDirection = "RIGHT";
+    score = 0;
+    currentSpeed = 150;
+    lastMoveTime = 0;
+    spawnFood();
+    
+    document.getElementById("score").innerText = "0";
+    document.getElementById("startup").style.display = "none";
+    document.getElementById("gameover").style.display = "none";
+    if (window.__PM_CLASSIC__?.beginRun) window.__PM_CLASSIC__.beginRun();
+    
+    started = true;
+    if(gameInterval) cancelAnimationFrame(gameInterval);
+    gameInterval = requestAnimationFrame(gameLoop);
+}
+
+function gameLoop(time) {
+    if (!started) return;
+    if (time - lastMoveTime > currentSpeed) {
+        update();
+        lastMoveTime = time;
+    }
+    draw();
+    gameInterval = requestAnimationFrame(gameLoop);
+}
+
+function update() {
+    direction = nextDirection;
+    let head = { x: snake[0].x, y: snake[0].y };
+
+    if (direction === "UP") head.y -= box;
+    if (direction === "DOWN") head.y += box;
+    if (direction === "LEFT") head.x -= box;
+    if (direction === "RIGHT") head.x += box;
+
+    if (head.x < 0 || head.y < 0 || head.x >= size || head.y >= size || 
+        snake.some(s => s.x === head.x && s.y === head.y)) {
+        return endGame();
+    }
+
+    if (head.x === food.x && head.y === food.y) {
+        score += food.value;
+        document.getElementById("score").innerText = score;
+        
+        if(food.type === '🍎') sounds.eatRed(); else sounds.eatGreen();
+
+        spawnFood();
+        if(currentSpeed > 60) currentSpeed -= 2;
+    } else {
+        snake.pop();
+    }
+    snake.unshift(head);
+}
+
+function draw() {
+    ctx.fillStyle = "#9bbc0f";
+    ctx.fillRect(0, 0, size, size);
+    
+    ctx.font = "14px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(food.type, food.x + box/2, food.y + box/2);
+
+    snake.forEach(s => {
+        ctx.fillStyle = "#0f380f";
+        ctx.fillRect(s.x + 1, s.y + 1, box - 2, box - 2);
+    });
+}
+
+function endGame() {
+    started = false;
+    sounds.dead();
+    if (score > getHigh()) localStorage.setItem("snake_pro_best", score);
+    document.getElementById("high").innerText = getHigh();
+    const finalScoreNode = document.getElementById("finalScore");
+    if (finalScoreNode) finalScoreNode.innerText = "SKORUN: " + score;
+    document.getElementById("gameover").style.display = "flex";
+    Promise.resolve(window.__PM_CLASSIC__?.finishRun?.(score)).then((result) => {
+        if (finalScoreNode && result?.ok) {
+            finalScoreNode.innerText = `SKORUN: ${score} • +${result.levelPoints} seviye puanı`;
+        }
+    }).catch(() => null);
+}
+
+function moveAction(dir) {
+    forceUnlockAudio();
+    if(!started) return;
+    
+    sounds.move();
+
+    if (dir === "UP" && direction !== "DOWN") nextDirection = "UP";
+    if (dir === "DOWN" && direction !== "UP") nextDirection = "DOWN";
+    if (dir === "LEFT" && direction !== "RIGHT") nextDirection = "LEFT";
+    if (dir === "RIGHT" && direction !== "LEFT") nextDirection = "RIGHT";
+}
+
+document.addEventListener("keydown", e => {
+    if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)) e.preventDefault();
+    if (e.key === "ArrowUp") moveAction("UP");
+    if (e.key === "ArrowDown") moveAction("DOWN");
+    if (e.key === "ArrowLeft") moveAction("LEFT");
+    if (e.key === "ArrowRight") moveAction("RIGHT");
+});
+
+const btns = ["UP", "DOWN", "LEFT", "RIGHT"];
+btns.forEach(id => {
+    const el = document.getElementById("btn-" + id);
+    el.addEventListener("touchstart", (e) => {
+        e.preventDefault(); 
+        moveAction(id);
+    }, { passive: false });
+});
+
+const startUI = document.getElementById("startup");
+const restartUI = document.getElementById("gameover");
+
+[startUI, restartUI].forEach(el => {
+    el.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        startGame();
+    }, { passive: false });
+});
+
+
+
+window.addEventListener('error',e=>{try{fetch('/api/client/error',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({game:document.body.dataset.game,type:'error',message:e.message,source:e.filename,line:e.lineno})})}catch{}});

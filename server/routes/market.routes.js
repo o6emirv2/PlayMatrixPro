@@ -1,5 +1,16 @@
-const express=require('express');const {products,setProducts}=require('../core/marketService');const {uidFromReq,getProfile,adjustBalance}=require('../core/economyService');const router=express.Router();
-router.get('/market/catalog',(_req,res)=>res.json({ok:true,items:products()}));
-router.post('/market/purchase',async(req,res)=>{const uid=uidFromReq(req);const item=products().find(x=>x.id===String(req.body.itemId));if(!item||!item.active||!Number(item.price))return res.status(400).json({ok:false,error:'ITEM_NOT_AVAILABLE'});const debit=await adjustBalance(uid,-Number(item.price),{reason:'market-purchase',idempotencyKey:`market:purchase:${uid}:${item.id}`,meta:{itemId:item.id}});if(!debit.ok)return res.status(409).json(debit);const profile=await getProfile(uid);profile.ownedMarketItems={...(profile.ownedMarketItems||{}),[item.id]:true};res.json({ok:true,item,balance:debit.balance,ownedMarketItems:profile.ownedMarketItems});});
-router.put('/admin/market/products',(req,res)=>{const items=Array.isArray(req.body.items)?req.body.items:[];const clean=items.map(x=>({id:String(x.id||'').slice(0,80),category:String(x.category||'misc').slice(0,40),name:String(x.name||'Ürün').slice(0,120),price:Math.max(0,Math.trunc(Number(x.price)||0)),active:x.active!==false,stock:x.stock==null?null:Math.max(0,Math.trunc(Number(x.stock)||0))})).filter(x=>x.id);res.json({ok:true,items:setProducts(clean)});});
-module.exports=router;
+const express = require('express');
+const { requireAuth, requireAdmin } = require('../core/security');
+const { listMarketItems, upsertMarketItem, purchaseItem, refundItem } = require('../core/marketService');
+const router = express.Router();
+
+router.get('/market/items', async (_req, res) => res.json({ ok: true, items: await listMarketItems() }));
+router.post('/market/purchase', requireAuth, async (req, res) => {
+  const result = await purchaseItem({ uid: req.user.uid, itemId: req.body.itemId, idempotencyKey: req.headers['idempotency-key'] || req.body.idempotencyKey });
+  res.status(result.ok ? 200 : 400).json(result);
+});
+router.post('/admin/market/item', requireAuth, requireAdmin, async (req, res) => res.json(await upsertMarketItem(req.body || {})));
+router.post('/admin/market/refund', requireAuth, requireAdmin, async (req, res) => {
+  const result = await refundItem({ adminUid: req.user.uid, uid: req.body.uid, itemId: req.body.itemId, idempotencyKey: req.headers['idempotency-key'] || req.body.idempotencyKey });
+  res.status(result.ok ? 200 : 400).json(result);
+});
+module.exports = router;
