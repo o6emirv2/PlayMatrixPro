@@ -185,18 +185,66 @@ function setupAutoModeBindings() {
     updateAutoCashoutInputStates();
 }
 
-window.showInlineError = (message) => {
-        const el = document.getElementById("inlineNotificationArea");
+const crashNoticeTimers = new Map();
+    const crashNoticeIconByType = {
+        success: 'fa-circle-check',
+        error: 'fa-triangle-exclamation',
+        warning: 'fa-circle-exclamation',
+        invite: 'fa-gamepad',
+        xp: 'fa-star',
+        cashout: 'fa-sack-dollar',
+        loss: 'fa-burst',
+        system: 'fa-circle-info',
+        info: 'fa-circle-info'
+    };
+
+    function normalizeNoticeType(type = 'info') {
+        const raw = String(type || 'info').toLowerCase();
+        if (['success','error','warning','invite','xp','cashout','loss','system','info'].includes(raw)) return raw;
+        return 'info';
+    }
+
+    function renderNoticeInto(el, { type = 'info', title = '', message = '' } = {}, timeout = 4200) {
         if (!el) return;
+        const safeType = normalizeNoticeType(type);
         el.replaceChildren();
         const icon = document.createElement('i');
-        icon.className = 'fa-solid fa-circle-info';
-        const text = document.createTextNode(` Bilgi: ${String(message || '')}`);
-        el.append(icon, text);
-        el.classList.add("show");
-        if(window.errorTimeout) clearTimeout(window.errorTimeout);
-        window.errorTimeout = setTimeout(() => { el.classList.remove("show"); }, 3500);
-    };
+        icon.className = `fa-solid ${crashNoticeIconByType[safeType] || crashNoticeIconByType.info}`;
+        const body = document.createElement('span');
+        body.textContent = `${title ? `${title}: ` : ''}${message || ''}`.trim();
+        el.append(icon, body);
+        el.classList.remove('is-success','is-error','is-warning');
+        if (['success','cashout','xp','invite'].includes(safeType)) el.classList.add('is-success');
+        else if (safeType === 'error' || safeType === 'loss') el.classList.add('is-error');
+        else if (safeType === 'warning') el.classList.add('is-warning');
+        el.classList.add('show');
+        const key = el.id || Math.random().toString(36);
+        if (crashNoticeTimers.has(key)) clearTimeout(crashNoticeTimers.get(key));
+        if (timeout > 0) {
+            crashNoticeTimers.set(key, setTimeout(() => {
+                el.classList.remove('show');
+                if (el.classList.contains('bet-box-notice')) el.replaceChildren();
+            }, timeout));
+        }
+    }
+
+    function showCrashNotice(input = '', opts = {}) {
+        const payload = typeof input === 'object' && input !== null ? input : { message: String(input || '') };
+        const type = normalizeNoticeType(payload.type || opts.type || 'info');
+        const title = payload.title || opts.title || '';
+        const message = payload.message || opts.message || '';
+        const scope = payload.scope || opts.scope || 'hud';
+        const timeout = Number(payload.duration ?? opts.duration ?? 4200);
+        const targets = [];
+        if (scope === 'box1' || scope === 'bet1') targets.push(document.getElementById('betNotice1'));
+        else if (scope === 'box2' || scope === 'bet2') targets.push(document.getElementById('betNotice2'));
+        else if (scope === 'all-bets') targets.push(document.getElementById('betNotice1'), document.getElementById('betNotice2'));
+        else targets.push(document.getElementById('crashHudNotice'), document.getElementById('inlineNotificationArea'));
+        targets.filter(Boolean).forEach((el) => renderNoticeInto(el, { type, title, message }, timeout));
+    }
+
+    window.showCrashNotice = showCrashNotice;
+    window.showInlineError = (message, opts = {}) => showCrashNotice({ type: opts.type || 'info', title: opts.title || 'Bilgi', message: String(message || ''), scope: opts.scope || 'hud', duration: opts.duration });
 
     window.showWinStrip = (avatar, user, mult, amt) => {
         elWsAvatar.src = avatar || DEFAULT_AVATAR;
@@ -538,6 +586,20 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             </div>`;
     }
 
+    function applyCrashProgression(profile = {}, { animate = false } = {}) {
+        const accountLevel = getPlayerAccountLevel(profile);
+        const accountProgress = getPlayerAccountProgressPct(profile);
+        if (elUiAccountLevelBar) {
+            elUiAccountLevelBar.style.width = accountProgress + '%';
+            if (animate) {
+                elUiAccountLevelBar.classList.add('xp-pulse');
+                setTimeout(() => elUiAccountLevelBar?.classList.remove('xp-pulse'), 900);
+            }
+        }
+        if (elUiAccountLevelPct) elUiAccountLevelPct.innerText = `${accountProgress.toFixed(1)}%`;
+        if (elUiAccountLevelBadge) elUiAccountLevelBadge.innerText = accountLevel;
+    }
+
     function applyCrashProfilePayload(payload) {
         if (!payload?.ok) throw new Error(payload?.error || 'PROFILE_LOAD_FAILED');
         lastProfilePayload = payload;
@@ -552,11 +614,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             userInfo.avatar = profile.avatar || profile.photoURL || profile.avatarUrl || '';
             userInfo.username = profile.username || profile.displayName || profile.fullName || 'Sen';
             renderCrashTopbarAvatar(profile);
-            const accountLevel = getPlayerAccountLevel(profile);
-            const accountProgress = getPlayerAccountProgressPct(profile);
-            if (elUiAccountLevelBar) elUiAccountLevelBar.style.width = accountProgress + '%';
-            if (elUiAccountLevelPct) elUiAccountLevelPct.innerText = `${accountProgress.toFixed(1)}%`;
-            if (elUiAccountLevelBadge) elUiAccountLevelBadge.innerText = accountLevel;
+            applyCrashProgression(profile, { animate: false });
             const badgeWrap = document.querySelector('.level-badge-wrap');
             if (badgeWrap) badgeWrap.style.boxShadow = '0 4px 15px rgba(0,0,0,0.4)';
             const statFill = document.querySelector('.stat-bar-fill');
@@ -668,6 +726,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     let lastServerMult = 1.00;
     let lastServerMultAt = 0;
     let lastServerTickAt = 0;
+    const seenOutcomeNotices = new Set();
 
     const elUiMultiplier = document.getElementById('uiMultiplier');
     const elLiveTableBody = document.getElementById('liveTableBody');
@@ -727,7 +786,9 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     function setButtonMode(button, mode) {
         if (!button) return;
         button.classList.toggle('btn-cashout', mode === 'cashout');
-        button.classList.toggle('btn-bet', mode !== 'cashout');
+        button.classList.toggle('btn-success', mode === 'success');
+        button.classList.toggle('btn-lost', mode === 'lost');
+        button.classList.toggle('btn-bet', !['cashout','success','lost'].includes(mode));
     }
 
     function setBoxStatus(box, text, state = '') {
@@ -779,7 +840,10 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             cashed: !!data.cashed,
             lost: !!data.lost,
             refunded: !!data.refunded,
-            cashingOut: false,
+            cashingOut: !!data.cashingOut,
+            settlementPending: !!data.settlementPending,
+            xpAwarded: Number(data.xpAwarded ?? data.xpResult?.xpAwarded ?? 0) || 0,
+            xpResult: data.xpResult || null,
             win: Number(data.win || 0) || 0,
             cashoutMult: Number(data.cashoutMult || 0) || 0
         };
@@ -859,6 +923,24 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
                 setBoxStatus(box, 'İşlemde', 'processing');
                 return;
             }
+            if (bet && String(bet.roundId || '') === String(currentRoundId || '') && bet.cashed) {
+                setButtonMode(btn, 'success');
+                const mult = Number(bet.cashoutMult || 0) || 0;
+                const xp = Number(bet.xpAwarded ?? bet.xpResult?.xpAwarded ?? 0) || 0;
+                btn.innerHTML = `ÇIKIŞ ALINDI <span>${mult > 0 ? mult.toFixed(2) + 'x' : ''}${xp > 0 ? ` • +${xp} XP` : ''}</span>`;
+                btn.disabled = true;
+                setBoxStatus(box, bet.settlementPending ? 'Bakiye işleniyor' : 'Çıkış alındı', bet.settlementPending ? 'processing' : 'ready');
+                return;
+            }
+            if (bet && String(bet.roundId || '') === String(currentRoundId || '') && bet.lost) {
+                setButtonMode(btn, 'lost');
+                const xp = Number(bet.xpAwarded ?? bet.xpResult?.xpAwarded ?? 0) || 0;
+                btn.innerHTML = `KAYBETTİ <span>${xp > 0 ? `+${xp} XP` : 'Tur kapandı'}</span>`;
+                btn.disabled = true;
+                setBoxStatus(box, 'Tur kaybedildi', 'closed');
+                return;
+            }
+
             if (bet && !bet.cashed && !bet.refunded && String(bet.roundId || '') === String(currentRoundId || '')) {
                 if (sPhase === 'FLYING') {
                     setButtonMode(btn, 'cashout');
@@ -947,7 +1029,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             if (activeBet && !activeBet.cashed && sPhase === 'FLYING') await cashOut(box);
             else await placeBet(box);
         } catch (error) {
-            window.showInlineError?.(error?.message || 'İşlem başarısız.');
+            showCrashNotice({ type: 'error', title: 'İşlem başarısız', message: error?.message || 'İşlem tamamlanamadı.', scope: `box${box}` });
         } finally {
             isProcessing[boxKey] = false;
             updateButtons();
@@ -971,21 +1053,34 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         if (balance !== null) currentBalance = balance;
         try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.({ ...payload, balance: currentBalance }); } catch (_) {}
         if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        if (!silent) window.showInlineError?.('Bahis sunucuya işlendi.');
+        if (!silent) showCrashNotice({ type: 'success', title: 'Bahis alındı', message: `${formatCompactMc(amount)} tura işlendi.`, scope: `box${box}` });
         if (typeof pmRtEmitCrashBetPresence === 'function') pmRtEmitCrashBetPresence(amount);
         updateButtons();
     }
 
-    function showCrashResultSummary(summary) {
+    function applyCrashProgressionFromPayload(payload = {}, { animate = true } = {}) {
+        const progression = payload?.progression || payload?.xpResult?.progression || payload?.resultSummary?.xpResult?.progression;
+        if (!progression || typeof progression !== 'object') return;
+        applyCrashProgression({ progression, accountLevel: progression.accountLevel ?? progression.level, accountLevelProgressPct: progression.accountLevelProgressPct ?? progression.progressPercent }, { animate });
+    }
+
+    function showCrashResultSummary(summary, { box = 0 } = {}) {
         if (!summary || typeof summary !== 'object') return;
+        const xp = summary.xpResult || null;
         const message = summary.message || 'Tur sonucu işlendi.';
-        window.showInlineError?.(message);
+        showCrashNotice({ type: summary.type === 'loss' ? 'loss' : 'cashout', title: summary.type === 'loss' ? 'Tur sonucu' : 'Kazanç', message, scope: box ? `box${box}` : 'hud', duration: 5200 });
+        if (xp?.xpAwarded > 0) {
+            showCrashNotice({ type: 'xp', title: 'XP', message: `+${xp.xpAwarded} XP hesabına işlendi.`, scope: 'hud', duration: 5200 });
+        } else if (xp?.reason === 'MANUAL_CASHOUT_BELOW_1_50_NO_XP') {
+            showCrashNotice({ type: 'warning', title: 'XP verilmedi', message: 'Manuel çıkışta XP için minimum 1.50x gerekir.', scope: 'hud', duration: 5600 });
+        }
     }
 
     async function cashOut(box) {
         const boxKey = getBoxKey(box);
         const bet = myBets[boxKey];
         if (!bet || bet.cashed) return;
+        showCrashNotice({ type: 'system', title: 'Çıkış', message: 'Bozdurma isteği sunucuya gönderildi.', scope: `box${box}`, duration: 2200 });
         const payload = await api('/api/crash/cashout', 'POST', { box });
         if (!payload?.ok) throw new Error(payload?.error || 'Çıkış alınamadı.');
         const serverBet = payload.bet ? normalizeServerBet({ ...payload.bet, isMine: true }) : null;
@@ -999,7 +1094,8 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.({ ...payload, balance: currentBalance, winAmount: targetBet.win, cashoutMult: targetBet.cashoutMult }); } catch (_) {}
         if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         window.showWinStrip?.(userInfo.avatar || DEFAULT_AVATAR, userInfo.username || 'Sen', targetBet.cashoutMult, targetBet.win);
-        showCrashResultSummary(payload.resultSummary);
+        applyCrashProgressionFromPayload(payload, { animate: true });
+        showCrashResultSummary(payload.resultSummary, { box });
         playCrashSfx('win');
         updateButtons();
     }
@@ -1015,7 +1111,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             autoBetPlacedForRound[boxKey] = currentRoundId;
             placeBet(box, true).catch((error) => {
                 autoBetPlacedForRound[boxKey] = null;
-                window.showInlineError?.(error?.message || 'Otomatik bahis alınamadı.');
+                showCrashNotice({ type: 'error', title: 'Otomatik bahis', message: error?.message || 'Otomatik bahis alınamadı.', scope: `box${box}` });
             });
         }
     }
@@ -1053,6 +1149,32 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
                 const boxKey = getBoxKey(box);
                 if (!seen.has(boxKey) && myBets[boxKey]?.roundId !== currentRoundId) myBets[boxKey] = null;
             });
+        }
+    }
+
+    function maybeShowOutcomeNotice(player = {}) {
+        if (!player?.isMine) return;
+        const box = Number(player.box) === 2 ? 2 : 1;
+        const keyBase = `${player.roundId || currentRoundId}:${box}`;
+        const xp = player.xpResult || null;
+        if (player.cashed) {
+            const key = `${keyBase}:cashed:${player.cashoutMult || 0}:${xp?.xpAwarded || 0}`;
+            if (seenOutcomeNotices.has(key)) return;
+            seenOutcomeNotices.add(key);
+            const mult = Number(player.cashoutMult || 0) || 0;
+            const win = Number(player.win ?? player.winAmount ?? 0) || 0;
+            const xpText = xp?.xpAwarded > 0 ? ` • +${xp.xpAwarded} XP` : (xp?.reason === 'MANUAL_CASHOUT_BELOW_1_50_NO_XP' ? ' • XP için minimum 1.50x gerekir' : '');
+            showCrashNotice({ type: 'cashout', title: 'Çıkış alındı', message: `${mult.toFixed(2)}x • +${formatCompactMc(win)}${xpText}`, scope: `box${box}`, duration: 5600 });
+            if (xp?.progression) applyCrashProgressionFromPayload({ xpResult: xp }, { animate: true });
+            return;
+        }
+        if (player.lost) {
+            const key = `${keyBase}:lost:${xp?.xpAwarded || 0}`;
+            if (seenOutcomeNotices.has(key)) return;
+            seenOutcomeNotices.add(key);
+            const xpText = xp?.xpAwarded > 0 ? ` +${xp.xpAwarded} XP işlendi.` : ' XP oluşmadı.';
+            showCrashNotice({ type: 'loss', title: 'Tur patladı', message: `Bahis kaybedildi.${xpText}`, scope: `box${box}`, duration: 5600 });
+            if (xp?.progression) applyCrashProgressionFromPayload({ xpResult: xp }, { animate: true });
         }
     }
 
@@ -1209,6 +1331,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         const activePlayers = getActivePlayersFromPayload(data);
         if (activePlayers.length || Array.isArray(data.activePlayers) || Array.isArray(data.activeBets)) {
             syncMyBetsFromActivePlayers(activePlayers);
+            activePlayers.forEach(maybeShowOutcomeNotice);
             renderLiveTable(activePlayers);
         }
         updateHud();
@@ -1257,8 +1380,8 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     function pmRtEscape(value = '') { return escapeHTML(value); }
 
     function pmRtToast(title = '', message = '', tone = 'info') {
-        const text = `${title ? `${title}: ` : ''}${message || ''}`.trim();
-        if (text) window.showInlineError?.(text);
+        const text = `${message || ''}`.trim();
+        if (title || text) showCrashNotice({ type: tone === 'error' ? 'error' : tone === 'success' ? 'invite' : 'info', title, message: text, scope: 'hud', duration: 4600 });
         return { tone };
     }
 
@@ -1445,9 +1568,9 @@ async function pmRtBeforeRedirect() {
         }
         myBets = { box1: null, box2: null };
         updateButtons();
-        if (Number(payload?.refunded || 0) > 0) window.showInlineError?.(`Crash bahsin iade edildi: ${formatCompactMc(payload.refunded)}`);
+        if (Number(payload?.refunded || 0) > 0) showCrashNotice({ type: 'success', title: 'İade', message: `Crash bahsin iade edildi: ${formatCompactMc(payload.refunded)}`, scope: 'hud' });
     } catch (error) {
-        window.showInlineError?.(error?.message || 'Crash bahsi iade edilirken hata oluştu.');
+        showCrashNotice({ type: 'error', title: 'İade hatası', message: error?.message || 'Crash bahsi iade edilirken hata oluştu.', scope: 'hud' });
         throw error;
     }
     return true;

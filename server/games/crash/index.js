@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { requireAuth, requireAdmin } = require('../../core/security');
 const { debitBalance, creditBalance, readBalance } = require('../../core/economyService');
+const { getProgression, normalizeXpBigInt } = require('../../core/progressionService');
 const { runtimeStore } = require('../../core/runtimeStore');
 const { initFirebaseAdmin } = require('../../config/firebaseAdmin');
 
@@ -14,7 +15,10 @@ const MIN_BET = 1;
 const MAX_BET = 1_000_000;
 const MIN_AUTO_CASHOUT = 2;
 const MAX_AUTO_CASHOUT = 100;
-const TICK_MS = 120;
+const TICK_MS = 80;
+const XP_UNIT_MC = 1000;
+const XP_PER_UNIT = 10;
+const MIN_MANUAL_XP_CASHOUT_MULT = 1.50;
 const RISK_DOC_COLLECTION = 'gameConfig';
 const RISK_DOC_ID = 'crash';
 
@@ -48,7 +52,8 @@ const state = {
   riskLoadPromise: null,
   roundStartPromise: null,
   io: null,
-  timer: null
+  timer: null,
+  autoTimers: new Map()
 };
 
 function makeHttpError(message, statusCode = 400) {
@@ -169,28 +174,79 @@ function pickCrashPoint() {
   return 1.25;
 }
 
+function multiplierAtElapsedMs(elapsedMs) {
+  const elapsed = Math.max(0, Number(elapsedMs) || 0) / 1000;
+  return Math.min(MAX_MULT, Math.max(1, round(1 + elapsed * 0.10 + Math.pow(elapsed, 1.42) * 0.022, 2)));
+}
+
 function currentMultiplier() {
   if (state.phase !== 'FLYING') return round(state.multiplier, 2);
-  const elapsed = Math.max(0, now() - state.startedAt) / 1000;
-  return Math.min(MAX_MULT, Math.max(1, round(1 + elapsed * 0.10 + Math.pow(elapsed, 1.42) * 0.022, 2)));
+  return multiplierAtElapsedMs(now() - state.startedAt);
+}
+
+function estimateDelayForMultiplier(targetMultiplier) {
+  const target = Math.max(1, Math.min(MAX_MULT, Number(targetMultiplier) || 1));
+  const elapsedNow = Math.max(0, now() - state.startedAt);
+  if (multiplierAtElapsedMs(elapsedNow) >= target) return 0;
+  let low = elapsedNow;
+  let high = Math.max(low + 250, 1000);
+  while (high < 3600000 && multiplierAtElapsedMs(high) < target) high *= 1.45;
+  for (let i = 0; i < 36; i += 1) {
+    const mid = Math.floor((low + high) / 2);
+    if (multiplierAtElapsedMs(mid) >= target) high = mid;
+    else low = mid + 1;
+  }
+  return Math.max(0, Math.floor(high - elapsedNow));
+}
+
+function clearAutoTimer(bet) {
+  if (!bet?.autoTimer) return;
+  clearTimeout(bet.autoTimer);
+  bet.autoTimer = null;
+  state.autoTimers.delete(bet.betId);
+}
+
+function scheduleAutoCashout(bet) {
+  if (!bet || !bet.autoCashout || bet.cashed || bet.lost || bet.refunded || state.phase !== 'FLYING') return;
+  clearAutoTimer(bet);
+  if (Number(bet.autoCashout) >= Number(state.crashPoint)) return;
+  const delay = estimateDelayForMultiplier(bet.autoCashout);
+  const timer = setTimeout(() => {
+    cashoutBet(bet, { automatic: true, forcedMultiplier: bet.autoCashout }).catch((error) => {
+      if (error?.message !== 'AUTO_CASHOUT_MISSED') console.error('[crash:auto-cashout:error]', JSON.stringify({ message: error.message }));
+    });
+  }, delay);
+  timer.unref?.();
+  bet.autoTimer = timer;
+  state.autoTimers.set(bet.betId, timer);
+}
+
+function scheduleAutoCashouts() {
+  for (const bet of state.bets.values()) scheduleAutoCashout(bet);
+}
+
+function clearAllAutoTimers() {
+  for (const bet of state.bets.values()) clearAutoTimer(bet);
+  for (const timer of state.autoTimers.values()) clearTimeout(timer);
+  state.autoTimers.clear();
 }
 
 async function readCrashProfile(req) {
   const uid = uidOf(req);
   let profile = {};
+  let hasFirestoreProfile = false;
   try {
     const { db } = initFirebaseAdmin();
     if (db && uid) {
       const snap = await db.collection('users').doc(uid).get();
       profile = snap.exists ? (snap.data() || {}) : {};
+      hasFirestoreProfile = snap.exists;
     }
   } catch (error) {
     console.error('[crash:profile:read:error]', JSON.stringify({ message: error.message }));
   }
-  const balance = await readBalance(uid);
-  const accountLevel = Math.max(1, Math.min(100, Math.trunc(Number(profile.accountLevel || profile.level || 1) || 1)));
-  const progression = profile.progression && typeof profile.progression === 'object' ? profile.progression : {};
-  const progressPercent = Math.max(0, Math.min(100, Number(progression.progressPercent ?? progression.accountLevelProgressPct ?? profile.accountLevelProgressPct ?? 0) || 0));
+  const balance = Number.isFinite(Number(profile.balance)) ? Math.max(0, Number(profile.balance) || 0) : await readBalance(uid);
+  const progression = getProgression(profile.accountXp ?? profile.xp ?? profile.accountLevelScore ?? 0);
   return {
     uid,
     username: safeDisplayName({ ...req.user, ...profile }),
@@ -198,11 +254,111 @@ async function readCrashProfile(req) {
     avatar: safeAvatarUrl(profile.avatar || profile.photoURL || profile.avatarUrl || ''),
     photoURL: safeAvatarUrl(profile.photoURL || profile.avatar || profile.avatarUrl || ''),
     selectedFrame: Math.max(0, Math.min(100, Math.trunc(Number(profile.selectedFrame || profile.frame || 0) || 0))),
-    accountLevel,
-    accountLevelProgressPct: progressPercent,
-    progression: { ...progression, level: accountLevel, progressPercent, accountLevelProgressPct: progressPercent },
-    balance
+    accountLevel: progression.accountLevel,
+    level: progression.accountLevel,
+    accountXp: progression.currentXp,
+    xp: progression.currentXp,
+    accountLevelProgressPct: progression.accountLevelProgressPct,
+    progression,
+    balance,
+    hasFirestoreProfile
   };
+}
+
+function crashXpForAmount(amount) {
+  const units = Math.floor(Math.max(0, Number(amount) || 0) / XP_UNIT_MC);
+  return units * XP_PER_UNIT;
+}
+
+function buildXpDecision(bet, { outcome = 'loss', cashoutMult = 0, automatic = false } = {}) {
+  const amount = Number(bet?.amount || 0) || 0;
+  const baseXp = crashXpForAmount(amount);
+  let eligible = baseXp > 0;
+  let reason = eligible ? 'CRASH_MC_USAGE_XP' : 'MINIMUM_1000_MC_REQUIRED';
+  if (outcome === 'cashout' && !automatic && Number(cashoutMult || 0) < MIN_MANUAL_XP_CASHOUT_MULT) {
+    eligible = false;
+    reason = 'MANUAL_CASHOUT_BELOW_1_50_NO_XP';
+  }
+  return {
+    eligible,
+    xpAwarded: eligible ? baseXp : 0,
+    reason,
+    rule: `${XP_UNIT_MC} MC = ${XP_PER_UNIT} XP`,
+    minimumManualCashoutForXp: MIN_MANUAL_XP_CASHOUT_MULT
+  };
+}
+
+async function awardCrashXp(bet, options = {}) {
+  if (!bet || !bet.uid) return { ok: false, xpAwarded: 0, reason: 'BET_OR_UID_MISSING', progression: getProgression(0) };
+  if (bet.xpSettled) return bet.xpResult || { ok: true, duplicate: true, xpAwarded: 0, reason: 'ALREADY_SETTLED', progression: getProgression(0) };
+  const decision = buildXpDecision(bet, options);
+  const idempotencyKey = `crash:xp:${bet.roundId}:${bet.uid}:${bet.box}`;
+  let output = {
+    ok: true,
+    idempotencyKey,
+    outcome: options.outcome || 'loss',
+    automatic: !!options.automatic,
+    cashoutMult: round(options.cashoutMult || 0, 2),
+    amount: bet.amount,
+    ...decision,
+    progression: null,
+    levelUp: false
+  };
+  try {
+    const { db } = initFirebaseAdmin();
+    if (!db) {
+      const key = `xp:${bet.uid}`;
+      const current = normalizeXpBigInt(runtimeStore.temporary.get(key) || 0);
+      const next = current + BigInt(output.xpAwarded || 0);
+      runtimeStore.temporary.set(key, next.toString(), 30 * 86400000);
+      output.progression = getProgression(next);
+    } else if (output.xpAwarded > 0) {
+      const userRef = db.collection('users').doc(bet.uid);
+      const idemRef = db.collection('idempotency').doc(idempotencyKey);
+      await db.runTransaction(async (tx) => {
+        const idem = await tx.get(idemRef);
+        if (idem.exists) {
+          output = { ...output, duplicate: true, ...(idem.data().result || {}) };
+          return;
+        }
+        const snap = await tx.get(userRef);
+        const current = normalizeXpBigInt(snap.exists ? ((snap.data() || {}).accountXp ?? (snap.data() || {}).xp ?? 0) : 0);
+        const before = getProgression(current);
+        const next = current + BigInt(output.xpAwarded);
+        const progression = getProgression(next);
+        output.progression = progression;
+        output.levelBefore = before.accountLevel;
+        output.levelAfter = progression.accountLevel;
+        output.levelUp = progression.accountLevel > before.accountLevel;
+        tx.set(userRef, {
+          xp: next.toString(),
+          accountXp: next.toString(),
+          accountLevel: progression.accountLevel,
+          level: progression.accountLevel,
+          accountLevelProgressPct: progression.accountLevelProgressPct,
+          progression,
+          updatedAt: now()
+        }, { merge: true });
+        tx.set(idemRef, { key: idempotencyKey, type: 'crash-xp', uid: bet.uid, createdAt: now(), result: output }, { merge: false });
+      });
+    } else {
+      const profileProgress = getProgression(0);
+      try {
+        const { db } = initFirebaseAdmin();
+        if (db) {
+          const snap = await db.collection('users').doc(bet.uid).get();
+          output.progression = getProgression(snap.exists ? ((snap.data() || {}).accountXp ?? (snap.data() || {}).xp ?? 0) : 0);
+        } else output.progression = profileProgress;
+      } catch (_) { output.progression = profileProgress; }
+    }
+  } catch (error) {
+    console.error('[crash:xp:error]', JSON.stringify({ message: error.message, uid: bet.uid, roundId: bet.roundId, box: bet.box }));
+    output.ok = false;
+    output.error = 'XP_SETTLEMENT_FAILED';
+  }
+  bet.xpSettled = true;
+  bet.xpResult = output;
+  return output;
 }
 
 function publicBet(bet, viewerUid = '') {
@@ -227,6 +383,10 @@ function publicBet(bet, viewerUid = '') {
     cashoutMult: round(bet.cashoutMult || 0, 2),
     winAmount: bet.winAmount || 0,
     win: bet.winAmount || 0,
+    settlementPending: !!bet.settlementPending,
+    cashoutMode: bet.cashoutMode || '',
+    xpAwarded: bet.xpResult?.xpAwarded || 0,
+    xpResult: isMine ? (bet.xpResult || null) : (bet.xpResult ? { xpAwarded: bet.xpResult.xpAwarded || 0, reason: bet.xpResult.reason || '' } : null),
     roundId: bet.roundId
   };
 }
@@ -276,6 +436,7 @@ function clearTimer() {
 }
 
 function startCountdown() {
+  clearAllAutoTimers();
   state.phase = 'COUNTDOWN';
   state.roundId = `cr_${now()}_${crypto.randomBytes(4).toString('hex')}`;
   state.crashPoint = pickCrashPoint();
@@ -294,6 +455,7 @@ function startFlying() {
   state.startedAt = now();
   state.multiplier = 1;
   emitState();
+  scheduleAutoCashouts();
   clearTimer();
   state.timer = setInterval(tick, TICK_MS);
   state.timer.unref?.();
@@ -301,7 +463,11 @@ function startFlying() {
 
 async function settleLosses() {
   for (const bet of state.bets.values()) {
-    if (!bet.cashed && !bet.refunded && !bet.cashingOut && !bet.refunding) bet.lost = true;
+    if (!bet.cashed && !bet.refunded && !bet.cashingOut && !bet.refunding) {
+      clearAutoTimer(bet);
+      bet.lost = true;
+      bet.xpResult = await awardCrashXp(bet, { outcome: 'loss' });
+    }
   }
 }
 
@@ -320,45 +486,63 @@ async function endRound() {
   state.timer.unref?.();
 }
 
-async function cashoutBet(bet, { automatic = false } = {}) {
+async function cashoutBet(bet, { automatic = false, forcedMultiplier = null } = {}) {
   if (!bet) return { ok: false, error: 'BET_NOT_FOUND', statusCode: 404 };
   if (bet.refunded) return { ok: false, error: 'BET_REFUNDED', statusCode: 409 };
   if (bet.refunding) return { ok: false, error: 'REFUND_IN_PROGRESS', statusCode: 409 };
   if (bet.lost) return { ok: false, error: 'BET_ALREADY_LOST', statusCode: 409 };
-  if (bet.cashed) return { ok: true, duplicate: true, bet, balance: await readBalance(bet.uid) };
-  if (bet.cashingOut) return { ok: false, error: 'CASHOUT_IN_PROGRESS', statusCode: 409 };
+  if (bet.cashed) return { ok: true, duplicate: true, bet, balance: bet.balance ?? await readBalance(bet.uid), xpResult: bet.xpResult || null };
+  if (bet.cashingOut) return { ok: true, pending: true, bet, balance: bet.balance ?? await readBalance(bet.uid), xpResult: bet.xpResult || null };
   if (state.phase !== 'FLYING') return { ok: false, error: 'CASHOUT_NOT_AVAILABLE', statusCode: 409 };
-  const mult = currentMultiplier();
-  if (mult >= state.crashPoint) {
+  const liveMult = currentMultiplier();
+  const requestedMult = forcedMultiplier !== null ? round(forcedMultiplier, 2) : liveMult;
+  const mult = automatic ? round(bet.autoCashout || requestedMult, 2) : round(requestedMult, 2);
+  if (automatic && (!bet.autoCashout || Number(bet.autoCashout) >= Number(state.crashPoint))) {
     bet.lost = true;
-    return { ok: false, error: automatic ? 'AUTO_CASHOUT_MISSED' : 'CASHOUT_TOO_LATE', statusCode: 409 };
+    return { ok: false, error: 'AUTO_CASHOUT_MISSED', statusCode: 409 };
   }
+  if (!automatic && liveMult >= state.crashPoint) {
+    bet.lost = true;
+    return { ok: false, error: 'CASHOUT_TOO_LATE', statusCode: 409 };
+  }
+  clearAutoTimer(bet);
   bet.cashingOut = true;
+  bet.cashed = true;
+  bet.lost = false;
+  bet.cashoutMult = mult;
+  bet.winAmount = Math.floor(bet.amount * mult);
+  bet.cashoutMode = automatic ? 'auto' : 'manual';
+  bet.settlementPending = true;
+  bet.cashoutAcceptedAt = now();
+  emitState();
   try {
-    const winAmount = Math.floor(bet.amount * mult);
-    const result = await creditBalance({ uid: bet.uid, amount: winAmount, reason: automatic ? 'crash-auto-cashout' : 'crash-cashout', idempotencyKey: `crash:cashout:${bet.roundId}:${bet.uid}:${bet.box}`, metadata: { roundId: bet.roundId, box: bet.box, multiplier: mult } });
+    const result = await creditBalance({ uid: bet.uid, amount: bet.winAmount, reason: automatic ? 'crash-auto-cashout' : 'crash-cashout', idempotencyKey: `crash:cashout:${bet.roundId}:${bet.uid}:${bet.box}`, metadata: { roundId: bet.roundId, box: bet.box, multiplier: mult, automatic } });
     if (!result.ok) throw makeHttpError(result.error || 'CASHOUT_FAILED', 409);
-    bet.cashed = true;
-    bet.lost = false;
-    bet.cashoutMult = mult;
-    bet.winAmount = winAmount;
     bet.balance = result.balance;
-    emitState();
-    return { ok: true, bet, balance: result.balance };
-  } catch (error) {
-    if (state.phase === 'CRASHED' && !bet.cashed && !bet.refunded) bet.lost = true;
-    throw error;
-  } finally {
+    bet.settlementPending = false;
     bet.cashingOut = false;
+    bet.xpResult = await awardCrashXp(bet, { outcome: 'cashout', cashoutMult: mult, automatic });
     emitState();
+    return { ok: true, bet, balance: result.balance, xpResult: bet.xpResult };
+  } catch (error) {
+    bet.cashed = false;
+    bet.settlementPending = false;
+    bet.cashingOut = false;
+    bet.winAmount = 0;
+    bet.cashoutMult = 0;
+    if (state.phase === 'CRASHED' && !bet.refunded) bet.lost = true;
+    emitState();
+    throw error;
   }
 }
 
 function tick() {
   state.multiplier = currentMultiplier();
   for (const bet of state.bets.values()) {
-    if (!bet.cashed && !bet.lost && !bet.refunded && !bet.cashingOut && !bet.refunding && bet.autoCashout && state.multiplier >= bet.autoCashout && state.multiplier < state.crashPoint) {
-      cashoutBet(bet, { automatic: true }).catch((error) => console.error('[crash:auto-cashout:error]', JSON.stringify({ message: error.message })));
+    if (!bet.cashed && !bet.lost && !bet.refunded && !bet.cashingOut && !bet.refunding && bet.autoCashout && state.multiplier >= bet.autoCashout && Number(bet.autoCashout) < Number(state.crashPoint)) {
+      cashoutBet(bet, { automatic: true, forcedMultiplier: bet.autoCashout }).catch((error) => {
+        if (error?.message !== 'AUTO_CASHOUT_MISSED') console.error('[crash:auto-cashout:error]', JSON.stringify({ message: error.message }));
+      });
     }
   }
   if (state.multiplier >= state.crashPoint) endRound().catch((error) => console.error('[crash:end:error]', JSON.stringify({ message: error.message })));
@@ -407,7 +591,7 @@ router.post('/bet', requireAuth, async (req, res, next) => {
     const debit = await debitBalance({ uid, amount, reason: 'crash-bet', idempotencyKey: `crash:bet:${key}`, metadata: { roundId: state.roundId, box, autoCashout } });
     if (!debit.ok) return res.status(409).json(debit);
     const profile = await readCrashProfile(req).catch(() => ({ username: safeDisplayName(req.user), avatar: '', selectedFrame: 0 }));
-    const bet = { betId: key, roundId: state.roundId, uid, username: profile.username || safeDisplayName(req.user), avatar: safeAvatarUrl(profile.avatar || profile.photoURL || ''), selectedFrame: Number(profile.selectedFrame || 0) || 0, box, amount, autoCashout, cashed: false, lost: false, refunded: false, refunding: false, cashingOut: false, winAmount: 0, cashoutMult: 0, at: now() };
+    const bet = { betId: key, roundId: state.roundId, uid, username: profile.username || safeDisplayName(req.user), avatar: safeAvatarUrl(profile.avatar || profile.photoURL || ''), selectedFrame: Number(profile.selectedFrame || 0) || 0, box, amount, autoCashout, cashed: false, lost: false, refunded: false, refunding: false, cashingOut: false, settlementPending: false, xpSettled: false, xpResult: null, winAmount: 0, cashoutMult: 0, at: now() };
     state.bets.set(key, bet);
     emitState();
     res.json({ ok: true, bet: publicBet(bet, uid), balance: debit.balance, roundId: state.roundId });
@@ -421,7 +605,11 @@ router.post('/cashout', requireAuth, async (req, res, next) => {
     const result = await cashoutBet(state.bets.get(`${state.roundId}:${uid}:${box}`));
     if (!result.ok) return res.status(result.statusCode || 409).json({ ok: false, error: result.error });
     const cashed = result.bet;
-    res.json({ ok: true, bet: publicBet(cashed, uid), winAmount: cashed.winAmount, cashoutMult: cashed.cashoutMult, balance: result.balance, resultSummary: { message: `${cashed.cashoutMult.toFixed(2)}x çıkış alındı.` } });
+    const xp = result.xpResult || cashed.xpResult || null;
+    const xpMessage = xp?.xpAwarded > 0
+      ? ` +${xp.xpAwarded} XP işlendi.`
+      : (xp?.reason === 'MANUAL_CASHOUT_BELOW_1_50_NO_XP' ? ' XP verilmedi: manuel çıkışta minimum 1.50x gerekir.' : '');
+    res.json({ ok: true, bet: publicBet(cashed, uid), winAmount: cashed.winAmount, cashoutMult: cashed.cashoutMult, balance: result.balance, xpAwarded: xp?.xpAwarded || 0, xpResult: xp, progression: xp?.progression || null, resultSummary: { type: 'cashout', message: `${cashed.cashoutMult.toFixed(2)}x çıkış alındı.${xpMessage}`, xpResult: xp } });
   } catch (error) { if (error.statusCode) return res.status(error.statusCode).json({ ok: false, error: error.message }); next(error); }
 });
 router.post('/refund-active', requireAuth, async (req, res, next) => {
@@ -435,7 +623,7 @@ router.post('/refund-active', requireAuth, async (req, res, next) => {
       bet.refunding = true;
       try {
         const result = await creditBalance({ uid, amount: bet.amount, reason: 'crash-invite-refund', idempotencyKey: `crash:refund:${key}`, metadata: { roundId: bet.roundId, box: bet.box } });
-        if (result.ok) { bet.refunded = true; refunded += bet.amount; refundedBets.push(publicBet(bet, uid)); state.bets.delete(key); }
+        if (result.ok) { clearAutoTimer(bet); bet.refunded = true; refunded += bet.amount; refundedBets.push(publicBet(bet, uid)); state.bets.delete(key); }
       } finally { bet.refunding = false; }
     }
     emitState();

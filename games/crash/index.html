@@ -36,7 +36,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <script src="/public/js/games/crash/crash-route-normalizer.js" defer></script>
-    <link rel="stylesheet" href="/public/css/games/crash.css?v=crash-hardening-20260503b" />
+    <link rel="stylesheet" href="/public/css/games/crash.css?v=crash-final-cashout-xp-ui-20260503c" />
   <link rel="stylesheet" href="/public/avatar-frame.css" />
   <script src="/public/playmatrix-static-runtime.js"></script>
   <script src="/public/playmatrix-api.js"></script>
@@ -130,6 +130,7 @@
         <div class="round-hud">
             <div class="hud-chip"><i class="fa-solid fa-bolt"></i> Faz: <strong id="hudPhase">Bekleniyor</strong></div>
             <div class="hud-chip"><i class="fa-solid fa-gauge-high"></i> İvme: <strong id="hudSpeed">0%</strong></div>
+            <div id="crashHudNotice" class="crash-hud-notice" aria-live="polite"></div>
         </div>
 
         <canvas id="crashCanvas"></canvas>
@@ -176,8 +177,11 @@
 
                 <div class="auto-row">
                     <button class="auto-icon-btn" id="btnAutoMode1" type="button" aria-label="Her tur otomatik katılım modu 1"><i class="fa-solid fa-rotate"></i></button>
-                    <input type="checkbox" id="chkAutoCash1" class="toggle-switch-only" aria-label="Otomatik bozdurma 1">
-                    <div class="auto-input-shell"><span>x</span><input type="number" id="inpAuto1" value="50.00" min="2.00" max="100.00" step="0.10" inputmode="decimal"></div>
+                    <div id="betNotice1" class="bet-box-notice" aria-live="polite"></div>
+                    <div class="auto-cashout-control" aria-label="Otomatik bozdurma ayarı 1">
+                        <input type="checkbox" id="chkAutoCash1" class="toggle-switch-only" aria-label="Otomatik bozdurma 1">
+                        <div class="auto-input-shell"><span>x</span><input type="number" id="inpAuto1" value="50.00" min="2.00" max="100.00" step="0.10" inputmode="decimal"></div>
+                    </div>
                 </div>
             </div>
 
@@ -215,8 +219,11 @@
 
                 <div class="auto-row">
                     <button class="auto-icon-btn" id="btnAutoMode2" type="button" aria-label="Her tur otomatik katılım modu 2"><i class="fa-solid fa-rotate"></i></button>
-                    <input type="checkbox" id="chkAutoCash2" class="toggle-switch-only" aria-label="Otomatik bozdurma 2">
-                    <div class="auto-input-shell"><span>x</span><input type="number" id="inpAuto2" value="50.00" min="2.00" max="100.00" step="0.10" inputmode="decimal"></div>
+                    <div id="betNotice2" class="bet-box-notice" aria-live="polite"></div>
+                    <div class="auto-cashout-control" aria-label="Otomatik bozdurma ayarı 2">
+                        <input type="checkbox" id="chkAutoCash2" class="toggle-switch-only" aria-label="Otomatik bozdurma 2">
+                        <div class="auto-input-shell"><span>x</span><input type="number" id="inpAuto2" value="50.00" min="2.00" max="100.00" step="0.10" inputmode="decimal"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -236,7 +243,7 @@
 </div>
 
 <script src="/public/js/games/online-boot-guard.js?v=phase10-11-runtime-fix-20260426h" defer></script>
-<script type="module" src="/public/js/games/crash/crash-app.js?v=crash-hardening-20260503b"></script>
+<script type="module" src="/public/js/games/crash/crash-app.js?v=crash-final-cashout-xp-ui-20260503c"></script>
   <script src="/public/playmatrix-runtime.js" defer></script>
   <script src="/public/js/phase4/static-actions.js" defer></script>
 </body>
