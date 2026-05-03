@@ -43,18 +43,18 @@ function showRealtimeToast(title = 'PlayMatrix', message = '', tone = 'info', op
 }
 
 
-function playSfx(name = '') {
-  try {
-    const key = String(name || '').trim().toLowerCase();
-    if (!key) return;
-    const store = window.__PM_GAME_SFX__ || window.__PM_SFX__ || {};
-    const audio = store[key];
-    if (audio && typeof audio.play === 'function') {
-      audio.currentTime = 0;
-      audio.play().catch(() => null);
-    }
-  } catch (_) {}
-}
+const ChessAudio = (() => {
+  let ctx = null;
+  let unlocked = false;
+  const presets = { move:[520,0.045,'sine',0.055], capture:[360,0.07,'triangle',0.075], check:[760,0.08,'square',0.055], win:[880,0.10,'sine',0.07], end:[180,0.12,'sawtooth',0.05], start:[620,0.08,'sine',0.045], error:[140,0.10,'square',0.04] };
+  function getCtx(){ const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; if (!ctx) ctx = new AC(); return ctx; }
+  async function unlock(){ try { const c = getCtx(); if (!c) return false; if (c.state === 'suspended') await c.resume(); unlocked = true; return true; } catch (_) { return false; } }
+  function play(name='move'){ try { const c = getCtx(); if (!c) return; if (c.state === 'suspended') c.resume().catch(()=>null); const [freq,duration,type,gainValue] = presets[String(name||'move').toLowerCase()] || presets.move; const t = c.currentTime; const osc = c.createOscillator(); const gain = c.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, t); gain.gain.setValueAtTime(0.0001, t); gain.gain.exponentialRampToValueAtTime(gainValue, t + 0.008); gain.gain.exponentialRampToValueAtTime(0.0001, t + duration); osc.connect(gain).connect(c.destination); osc.start(t); osc.stop(t + duration + 0.02); } catch (_) {} }
+  return { unlock, play, get unlocked(){ return unlocked; } };
+})();
+function installChessAudioUnlock(){ const unlock = () => ChessAudio.unlock().catch(()=>null); window.addEventListener('pointerdown', unlock, { once:true, passive:true }); window.addEventListener('touchstart', unlock, { once:true, passive:true }); window.addEventListener('click', unlock, { once:true, passive:true }); }
+function playSfx(name = '') { ChessAudio.play(name || 'move'); }
+installChessAudioUnlock();
 
 function showRealtimeInviteModal(payload = {}) {
   try {
@@ -177,6 +177,8 @@ const elStudioIntro = document.getElementById('studioIntro');
     let validMovesForSelected = [];
     let lastFen = '';
     let lastStatus = '';
+    let lastMoveCount = 0;
+    let socketListenersWired = false;
     let isProcessingMove = false;
     let currentRoomState = null;
     let lastResultSummaryKey = '';
@@ -300,12 +302,12 @@ const elStudioIntro = document.getElementById('studioIntro');
     function applyTopbarAvatar(profile = {}) {
       const host = document.getElementById('uiAccountAvatarHost');
       if (!host) return;
-      const signature = JSON.stringify({ avatar: profile.avatar || '', frame: profile.selectedFrame || 0 });
+      const signature = JSON.stringify({ avatar: profile.avatar || '' });
       if (host.dataset.pmAvatarSig === signature && host.childElementCount) return;
       host.dataset.pmAvatarSig = signature;
       try {
         if (window.PMAvatar && typeof window.PMAvatar.renderAvatarNode === 'function') {
-          host.replaceChildren(window.PMAvatar.renderAvatarNode({ avatar: profile.avatar || '', selectedFrame: profile.selectedFrame || 0, extraClass: 'pm-game-topbar-avatar', sizeTag: 'topbar', alt: 'Hesap avatarı' }));
+          const img = document.createElement('img'); img.className = 'pm-game-topbar-avatar-fallback'; img.alt = 'Hesap avatarı'; img.src = profile.avatar || DEFAULT_AVATAR; host.replaceChildren(img);
           return;
         }
       } catch (_) {}
@@ -417,6 +419,7 @@ function resetToLobby() {
   validMovesForSelected = [];
   lastFen = '';
   lastStatus = '';
+  lastMoveCount = 0;
   try { localStorage.removeItem('activeChessRoom'); } catch (_) {}
   const lobby = document.getElementById('lobbyArea');
   const game = document.getElementById('gameArea');
@@ -424,7 +427,11 @@ function resetToLobby() {
   if (game) game.style.display = 'none';
   startLobbyPolling();
 }
-Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, showHowToPlay, showMatrixModal, resetToLobby });
+function handleChessExit(){
+  if (currentRoomId) { resetToLobby(); showLobbyNotice('Satranç lobisine döndün.', 'info'); return; }
+  window.location.href = 'https://playmatrix.com.tr/';
+}
+Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, showHowToPlay, showMatrixModal, resetToLobby, handleChessExit });
 
     function clearRuntimeNotices() { showLobbyNotice(''); showGameNotice(''); }
     function setBootBusyState(isBusy) { if (elBtnEnterGame) elBtnEnterGame.disabled = !!isBusy; if (elBtnRetryBoot) elBtnRetryBoot.disabled = !!isBusy; }
@@ -569,8 +576,17 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       return Math.max(0, Math.min(100, value));
     }
 
+    function reportChessClientIssue(scope, payload = {}) {
+      try {
+        const body = { game:'chess', scope:String(scope||'frontend'), type:'chess-client', message:String(payload.message || payload.error || scope || 'Satranç istemci olayı').slice(0,500), path: location.pathname, source: payload.source || 'games/chess/Satranc.phase4-module-1.js', line: payload.line || null, stack: String(payload.stack || '').slice(0,1200), roomId: currentRoomId || '', stateVersion: currentRoomState?.stateVersion || 0, at: Date.now() };
+        fetch(`${getApiBase()}/api/client/error`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body), keepalive:true }).catch(()=>null);
+      } catch (_) {}
+    }
+    window.addEventListener('error', (event) => reportChessClientIssue('window.error', { message:event.message, source:event.filename, line:event.lineno, stack:event.error?.stack }), true);
+    window.addEventListener('unhandledrejection', (event) => reportChessClientIssue('promise.rejection', { message:event.reason?.message || String(event.reason || ''), stack:event.reason?.stack }), true);
     async function fetchAPI(endpoint, method = 'GET', body = null, attempt = 0) {
-      return core.requestWithAuth(endpoint, { method, body, timeoutMs: 8000, retries: attempt === 0 ? 1 : 0 });
+      try { return await core.requestWithAuth(endpoint, { method, body, timeoutMs: 8000, retries: attempt === 0 ? 1 : 0 }); }
+      catch (error) { reportChessClientIssue(`api.${method}.${endpoint}`, { message:error.message, endpoint, method, body }); throw error; }
     }
 
     async function restoreChessSession(roomId, suppressError = false) {
@@ -697,7 +713,10 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
           const modeLabel = r.mode === 'bot' ? 'Bot' : r.mode === 'bet' ? 'Bahisli' : r.mode === 'private' ? 'Özel' : 'Bahissiz';
           let statusText = '';
           let btnHtml = '';
-          if (r.status === 'waiting') {
+          if (r.mode === 'bot' || r.joinDisabledReason === 'BOT_ROOM_NOT_JOINABLE') {
+            statusText = '<span class="pm-chess-status-playing"><i class="fa-solid fa-robot"></i> Bot Oyunu • Katılım Kapalı</span>';
+            btnHtml = '<button class="btn-join btn-disabled" disabled>BOT ODASI</button>';
+          } else if (r.status === 'waiting') {
             statusText = '<span class="pm-chess-status-waiting"><i class="fa-solid fa-clock"></i> Rakip Bekleniyor</span>';
             btnHtml = isMe ? '<button class="btn-join btn-disabled" disabled>SENİN ODAN</button>' : '<button class="btn-join" data-room-id="' + escapeHTML(r.id) + '">KATIL</button>';
           } else if (r.status === 'playing') {
@@ -782,7 +801,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
     function translateError(code = '') {
       const key = String(code || '').toUpperCase();
       const map = {
-        ROOM_FULL: 'Oda dolu.', ROOM_NOT_FOUND: 'Oda bulunamadı.', NOT_YOUR_TURN: 'Sıra sende değil.', ILLEGAL_MOVE: 'Bu hamle satranç kurallarına göre geçersiz.', INVALID_MOVE_FORMAT: 'Hamle formatı geçersiz.', INSUFFICIENT_BALANCE: 'Bakiye yetersiz.', BET_MIN_1000_MC: 'Bahisli Satranç için minimum bahis 1.000 MC.', BET_MAX_10000_MC: 'Bahisli Satranç için maksimum bahis 10.000 MC.', ALREADY_IN_ACTIVE_CHESS_ROOM: 'Zaten aktif bir Satranç odan var.', DRAW_DISABLED_FOR_BOT: 'Bot oyununda beraberlik teklifi yoktur.', ROOM_CLOSED: 'Oda kapandı.', EXTENSION_REJECTED: 'Süre uzatma reddedildi.'
+        ROOM_FULL: 'Oda dolu.', ROOM_NOT_FOUND: 'Oda bulunamadı.', NOT_YOUR_TURN: 'Sıra sende değil.', ILLEGAL_MOVE: 'Bu hamle satranç kurallarına göre geçersiz.', INVALID_MOVE_FORMAT: 'Hamle formatı geçersiz.', INSUFFICIENT_BALANCE: 'Bakiye yetersiz.', BET_MIN_1000_MC: 'Bahisli Satranç için minimum bahis 1.000 MC.', BET_MAX_10000_MC: 'Bahisli Satranç için maksimum bahis 10.000 MC.', ALREADY_IN_ACTIVE_CHESS_ROOM: 'Zaten aktif bir Satranç odan var.', DRAW_DISABLED_FOR_BOT: 'Bot oyununda beraberlik teklifi yoktur.', ROOM_CLOSED: 'Oda kapandı.', EXTENSION_REJECTED: 'Süre uzatma reddedildi.', STATE_VERSION_MISMATCH:'Oyun verisi yenilendi. Lütfen hamleni tekrar seç.', AUTH_REQUIRED:'Oturum doğrulaması gerekiyor.', SOCKET_TIMEOUT:'Bağlantı gecikti. Hamle tekrar deneniyor.', SOCKET_OFFLINE:'Canlı bağlantı kapalı. Sunucuya yeniden bağlanılıyor.', BOT_ROOM_NOT_JOINABLE:'Bot odasına başka oyuncu katılamaz.', ROOM_NOT_PLAYING:'Oda aktif oyun durumunda değil.', NOT_IN_ROOM:'Bu odada oyuncu değilsin.'
       };
       return map[key] || String(code || 'İşlem tamamlanamadı.');
     }
@@ -791,14 +810,16 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       try {
         if (chessSocket && chessSocket.connected) return chessSocket;
         chessSocket = await core.createAuthedSocket(chessSocket, { transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: 6, timeout: 6000 });
+        if (socketListenersWired) return chessSocket;
+        socketListenersWired = true;
         chessSocket.on('connect', () => {
           try { chessSocket.emit('chess:lobby:subscribe'); } catch (_) {}
           try { chessSocket.emit('chess:subscribe-user', null, () => {}); } catch (_) {}
           try { if (currentRoomId) chessSocket.emit('chess:join', currentRoomId, () => {}); } catch (_) {}
         });
         chessSocket.on('chess:lobby', () => { if (!currentRoomId) fetchLobby(false).catch(() => null); });
-        chessSocket.on('chess:room', (room) => { if (room?.id && room.id === currentRoomId) syncBoardUI(room); });
-        chessSocket.on('chess:room_public', (room) => { if (room?.id && room.id === currentRoomId) syncBoardUI(room); });
+        chessSocket.on('chess:room', (room) => { if (room?.id && room.id === currentRoomId) { syncBoardUI(room); showGameNotice(''); } });
+        chessSocket.on('chess:room_public', (room) => { if (room?.id && room.id === currentRoomId) { syncBoardUI(room); showGameNotice(''); } });
         return chessSocket;
       } catch (_) { return null; }
     }
@@ -868,7 +889,8 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
 
       playSfx('start');
       syncBoardUI(roomData);
-      pollingInterval = setInterval(pollGameState, 12000);
+      showGameNotice('');
+      pollingInterval = setInterval(pollGameState, 2500);
       startGamePing();
     }
 
@@ -989,6 +1011,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
     function syncBoardUI(r) {
       if (!r) return;
       currentRoomState = r;
+      if (r.status === 'playing') showGameNotice('');
       const { players, host, guest } = getRoomPlayers(r);
       const me = players.find(p => p.isMe || p.uid === userUid) || (myColor === 'w' ? host : guest);
       const opp = players.find(p => p.color && p.color !== myColor) || (myColor === 'w' ? guest : host);
@@ -1025,7 +1048,8 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         const myTurn = r.turn === myColor;
         const checkText = r.check ? ' • ŞAH' : '';
         const drawText = r.drawOfferBy === 'opponent' ? ' • BERABERLİK TEKLİFİ VAR' : r.drawOfferBy === 'me' ? ' • BERABERLİK TEKLİFİ GÖNDERİLDİ' : '';
-        statusTxt.innerText = (myTurn ? "SIRA SENDE" : "SIRA RAKİPTE") + checkText + drawText;
+        const botThinking = r.mode === 'bot' && !myTurn && Number(r.botThinkingUntil || 0) > Date.now();
+        statusTxt.innerText = botThinking ? 'PLAYMATRIX DÜŞÜNÜYOR...' : (myTurn ? "SIRA SENDE" : "SIRA RAKİPTE") + checkText + drawText;
         statusTxt.style.color = myTurn ? "#00ffa3" : "#f1c40f";
       } else if (r.status === 'finished') {
         clearInterval(pollingInterval);
@@ -1053,10 +1077,14 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         const ok = gameLogic.load(r.fen);
         if (!ok) console.warn('[PlayMatrix:Satranc] invalid FEN from backend', r.fen);
         drawBoard();
-        if (lastFen !== "" && r.fen !== lastFen) {
+        const moveCount = Array.isArray(r.moves) ? r.moves.length : 0;
+        if (moveCount > lastMoveCount || (lastFen !== "" && r.fen !== lastFen)) {
+          const lastMove = Array.isArray(r.moves) ? r.moves[r.moves.length - 1] : null;
           if (gameLogic.in_check && gameLogic.in_check()) playSfx('check');
+          else if (lastMove?.flags === 'capture') playSfx('capture');
           else playSfx('move');
         }
+        lastMoveCount = moveCount;
         lastFen = r.fen;
         lastStatus = r.status;
       }
@@ -1085,6 +1113,8 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
           sqDiv.dataset.sq = sqName;
 
           if (selectedSq === sqName) sqDiv.classList.add('highlight');
+          const lastMove = Array.isArray(currentRoomState?.moves) ? currentRoomState.moves[currentRoomState.moves.length - 1] : null;
+          if (lastMove && (lastMove.from === sqName || lastMove.to === sqName)) sqDiv.classList.add('last-move');
 
           const isMoveObj = validMovesForSelected.find(m => m.to === sqName);
           if (isMoveObj) {
@@ -1125,7 +1155,13 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
           try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {}
           if (res?.room) syncBoardUI(res.room);
         } catch(e) {
-          showMatrixModal("Hata", translateError(e.message), "error");
+          if (String(e.message || '').toUpperCase() === 'STATE_VERSION_MISMATCH') {
+            showGameNotice('Hamle senkronu yenilendi. Lütfen hamleni tekrar seç.', 'warning');
+            await pollGameState().catch(() => null);
+          } else {
+            showMatrixModal("Hata", translateError(e.message), "error");
+            playSfx('error');
+          }
           if (lastFen) gameLogic.load(lastFen);
           drawBoard();
         } finally {
@@ -1174,6 +1210,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
     });
 
     document.getElementById('matrixModalCloseBtn')?.addEventListener('click', closeMatrixModal);
+    document.getElementById('chessExitBtn')?.addEventListener('click', handleChessExit);
     document.querySelector('#confirmModal .btn-no')?.addEventListener('click', closeConfirmModal);
 
     onAuthStateChanged(user => {

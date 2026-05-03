@@ -1,6 +1,19 @@
 /* PlayMatrix FAZ 3: Crash application module extracted from HTML shell. */
     import { initPlayMatrixOnlineCore } from "../../../pm-online-core.js";
 
+const __PM_CRASH_CLIENT_REPORTER__ = (() => {
+  function apiBase(){ try { return window.__PLAYMATRIX_API_URL__ || window.__PM_RUNTIME?.apiBase || window.location.origin; } catch (_) { return window.location.origin; } }
+  function report(scope, payload = {}) {
+    try {
+      const body = { game:'crash', scope:String(scope||'frontend'), type:'crash-client', message:String(payload.message || payload.error || scope || 'Crash istemci olayı').slice(0,500), path:location.pathname, source:payload.source || 'public/js/games/crash/crash-app.js', line:payload.line || null, stack:String(payload.stack || '').slice(0,1200), at:Date.now() };
+      fetch(`${apiBase()}/api/client/error`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), keepalive:true }).catch(()=>null);
+    } catch (_) {}
+  }
+  window.addEventListener('error', (event) => report('window.error', { message:event.message, source:event.filename, line:event.lineno, stack:event.error?.stack }), true);
+  window.addEventListener('unhandledrejection', (event) => report('promise.rejection', { message:event.reason?.message || String(event.reason || ''), stack:event.reason?.stack }), true);
+  return { report };
+})();
+
     const core = await initPlayMatrixOnlineCore();
     const auth = core.auth;
     const onAuthStateChanged = core.onAuthStateChanged;

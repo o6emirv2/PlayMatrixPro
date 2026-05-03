@@ -31,7 +31,9 @@ app.use((req, res, next) => {
   const startedAt = Date.now();
   res.on('finish', () => {
     if (res.statusCode >= 400) {
-      console.error('[api:error]', JSON.stringify({ method: req.method, path: req.originalUrl || req.url, status: res.statusCode, ms: Date.now() - startedAt, requestId: req.headers['x-request-id'] || null }));
+      const row = { id:`api_${Date.now()}_${Math.random().toString(36).slice(2)}`, scope:'api.error', game: String(req.originalUrl || req.url).includes('/chess') ? 'chess' : String(req.originalUrl || req.url).includes('/crash') ? 'crash' : 'system', method: req.method, path: req.originalUrl || req.url, status: res.statusCode, ms: Date.now() - startedAt, requestId: req.headers['x-request-id'] || null, message:`${req.method} ${req.originalUrl || req.url} ${res.statusCode}`, createdAt:Date.now(), severity:res.statusCode >= 500 ? 'error' : 'warning' };
+      runtimeStore.errors.set(row.id, row, 24*3600000);
+      console.error('[api:error]', JSON.stringify({ method: row.method, path: row.path, status: row.status, ms: row.ms, requestId: row.requestId, game: row.game }));
     }
   });
   next();
@@ -128,7 +130,7 @@ setInterval(()=>{ Object.values(runtimeStore).forEach(store => store.prune && st
 })();
 
 app.use((req,res)=>res.status(404).json({ ok:false, error:'NOT_FOUND' }));
-app.use((err,req,res,next)=>{ console.error('[server:error]', JSON.stringify({ message: err?.message || String(err), stack: err?.stack || '', path: req.originalUrl || req.url, method: req.method })); res.status(err.statusCode || 500).json({ ok:false, error: err.message === 'INSUFFICIENT_BALANCE' ? 'INSUFFICIENT_BALANCE' : 'INTERNAL_ERROR' }); });
+app.use((err,req,res,next)=>{ const row = { id:`server_${Date.now()}_${Math.random().toString(36).slice(2)}`, scope:'server.error', game:String(req.originalUrl || req.url).includes('/chess') ? 'chess' : String(req.originalUrl || req.url).includes('/crash') ? 'crash' : 'system', message:err?.message || String(err), stack:String(err?.stack || '').slice(0,2000), path:req.originalUrl || req.url, method:req.method, status:err.statusCode || 500, createdAt:Date.now(), severity:'error' }; runtimeStore.errors.set(row.id, row, 24*3600000); console.error('[server:error]', JSON.stringify({ message: row.message, stack: row.stack, path: row.path, method: row.method, game: row.game })); res.status(err.statusCode || 500).json({ ok:false, error: err.message === 'INSUFFICIENT_BALANCE' ? 'INSUFFICIENT_BALANCE' : 'INTERNAL_ERROR' }); });
 const port = Number(process.env.PORT || 3000);
 if (require.main === module) server.listen(port, () => console.log(`[playmatrix] listening on ${port}`));
 module.exports = { app, server, io };

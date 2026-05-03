@@ -10,6 +10,7 @@ const router = express.Router();
 const rooms = new Map();
 const queue = new Map();
 let ioRef = null;
+const botTimers = new Map();
 
 const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const FREE_TIME_MS = 10 * 60 * 1000;
@@ -24,6 +25,7 @@ const FREE_DAILY_WIN_LIMIT = 10;
 const FREE_WIN_REWARD_MC = 5000;
 const BET_XP_PER_1000_MC = 100;
 const BOT_PROFILE = Object.freeze({ uidPrefix: 'bot_', name: 'PlayMatrix', username: 'PlayMatrix', avatar: '/public/assets/images/logo.png', selectedFrame: 100, frameUrl: '/public/assets/frames/frame-100.png' });
+const BOT_MOVE_DELAY_MS = Math.max(3000, Math.trunc(Number(process.env.CHESS_BOT_MOVE_DELAY_MS || 3000) || 3000));
 const MIN_BET = 1000;
 const MAX_BET = 10000;
 const files = 'abcdefgh';
@@ -46,13 +48,22 @@ function createHttpError(statusCode, error) {
 function asyncRoute(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch((error) => {
     if (error && error.statusCode && error.statusCode < 500) {
+      reportChessIssue(`api.${req.method}.${req.originalUrl || req.url}`, { error: error.message || 'REQUEST_REJECTED', status: error.statusCode, method: req.method, path: req.originalUrl || req.url, severity: 'warning' });
       return res.status(error.statusCode).json({ ok: false, error: error.message || 'REQUEST_REJECTED' });
     }
+    reportChessIssue(`api.${req.method}.${req.originalUrl || req.url}`, { error: error?.message || 'INTERNAL_ERROR', status: 500, method: req.method, path: req.originalUrl || req.url, severity: 'error' });
     return next(error);
   });
 }
 function safeStr(value, max = 80) {
   return String(value ?? '').replace(/[<>]/g, '').trim().slice(0, max);
+}
+function reportChessIssue(scope, details = {}) {
+  const row = { id: `chess_${Date.now()}_${Math.random().toString(36).slice(2)}`, game: 'chess', scope: String(scope || 'chess.unknown'), message: String(details.error || details.message || scope || 'Satranç olayı').slice(0, 500), details, createdAt: Date.now(), severity: details.severity || 'error' };
+  runtimeStore.errors.set(row.id, row, 24 * 3600000);
+  const method = row.severity === 'info' ? 'info' : row.severity === 'warning' ? 'warn' : 'error';
+  console[method]('[game:issue:chess]', JSON.stringify({ scope: row.scope, message: row.message, roomId: details.roomId || '', status: details.status || '', severity: row.severity }));
+  return row;
 }
 
 function istanbulDateKey(ts = now()) {
@@ -402,6 +413,7 @@ function publicRoom(r, viewerUid = '') {
     : null;
   return {
     id: r.id, roomId: r.id, status: r.status, mode: r.mode, bet: r.bet, pot: r.pot,
+    botRoom: r.mode === 'bot', joinDisabled: r.mode === 'bot' || r.status !== 'waiting', joinDisabledReason: r.mode === 'bot' ? 'BOT_ROOM_NOT_JOINABLE' : r.status !== 'waiting' ? 'ROOM_NOT_WAITING' : '', botThinkingUntil: r.botThinkingUntil || 0,
     host, guest,
     hostName: host.username, guestName: guest?.username || 'Bilinmeyen',
     hostUid: host.uid || '', guestUid: guest?.uid || '',
@@ -598,7 +610,7 @@ async function createRoomFor(req, opts = {}) {
   }
   const ts = now();
   const player = await buildPlayer(req, 'w');
-  const r = { id: `ch_${ts}_${crypto.randomBytes(12).toString('hex')}`, status: mode === 'bot' ? 'playing' : 'waiting', mode, bet: mode === 'bot' ? 0 : betAmount, pot: mode === 'bot' ? 0 : betAmount, fen: INITIAL_FEN, turn: 'w', moves: [], moveIds: {}, stateVersion: 1, drawOfferBy: '', check: '', createdAt: ts, updatedAt: ts, finishedAt: 0, players: [player], clock: { lastTurnAt: ts }, settlement: {}, xpAwards: {}, freeRewards: {}, lifecycle: makeLifecycle(ts), lastGameActionAt: ts, lastMoveAt: 0 };
+  const r = { id: `ch_${ts}_${crypto.randomBytes(12).toString('hex')}`, status: mode === 'bot' ? 'playing' : 'waiting', mode, bet: mode === 'bot' ? 0 : betAmount, pot: mode === 'bot' ? 0 : betAmount, fen: INITIAL_FEN, turn: 'w', moves: [], moveIds: {}, stateVersion: 1, drawOfferBy: '', check: '', createdAt: ts, updatedAt: ts, finishedAt: 0, players: [player], clock: { lastTurnAt: ts }, settlement: {}, xpAwards: {}, freeRewards: {}, lifecycle: makeLifecycle(ts), lastGameActionAt: ts, lastMoveAt: 0, botThinkingUntil: 0 };
   if (mode === 'bot') {
     r.players.push({ uid: `${BOT_PROFILE.uidPrefix}${r.id}`, name: BOT_PROFILE.name, username: BOT_PROFILE.username, avatar: BOT_PROFILE.avatar, selectedFrame: BOT_PROFILE.selectedFrame, frameUrl: BOT_PROFILE.frameUrl, color: 'b', timeLeftMs: FREE_TIME_MS, connected: true, joinedAt: ts, lastSeenAt: ts, isBot: true });
   }
@@ -728,7 +740,7 @@ async function processChessMove({ user, body }) {
   touchRoom(r);
   emitRoom(r);
   emitLobby();
-  if (r.status === 'playing') await makeBotMoveIfNeeded(r);
+  if (r.status === 'playing') scheduleBotMoveIfNeeded(r);
   return { ok: true, room: publicRoom(r, viewerUid) };
 }
 
@@ -736,6 +748,7 @@ async function joinRoomFor(req, r) {
   const playerUid = uidOf(req);
   if (!r) throw createHttpError(404, 'ROOM_NOT_FOUND');
   if (r.status === 'finished') throw createHttpError(409, 'ROOM_FINISHED');
+  if (r.mode === 'bot' && !r.players.some((p) => p.uid === playerUid)) throw createHttpError(409, 'BOT_ROOM_NOT_JOINABLE');
   if (r.players.some((p) => p.uid === playerUid)) { const p = r.players.find((x) => x.uid === playerUid); p.connected = true; p.lastSeenAt = now(); p.disconnectedAt = 0; return { room: r, charged: { ok: true, balance: await readBalance(playerUid).catch(() => 0) } }; }
   if (r.players.length >= 2 || r.status !== 'waiting') throw createHttpError(409, 'ROOM_FULL');
   const active = activeRoomFor(playerUid);
@@ -753,8 +766,22 @@ async function joinRoomFor(req, r) {
   emitLobby();
   return { room: r, charged };
 }
+function scheduleBotMoveIfNeeded(r) {
+  if (!r || r.mode !== 'bot' || r.status !== 'playing' || r.turn !== 'b') return;
+  if (botTimers.has(r.id)) return;
+  r.botThinkingUntil = Date.now() + BOT_MOVE_DELAY_MS;
+  r.stateVersion += 1;
+  emitRoom(r);
+  const timer = setTimeout(async () => {
+    botTimers.delete(r.id);
+    try { await makeBotMoveIfNeeded(r); } catch (error) { reportChessIssue('bot.move.error', { roomId: r.id, error: error.message, severity: 'error' }); }
+  }, BOT_MOVE_DELAY_MS);
+  timer.unref?.();
+  botTimers.set(r.id, timer);
+}
 async function makeBotMoveIfNeeded(r) {
   if (!r || r.mode !== 'bot' || r.status !== 'playing' || r.turn !== 'b') return;
+  r.botThinkingUntil = 0;
   const state = parseFen(r.fen);
   const moves = legalMoves(state, 'b');
   if (!moves.length) return;
@@ -776,7 +803,7 @@ async function makeBotMoveIfNeeded(r) {
 router.get('/lobby', requireAuth, asyncRoute(async (req, res) => {
   const viewerUid = uidOf(req);
   for (const r of rooms.values()) syncClock(r);
-  const visible = [...rooms.values()].filter((r) => r.status !== 'finished' && r.mode !== 'private' && r.mode !== 'bot').map((r) => publicRoom(r, viewerUid));
+  const visible = [...rooms.values()].filter((r) => r.status !== 'finished' && r.mode !== 'private').map((r) => publicRoom(r, viewerUid));
   res.json({ ok: true, rooms: visible });
 }));
 router.get('/profile', requireAuth, asyncRoute(async (req, res) => {
@@ -897,6 +924,7 @@ router.post('/leave', requireAuth, asyncRoute(async (req, res) => {
 }));
 async function authenticateChessSocket(socket) {
   try {
+    if (socket.data?.chessUid) return true;
     const token = String(socket.handshake?.auth?.token || '').trim();
     if (!token) return false;
     const { auth } = initFirebaseAdmin();
