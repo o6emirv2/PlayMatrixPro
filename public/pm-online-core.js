@@ -23,6 +23,12 @@ function buildError(message, code, extra = {}) {
   return error;
 }
 
+
+function readServerSessionToken() {
+  try { return window.sessionStorage?.getItem('pm_session_token') || window.localStorage?.getItem('pm_session_token') || ''; }
+  catch (_) { return ''; }
+}
+
 function timeoutAfter(ms, code) {
   return new Promise((_, reject) => {
     window.setTimeout(() => reject(buildError(code, code)), Math.max(1000, Number(ms) || 1000));
@@ -57,6 +63,8 @@ async function requestWithSessionFallback(core, endpoint, { method = 'GET', body
     try {
       const requestHeaders = { ...headers };
       if (body != null && !requestHeaders['Content-Type']) requestHeaders['Content-Type'] = 'application/json';
+      const sessionToken = readServerSessionToken();
+      if (sessionToken && !requestHeaders['x-session-token']) requestHeaders['x-session-token'] = sessionToken;
       if (token) requestHeaders.Authorization = `Bearer ${token}`;
       const response = await fetch(`${base}${endpoint}`, {
         method,

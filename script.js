@@ -3,7 +3,7 @@ import { bootHomeApplication } from '/public/js/home/app.js';
 const PM_GAME_ROUTES = Object.freeze({
   crash: '/games/crash', chess: '/games/chess', satranc: '/games/chess', pisti: '/games/pisti',
   pattern: '/games/pattern-master', patternmaster: '/games/pattern-master', space: '/games/space', spacepro: '/games/space',
-  snake: '/games/snake', snakepro: '/games/snake', music: '/games/music-tiles', musictiles: '/games/music-tiles'
+  snake: '/games/snake', snakepro: '/games/snake'
 });
 
 window.__PLAYMATRIX_ROUTES__ = PM_GAME_ROUTES;

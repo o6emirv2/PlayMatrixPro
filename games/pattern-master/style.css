@@ -1159,14 +1159,3 @@ body.pm-modal-scroll-locked{
 @media (max-width:640px){.pmg-rt-stack{left:12px;right:12px;width:auto;top:calc(env(safe-area-inset-top) + 78px)}}
 
 .pm-game-avatar-shell,.pm-avatar-shell{aspect-ratio:1/1;overflow:visible}.pm-game-frame,.pm-frame-image{pointer-events:none}.action-icon-btn,.back-btn{touch-action:manipulation}@media(max-width:720px){body{min-height:100svh}.game-shell,.arena-shell,.table-wrap{max-width:100vw;overflow:hidden}}
-
-/* V8 game avatar/frame overlay hardening */
-.pm-game-avatar-shell,
-.pm-game-topbar-avatar-host,
-.t-avatar-wrap,
-[data-pm-avatar="true"],
-.pm-avatar { position: relative !important; overflow: visible !important; isolation: isolate; }
-[data-pm-avatar="true"] > img:not(.pm-frame-image):not(.pm-avatar-shell__frame):not(.pm-game-frame),
-.pm-avatar-img,.p-avatar,.t-avatar { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; object-fit:cover!important; border-radius:50%!important; z-index:2!important; transform:scale(var(--pm-avatar-scale,.84)) translateZ(0)!important; }
-.pm-frame-image,.pm-avatar-shell__frame,.pm-game-frame,.t-frame { position:absolute!important; left:50%!important; top:50%!important; width:134%!important; height:134%!important; max-width:none!important; max-height:none!important; object-fit:contain!important; z-index:9!important; display:block!important; opacity:1!important; visibility:visible!important; pointer-events:none!important; transform:translate(-50%,-50%) translateZ(0)!important; filter:drop-shadow(0 0 7px rgba(255,210,80,.45)) drop-shadow(0 5px 12px rgba(0,0,0,.35))!important; }
-[data-frame-index="0"] .pm-frame-image,[data-frame-index="0"] .pm-avatar-shell__frame { display:none!important; }
