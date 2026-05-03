@@ -1,6 +1,6 @@
 const DEFAULT_ROOT_ID = 'framePickerModal';
 const DEFAULT_CONTAINER_ID = 'framePickerContainer';
-const DEFAULT_FALLBACK_AVATAR = '/assets/avatars/system/fallback.svg';
+const DEFAULT_FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
 
 function normalizeFrameLevel(value = 0) {
   const parsed = Math.floor(Number(value) || 0);

@@ -4,7 +4,7 @@
   const VERSION = 'clean-runtime-fix-20260426h';
   const ONLINE_GAME_RE = /\/games\/(crash|chess|pisti)(?:\/)?$/i;
   const ONLINE_NAMES = /^(crash|satranç|satranc|pişti|pisti)$/i;
-  const FALLBACK_AVATAR = '/assets/avatars/system/fallback.svg';
+  const FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
 
   function $(id) { return document.getElementById(id); }
   function qsa(selector, root) { return Array.from((root || document).querySelectorAll(selector)); }

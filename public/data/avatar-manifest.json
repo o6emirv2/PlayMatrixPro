@@ -1,7 +1,7 @@
 {
   "version": 1,
   "mode": "link",
-  "fallback": "/assets/avatars/system/fallback.svg",
+  "fallback": "/public/assets/avatars/system/fallback.svg",
   "defaultAvatar": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfGyJQYvPP6iCLIpSd0v2JMQxgxA3dUEjyLmW4F82zYQ&s=10",
   "allowedRemoteHosts": [
     "encrypted-tbn0.gstatic.com",

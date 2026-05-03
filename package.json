@@ -1,9 +1,9 @@
 {
   "name": "playmatrix-clean-production",
-  "version": "5.0.0",
+  "version": "8.0.0",
   "private": true,
   "type": "commonjs",
-  "description": "PlayMatrix clean modular production build",
+  "description": "PlayMatrix clean modular production build - crash/chess/pisti rewritten server systems",
   "main": "server.js",
   "engines": {
     "node": ">=20 <23"

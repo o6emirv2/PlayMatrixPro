@@ -1,7 +1,7 @@
 'use strict';
 
 (() => {
-  const FALLBACK_AVATAR = '/assets/avatars/system/fallback.svg';
+  const FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
   const FRAME_ASSET_COUNT = 18;
   const DEFAULT_FRAME_PROFILE = Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' });
   const FRAME_LEVEL_TO_ASSET = Object.freeze([

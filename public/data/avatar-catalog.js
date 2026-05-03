@@ -8,7 +8,7 @@ import { EMOJI_ANONYMOUS_AVATARS } from './avatar-sources/emoji-anonymous.js';
 import { FLOWER_AVATARS } from './avatar-sources/flowers.js';
 
 export const AVATAR_REMOTE_MODE = 'link';
-export const AVATAR_FALLBACK = '/assets/avatars/system/fallback.svg';
+export const AVATAR_FALLBACK = '/public/assets/avatars/system/fallback.svg';
 
 export const AVATAR_ALLOWED_REMOTE_HOSTS = Object.freeze([
   'encrypted-tbn0.gstatic.com',
