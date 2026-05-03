@@ -253,6 +253,8 @@ const elStudioIntro = document.getElementById('studioIntro');
     const gameLogic = window.Chess ? new Chess() : createMiniChessClient();
     let lobbySearchQuery = '';
     let chessSocket = null;
+    const avatarRenderCache = new Map();
+    let extensionPromptKey = '';
     const PIECE_UNICODE = Object.freeze({ K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' });
     const PIECE_IMGS = Object.freeze(Object.fromEntries(Object.entries(PIECE_UNICODE).map(([key, glyph]) => {
       const fg = key === key.toUpperCase() ? '#f8fafc' : '#0f172a';
@@ -269,6 +271,7 @@ const elStudioIntro = document.getElementById('studioIntro');
         name: player.name || player.username || player.displayName || 'Oyuncu',
         avatar: player.avatar || '',
         selectedFrame: Number(player.selectedFrame || 0) || 0,
+        frameUrl: player.frameUrl || '',
         isMe: !!player.isMe || (!!player.uid && player.uid === userUid),
         uid: player.uid || ''
       };
@@ -297,6 +300,9 @@ const elStudioIntro = document.getElementById('studioIntro');
     function applyTopbarAvatar(profile = {}) {
       const host = document.getElementById('uiAccountAvatarHost');
       if (!host) return;
+      const signature = JSON.stringify({ avatar: profile.avatar || '', frame: profile.selectedFrame || 0 });
+      if (host.dataset.pmAvatarSig === signature && host.childElementCount) return;
+      host.dataset.pmAvatarSig = signature;
       try {
         if (window.PMAvatar && typeof window.PMAvatar.renderAvatarNode === 'function') {
           host.replaceChildren(window.PMAvatar.renderAvatarNode({ avatar: profile.avatar || '', selectedFrame: profile.selectedFrame || 0, extraClass: 'pm-game-topbar-avatar', sizeTag: 'topbar', alt: 'Hesap avatarı' }));
@@ -376,17 +382,27 @@ function closeMatrixModal() {
   setModalActive('matrixModal', false);
   if (shouldLobby) resetToLobby();
 }
-function showConfirmModal(title, message, onConfirm) {
+function showConfirmModal(title, message, onConfirm, onCancel = null, options = {}) {
   const titleEl = document.getElementById('confirmModalTitle');
   const descEl = document.getElementById('confirmModalDesc');
   const yesBtn = document.getElementById('confirmYesBtn');
+  const noBtn = document.querySelector('#confirmModal .btn-no');
   if (titleEl) titleEl.textContent = String(title || 'Onay');
   if (descEl) descEl.textContent = String(message || 'İşlemi onaylıyor musun?');
   if (yesBtn) {
+    yesBtn.textContent = options.yesText || 'EVET';
     yesBtn.onclick = async () => {
       yesBtn.disabled = true;
       try { if (typeof onConfirm === 'function') await onConfirm(); }
       finally { yesBtn.disabled = false; closeConfirmModal(); }
+    };
+  }
+  if (noBtn) {
+    noBtn.textContent = options.noText || 'HAYIR';
+    noBtn.onclick = async () => {
+      noBtn.disabled = true;
+      try { if (typeof onCancel === 'function') await onCancel(); }
+      finally { noBtn.disabled = false; closeConfirmModal(); }
     };
   }
   setModalActive('confirmModal', true);
@@ -486,6 +502,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         setBootProgress(48);
         setBootStatus('Lobi arayüzü hazırlanıyor...');
         wireLobbySearchUI();
+        wireRoomModeUI();
         try { if (typeof ensureRealtimeShell === 'function') ensureRealtimeShell(); } catch (error) { console.warn('[PlayMatrix:Satranc] realtime shell skipped', error); }
         setBootProgress(66);
         setBootStatus('Lobi ve oyun verileri HTTP eşitleme modunda hazırlanıyor...');
@@ -592,6 +609,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       if (!userUid) { const user = await resolveBootUser(6500); userUid = user.uid; }
       fetchBalance();
       wireLobbySearchUI();
+      wireRoomModeUI();
       ensureRealtimeShell();
       await preparePollingSync();
       hydrateFriendCounts(true).catch(() => null);
@@ -713,6 +731,24 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       }
     }
 
+    function updateRoomModeUI() {
+      const modeEl = document.getElementById('chessRoomMode');
+      const betField = document.querySelector('.chess-bet-field');
+      const createBtn = document.querySelector('[data-pm-action="createRoom"]');
+      const quickBtn = document.querySelector('[data-pm-action="joinRoom"]');
+      const mode = String(modeEl?.value || 'free');
+      if (betField) betField.hidden = mode !== 'bet';
+      if (createBtn) createBtn.textContent = mode === 'bot' ? 'BOTLA OYNA' : 'ODA KUR';
+      if (quickBtn) quickBtn.textContent = mode === 'bot' ? 'BOT OYUNU BAŞLAT' : 'HIZLI KATIL';
+    }
+    function wireRoomModeUI() {
+      const modeEl = document.getElementById('chessRoomMode');
+      if (!modeEl || modeEl.dataset.pmWired === '1') return;
+      modeEl.dataset.pmWired = '1';
+      modeEl.addEventListener('change', updateRoomModeUI);
+      updateRoomModeUI();
+    }
+
     function readRoomOptions() {
       const modeEl = document.getElementById('chessRoomMode');
       const betEl = document.getElementById('chessBetAmount');
@@ -746,7 +782,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
     function translateError(code = '') {
       const key = String(code || '').toUpperCase();
       const map = {
-        ROOM_FULL: 'Oda dolu.', ROOM_NOT_FOUND: 'Oda bulunamadı.', NOT_YOUR_TURN: 'Sıra sende değil.', ILLEGAL_MOVE: 'Bu hamle satranç kurallarına göre geçersiz.', INVALID_MOVE_FORMAT: 'Hamle formatı geçersiz.', INSUFFICIENT_BALANCE: 'Bakiye yetersiz.', BET_MIN_1000_MC: 'Bahisli Satranç için minimum bahis 1.000 MC.', BET_MAX_10000_MC: 'Bahisli Satranç için maksimum bahis 10.000 MC.', ALREADY_IN_ACTIVE_CHESS_ROOM: 'Zaten aktif bir Satranç odan var.'
+        ROOM_FULL: 'Oda dolu.', ROOM_NOT_FOUND: 'Oda bulunamadı.', NOT_YOUR_TURN: 'Sıra sende değil.', ILLEGAL_MOVE: 'Bu hamle satranç kurallarına göre geçersiz.', INVALID_MOVE_FORMAT: 'Hamle formatı geçersiz.', INSUFFICIENT_BALANCE: 'Bakiye yetersiz.', BET_MIN_1000_MC: 'Bahisli Satranç için minimum bahis 1.000 MC.', BET_MAX_10000_MC: 'Bahisli Satranç için maksimum bahis 10.000 MC.', ALREADY_IN_ACTIVE_CHESS_ROOM: 'Zaten aktif bir Satranç odan var.', DRAW_DISABLED_FOR_BOT: 'Bot oyununda beraberlik teklifi yoktur.', ROOM_CLOSED: 'Oda kapandı.', EXTENSION_REJECTED: 'Süre uzatma reddedildi.'
       };
       return map[key] || String(code || 'İşlem tamamlanamadı.');
     }
@@ -757,13 +793,44 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         chessSocket = await core.createAuthedSocket(chessSocket, { transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: 6, timeout: 6000 });
         chessSocket.on('connect', () => {
           try { chessSocket.emit('chess:lobby:subscribe'); } catch (_) {}
-          try { if (userUid) chessSocket.emit('chess:subscribe-user', userUid); } catch (_) {}
-          try { if (currentRoomId) chessSocket.emit('chess:join', currentRoomId); } catch (_) {}
+          try { chessSocket.emit('chess:subscribe-user', null, () => {}); } catch (_) {}
+          try { if (currentRoomId) chessSocket.emit('chess:join', currentRoomId, () => {}); } catch (_) {}
         });
         chessSocket.on('chess:lobby', () => { if (!currentRoomId) fetchLobby(false).catch(() => null); });
         chessSocket.on('chess:room', (room) => { if (room?.id && room.id === currentRoomId) syncBoardUI(room); });
+        chessSocket.on('chess:room_public', (room) => { if (room?.id && room.id === currentRoomId) syncBoardUI(room); });
         return chessSocket;
       } catch (_) { return null; }
+    }
+    function socketAck(event, payload, timeoutMs = 5000) {
+      return new Promise((resolve, reject) => {
+        if (!chessSocket || !chessSocket.connected) return reject(new Error('SOCKET_OFFLINE'));
+        let done = false;
+        const timer = setTimeout(() => { if (!done) { done = true; reject(new Error('SOCKET_TIMEOUT')); } }, timeoutMs);
+        try {
+          chessSocket.emit(event, payload, (response) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            if (!response?.ok) reject(new Error(response?.error || 'SOCKET_REJECTED'));
+            else resolve(response);
+          });
+        } catch (error) {
+          clearTimeout(timer);
+          reject(error);
+        }
+      });
+    }
+    async function sendChessMove(payload) {
+      await ensureChessSocket().catch(() => null);
+      if (chessSocket?.connected) return socketAck('chess:move', payload, 4500).catch(() => fetchAPI('/api/chess/move', 'POST', payload));
+      return fetchAPI('/api/chess/move', 'POST', payload);
+    }
+    async function sendExtensionDecision(accept) {
+      const payload = { roomId: currentRoomId, accept: !!accept };
+      await ensureChessSocket().catch(() => null);
+      if (chessSocket?.connected) return socketAck('chess:extend', payload, 4500).catch(() => fetchAPI('/api/chess/extend', 'POST', payload));
+      return fetchAPI('/api/chess/extend', 'POST', payload);
     }
 
     function startGamePing() {
@@ -801,7 +868,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
 
       playSfx('start');
       syncBoardUI(roomData);
-      pollingInterval = setInterval(pollGameState, 1500);
+      pollingInterval = setInterval(pollGameState, 12000);
       startGamePing();
     }
 
@@ -849,38 +916,76 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       return Math.min(18, Math.max(9, lvl - 82));
     }
 
-    function applyFramedAvatar(avatarId, frameId, avatarUrl, selectedFrameLevel) {
+    function applyFramedAvatar(avatarId, frameId, avatarUrl, selectedFrameLevel, explicitFrameUrl = '') {
       const host = document.getElementById(`${avatarId}Host`) || document.getElementById(avatarId)?.parentElement;
-      if (window.PMAvatar && host) {
-        const sizePx = Math.max(34, Number(host.clientWidth || 38));
-        const node = window.PMAvatar.createNode({
-          avatarUrl,
-          level: selectedFrameLevel,
-          sizePx,
-          extraClass: 'pm-game-avatar-shell',
-          imageClass: 'p-avatar',
-          wrapperClass: 'pm-avatar',
-          sizeTag: 'main',
-          alt: 'Oyuncu avatarı'
-        });
-        host.replaceChildren(node);
+      const safeAvatar = avatarUrl || DEFAULT_AVATAR;
+      const frameValue = Number(selectedFrameLevel || 0) || 0;
+      const directFrame = explicitFrameUrl || (frameValue >= 100 ? `/public/assets/frames/frame-${Math.trunc(frameValue)}.png` : '');
+      const signature = JSON.stringify({ avatar: safeAvatar, frame: frameValue, directFrame });
+      if (avatarRenderCache.get(avatarId) === signature && host?.childElementCount) return;
+      avatarRenderCache.set(avatarId, signature);
+      if (directFrame && host) {
+        const wrap = document.createElement('div');
+        wrap.className = 'pm-avatar pm-game-avatar-shell';
+        const img = document.createElement('img');
+        img.className = 'p-avatar';
+        img.alt = 'Oyuncu avatarı';
+        img.src = safeAvatar;
+        const frame = document.createElement('img');
+        frame.className = 'pm-game-frame';
+        frame.alt = '';
+        frame.setAttribute('aria-hidden', 'true');
+        frame.src = directFrame;
+        wrap.append(img, frame);
+        host.replaceChildren(wrap);
         return;
+      }
+      if (window.PMAvatar && host) {
+        try {
+          const node = window.PMAvatar.createNode({
+            avatarUrl: safeAvatar,
+            level: frameValue,
+            sizePx: 40,
+            extraClass: 'pm-game-avatar-shell',
+            imageClass: 'p-avatar',
+            wrapperClass: 'pm-avatar',
+            sizeTag: 'main',
+            alt: 'Oyuncu avatarı'
+          });
+          host.replaceChildren(node);
+          return;
+        } catch (_) {}
       }
       const avatarEl = document.getElementById(avatarId);
       const frameEl = document.getElementById(frameId);
       if (!avatarEl || !frameEl) return;
-      avatarEl.src = avatarUrl || DEFAULT_AVATAR;
-      const frameIndex = resolveFrameIndex(selectedFrameLevel);
-      if (frameIndex <= 0) {
+      if (avatarEl.src !== safeAvatar) avatarEl.src = safeAvatar;
+      const frameIndex = resolveFrameIndex(frameValue);
+      if (frameIndex > 0) {
+        const src = `/public/assets/frames/frame-${frameIndex}.png`;
+        if (frameEl.src !== src) frameEl.src = src;
+        frameEl.hidden = false;
+      } else {
         frameEl.hidden = true;
         frameEl.removeAttribute('src');
-        return;
       }
-      frameEl.hidden = false;
-      frameEl.src = `/public/assets/frames/frame-${frameIndex}.png`;
-      frameEl.dataset.fallback = `/public/assets/frames/frame-${frameIndex}.png`;
     }
 
+    function maybeShowExtensionPrompt(r) {
+      const prompt = r?.extensionPrompt;
+      if (!prompt?.active || prompt.myResponse) return;
+      const key = `${r.id}:${prompt.promptAt || 0}`;
+      if (extensionPromptKey === key) return;
+      extensionPromptKey = key;
+      showConfirmModal('Süre Uzatma', prompt.message || '60 dakika doldu. Oyuna devam edilsin mi?', async () => {
+        const res = await sendExtensionDecision(true);
+        if (res?.room) syncBoardUI(res.room);
+      }, async () => {
+        const res = await sendExtensionDecision(false);
+        if (res?.room) syncBoardUI(res.room);
+        else resetToLobby();
+      }, { yesText: 'DEVAM ET', noText: 'BİTİR' });
+    }
     function syncBoardUI(r) {
       if (!r) return;
       currentRoomState = r;
@@ -890,15 +995,26 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
 
       const myNameEl = document.getElementById("myName");
       const oppNameEl = document.getElementById("oppName");
-      if (myNameEl) myNameEl.innerText = me.username || me.name || 'Sen';
-      applyFramedAvatar("myAvatar", "myAvatarFrame", me.avatar, me.selectedFrame);
+      if (myNameEl && myNameEl.textContent !== (me.username || me.name || 'Sen')) myNameEl.textContent = me.username || me.name || 'Sen';
+      applyFramedAvatar("myAvatar", "myAvatarFrame", me.avatar, me.selectedFrame, me.frameUrl);
       const myPlate = document.getElementById("myPlate");
       if (myPlate) myPlate.className = (r.turn === myColor && r.status === 'playing') ? "player-plate active" : "player-plate";
 
-      if (oppNameEl) oppNameEl.innerText = opp.username || opp.name || 'Bekleniyor...';
-      applyFramedAvatar("oppAvatar", "oppAvatarFrame", opp.avatar, opp.selectedFrame);
+      if (oppNameEl && oppNameEl.textContent !== (opp.username || opp.name || 'Bekleniyor...')) oppNameEl.textContent = opp.username || opp.name || 'Bekleniyor...';
+      applyFramedAvatar("oppAvatar", "oppAvatarFrame", opp.avatar, opp.selectedFrame, opp.frameUrl);
       const oppPlate = document.getElementById("oppPlate");
       if (oppPlate) oppPlate.className = (r.turn !== myColor && r.status === 'playing') ? "player-plate active" : "player-plate";
+
+      const drawBtn = document.getElementById('drawBtn');
+      if (drawBtn) {
+        const hideDraw = r.mode === 'bot' || r.status !== 'playing';
+        drawBtn.hidden = hideDraw;
+        drawBtn.disabled = hideDraw;
+        drawBtn.textContent = r.drawOfferBy === 'opponent' ? 'BERABERLİĞİ KABUL ET' : r.drawOfferBy === 'me' ? 'TEKLİF GÖNDERİLDİ' : 'BERABERLİK TEKLİF ET';
+      }
+      maybeShowExtensionPrompt(r);
+      if (r.lifecycle?.notice === 'extension-accepted') showGameNotice('Oda süresi iki oyuncu onayıyla 30 dakika uzatıldı.', 'info');
+      if (r.lifecycle?.notice === 'extension-pending' && r.extensionPrompt?.active) showGameNotice('60 dakika doldu. Devam kararı bekleniyor.', 'warning');
 
       const statusTxt = document.getElementById("gameStatusTxt");
       if (!statusTxt) return;
@@ -921,6 +1037,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
           if (r.resultSummary.outcome === 'win') playSfx('win');
           else if (r.resultSummary.outcome === 'loss') playSfx('end');
           showGameResultSummary(r.resultSummary, 'Satranç Sonucu', 'Oyun sonucu işlendi.', 'info');
+          fetchBalance().catch(() => null);
         } else {
           const draw = r.winner === 'draw' || r.winnerColor === 'draw';
           const iWon = r.winnerColor === myColor;
@@ -997,29 +1114,23 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       const moveObj = validMovesForSelected.find(m => m.to === sq);
       if (selectedSq && moveObj) {
         isProcessingMove = true;
-        document.getElementById("gameStatusTxt").innerText = "HAMLE İLETİLİYOR...";
-
-        const m = gameLogic.move({ from: moveObj.from, to: moveObj.to, promotion: 'q' });
+        const status = document.getElementById("gameStatusTxt");
+        if (status) status.innerText = "HAMLE İLETİLİYOR...";
+        const payload = { roomId: currentRoomId, from: moveObj.from, to: moveObj.to, promotion: 'q', expectedStateVersion: currentRoomState?.stateVersion || 0, clientMoveId: `${currentRoomId}:${currentRoomState?.stateVersion || 0}:${moveObj.from}-${moveObj.to}` };
         selectedSq = null;
         validMovesForSelected = [];
         drawBoard();
-
-        if (gameLogic.in_check()) playSfx('check');
-        else if (m && m.captured) playSfx('capture');
-        else playSfx('move');
-
         try {
-          const res = await fetchAPI('/api/chess/move', 'POST', { roomId: currentRoomId, from: moveObj.from, to: moveObj.to, promotion: 'q', expectedStateVersion: currentRoomState?.stateVersion || 0, clientMoveId: `${currentRoomId}:${currentRoomState?.stateVersion || 0}:${moveObj.from}-${moveObj.to}` });
+          const res = await sendChessMove(payload);
           try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {}
-          lastFen = res.room.fen;
-          syncBoardUI(res.room);
+          if (res?.room) syncBoardUI(res.room);
         } catch(e) {
           showMatrixModal("Hata", translateError(e.message), "error");
-          gameLogic.load(lastFen);
+          if (lastFen) gameLogic.load(lastFen);
           drawBoard();
+        } finally {
+          isProcessingMove = false;
         }
-
-        isProcessingMove = false;
         return;
       }
 
@@ -1049,9 +1160,11 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
 
     window.offerDraw = async () => {
       if (!currentRoomId) return;
+      if (currentRoomState?.mode === 'bot') { showGameNotice('Bot oyununda beraberlik teklifi yoktur.', 'warning'); return; }
       try {
         const res = await fetchAPI('/api/chess/draw', 'POST', { roomId: currentRoomId });
         if (res?.room) syncBoardUI(res.room);
+        if (res?.offered) showGameNotice('Beraberlik teklifi rakibe gönderildi.', 'info');
       } catch(e) { showMatrixModal('Hata', translateError(e.message), 'error'); }
     };
 

@@ -523,3 +523,57 @@
   .chess-game-actions{width:calc(100vw - 24px);gap:8px}
   .btn-draw,.btn-resign{font-size:11px;padding:11px 10px}
 }
+
+/* Chess v2 focused hardening: stable player identity, mode-aware controls, no visual jump */
+.player-plate,
+.player-plate.active{
+  transform:none !important;
+  min-height:78px;
+  transition:border-color .18s var(--ease), box-shadow .18s var(--ease) !important;
+}
+.player-info{
+  width:100%;
+  min-width:0;
+  display:grid !important;
+  grid-template-columns:48px minmax(0,1fr);
+  align-items:center;
+}
+.pm-game-avatar-shell{
+  width:42px !important;
+  height:42px !important;
+  flex:0 0 42px !important;
+  contain:layout paint;
+}
+.pm-game-avatar-shell > .pm-avatar,
+.pm-game-avatar-shell .pm-avatar,
+.pm-game-avatar-shell .p-avatar{
+  width:42px !important;
+  height:42px !important;
+  min-width:42px !important;
+  min-height:42px !important;
+}
+.p-name{
+  display:block;
+  width:100%;
+  max-width:none !important;
+  min-width:0;
+  white-space:nowrap;
+  overflow:visible !important;
+  text-overflow:clip !important;
+  font-size:clamp(13px,3.3vw,16px);
+  line-height:1.2;
+}
+.chess-bet-field[hidden],
+.btn-draw[hidden]{display:none !important;}
+.chess-room-controls:has(.chess-bet-field[hidden]){grid-template-columns:1fr;}
+.btn-draw:disabled{opacity:.55;filter:grayscale(.35);pointer-events:none;}
+.status-text{min-height:48px;display:flex;align-items:center;justify-content:center;}
+@media (max-width:560px){
+  .player-plate{width:calc(100vw - 24px);padding:12px 14px;}
+  .player-info{grid-template-columns:46px minmax(0,1fr);}
+  .pm-game-avatar-shell,
+  .pm-game-avatar-shell > .pm-avatar,
+  .pm-game-avatar-shell .pm-avatar,
+  .pm-game-avatar-shell .p-avatar{width:40px !important;height:40px !important;min-width:40px !important;min-height:40px !important;}
+  .p-name{font-size:clamp(13px,3.8vw,15px);letter-spacing:.1px;}
+}

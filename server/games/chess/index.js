@@ -16,6 +16,14 @@ const FREE_TIME_MS = 10 * 60 * 1000;
 const RECONNECT_GRACE_MS = Number(process.env.CHESS_DISCONNECT_GRACE_MS || 90000);
 const QUEUE_TTL_MS = Number(process.env.MATCH_QUEUE_TTL_MS || 120000);
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
+const ROOM_PRIMARY_MS = 60 * 60 * 1000;
+const ROOM_EXTENSION_MS = 30 * 60 * 1000;
+const ROOM_IDLE_EMPTY_MS = 5 * 60 * 1000;
+const ROOM_EXTENSION_RESPONSE_MS = 60 * 1000;
+const FREE_DAILY_WIN_LIMIT = 10;
+const FREE_WIN_REWARD_MC = 5000;
+const BET_XP_PER_1000_MC = 100;
+const BOT_PROFILE = Object.freeze({ uidPrefix: 'bot_', name: 'PlayMatrix', username: 'PlayMatrix', avatar: '/public/assets/images/logo.png', selectedFrame: 100, frameUrl: '/public/assets/frames/frame-100.png' });
 const MIN_BET = 1000;
 const MAX_BET = 10000;
 const files = 'abcdefgh';
@@ -46,6 +54,33 @@ function asyncRoute(fn) {
 function safeStr(value, max = 80) {
   return String(value ?? '').replace(/[<>]/g, '').trim().slice(0, max);
 }
+
+function istanbulDateKey(ts = now()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(ts));
+    const bag = Object.fromEntries(parts.map((p) => [p.type, p.value]));
+    return `${bag.year}-${bag.month}-${bag.day}`;
+  } catch (_) {
+    return new Date(ts + 3 * 3600000).toISOString().slice(0, 10);
+  }
+}
+function makeLifecycle(createdAt = now()) {
+  return {
+    createdAt,
+    primaryDeadlineAt: createdAt + ROOM_PRIMARY_MS,
+    extensionDeadlineAt: 0,
+    finalDeadlineAt: 0,
+    extensionState: 'none',
+    promptAt: 0,
+    promptExpiresAt: 0,
+    responses: {},
+    decidedAt: 0,
+    notice: ''
+  };
+}
+function isHumanPlayer(p) { return p && !p.isBot && !String(p.uid || '').startsWith(BOT_PROFILE.uidPrefix); }
+function markMeaningfulAction(r) { if (r) { r.lastGameActionAt = now(); r.lastMoveAt = now(); } }
+function liveHumanPlayers(r) { return (r?.players || []).filter(isHumanPlayer); }
 function displayNameFromProfile(profile = {}, fallbackUid = '') {
   const raw = profile.username || profile.displayName || profile.fullName || profile.name || '';
   if (raw && !String(raw).includes('@')) return safeStr(raw, 40);
@@ -311,6 +346,7 @@ function publicPlayer(p, r, viewerUid = '') {
     name: p.username || p.name || 'Oyuncu',
     avatar: p.avatar || '',
     selectedFrame: Number(p.selectedFrame || 0) || 0,
+    frameUrl: p.frameUrl || '',
     color: p.color,
     connected: !!p.connected,
     timeLeftMs: Math.max(0, Math.trunc(Number(p.timeLeftMs) || 0)),
@@ -324,16 +360,28 @@ function resultSummaryFor(r, viewerUid = '') {
   const draw = r.winnerColor === 'draw' || r.result === 'draw' || r.result === 'stalemate' || r.result === 'fifty-move-draw';
   const xp = r.xpAwards?.[viewerUid]?.xpAwarded || 0;
   const balance = r.settlement?.[viewerUid]?.balance;
+  const freeReward = r.freeRewards?.[viewerUid] || null;
   const outcome = draw ? 'draw' : won ? 'win' : 'loss';
+  let message = '';
+  if (r.mode === 'bot') message = 'Bot oyunu eğlence modudur. MC, XP ve level ödülü verilmez.';
+  else if (draw && r.mode === 'bet') message = `Bahisli Satranç berabere bitti. Bahsin yarısı iade edildi. Beraberlikte XP verilmez.`;
+  else if (draw) message = 'Satranç berabere bitti. Bu sonuçta ödül verilmez.';
+  else if (r.mode === 'free' && won) {
+    if (freeReward?.rewarded) message = `Bahissiz Satranç galibiyeti: +${FREE_WIN_REWARD_MC.toLocaleString('tr-TR')} MC. Günlük hak: ${freeReward.used}/${FREE_DAILY_WIN_LIMIT}.`;
+    else message = freeReward?.reason === 'DAILY_LIMIT' ? 'Bahissiz Satranç galibiyeti işlendi. Günlük 10 ödül hakkı dolduğu için MC verilmedi.' : 'Bahissiz Satranç sonucu işlendi.';
+  } else if (r.mode === 'bet') {
+    message = won
+      ? `Bahisli Satranç galibiyeti işlendi. Pot: ${Number(r.pot || 0).toLocaleString('tr-TR')} MC. +${xp.toLocaleString('tr-TR')} XP.`
+      : `Bahisli Satranç kaybı işlendi. Kazanç yok. Kullanılan bahis için +${xp.toLocaleString('tr-TR')} XP.`;
+  } else {
+    message = won ? 'Satranç galibiyeti işlendi.' : 'Satranç maçı kayıp olarak işlendi.';
+  }
   return {
     gameType: 'chess', resultCode: r.result || 'finished', outcome, settledAt: r.finishedAt || r.updatedAt || now(),
     title: draw ? 'BERABERE' : won ? 'KAZANDIN!' : 'KAYBETTİN',
-    message: draw
-      ? `Satranç berabere bitti.${xp ? ` +${xp} XP işlendi.` : ''}`
-      : won
-        ? `Satranç galibiyeti işlendi.${r.bet ? ` Pot: ${r.pot.toLocaleString('tr-TR')} MC.` : ''}${xp ? ` +${xp} XP.` : ''}`
-        : `Satranç maçı kayıp olarak işlendi.${xp ? ` +${xp} XP.` : ''}`,
+    message,
     xpAwarded: xp,
+    freeReward,
     balance,
     progression: r.xpAwards?.[viewerUid]?.progression || null
   };
@@ -341,13 +389,26 @@ function resultSummaryFor(r, viewerUid = '') {
 function publicRoom(r, viewerUid = '') {
   const host = publicPlayer(r.players[0], r, viewerUid) || { username: 'Bilinmeyen', name: 'Bilinmeyen', color: 'w' };
   const guest = publicPlayer(r.players[1], r, viewerUid) || null;
+  const lifecycle = r.lifecycle || makeLifecycle(r.createdAt || now());
+  const extensionPrompt = r.status === 'playing' && lifecycle.extensionState === 'pending'
+    ? {
+        active: true,
+        promptAt: lifecycle.promptAt || 0,
+        promptExpiresAt: lifecycle.promptExpiresAt || 0,
+        message: '60 dakika süre doldu. Son 30 dakika kaldı. 30 dakika sonra oda kapanacaktır. Bu bir bilgilendirme mesajıdır. Oyuna devam edilsin mi?',
+        myResponse: lifecycle.responses?.[viewerUid] || '',
+        responses: liveHumanPlayers(r).map((p) => ({ playerKey: hashPlayerKey(r.id, p.uid), username: p.username || p.name || 'Oyuncu', responded: !!lifecycle.responses?.[p.uid], accepted: lifecycle.responses?.[p.uid] === 'accept' }))
+      }
+    : null;
   return {
     id: r.id, roomId: r.id, status: r.status, mode: r.mode, bet: r.bet, pot: r.pot,
     host, guest,
     hostName: host.username, guestName: guest?.username || 'Bilinmeyen',
     hostUid: host.uid || '', guestUid: guest?.uid || '',
     players: r.players.map((p) => publicPlayer(p, r, viewerUid)),
-    turn: r.turn, fen: r.fen, moves: r.moves, winnerUid: viewerUid === r.winnerUid ? r.winnerUid : '', winnerColor: r.winnerColor || '', winner: r.winnerColor || '', result: r.result || '', resultSummary: resultSummaryFor(r, viewerUid), drawOfferBy: r.drawOfferBy && r.drawOfferBy !== viewerUid ? 'opponent' : r.drawOfferBy === viewerUid ? 'me' : '', check: r.check || '', stateVersion: r.stateVersion, createdAt: r.createdAt, updatedAt: r.updatedAt, finishedAt: r.finishedAt || 0
+    turn: r.turn, fen: r.fen, moves: r.moves, winnerUid: viewerUid === r.winnerUid ? r.winnerUid : '', winnerColor: r.winnerColor || '', winner: r.winnerColor || '', result: r.result || '', resultSummary: resultSummaryFor(r, viewerUid), drawOfferBy: r.drawOfferBy && r.drawOfferBy !== viewerUid ? 'opponent' : r.drawOfferBy === viewerUid ? 'me' : '', check: r.check || '', stateVersion: r.stateVersion, createdAt: r.createdAt, updatedAt: r.updatedAt, finishedAt: r.finishedAt || 0,
+    lifecycle: { primaryDeadlineAt: lifecycle.primaryDeadlineAt || 0, extensionDeadlineAt: lifecycle.extensionDeadlineAt || 0, finalDeadlineAt: lifecycle.finalDeadlineAt || 0, extensionState: lifecycle.extensionState || 'none', notice: lifecycle.notice || '' },
+    extensionPrompt
   };
 }
 function activeRoomFor(uid) {
@@ -386,7 +447,7 @@ async function chargePlayer(req, r) {
 }
 async function applyXpAndStats({ uid, xp, outcome, roomId, mode, bet }) {
   if (!uid || !xp) return { ok: true, xpAwarded: 0, progression: getProgression(0) };
-  const key = `chess:xp:${roomId}:${uid}:${outcome}`;
+  const key = `chess:xp:${roomId}:${uid}`;
   const memoryKey = `idem:${key}`;
   if (runtimeStore.temporary.get(memoryKey)) return runtimeStore.temporary.get(memoryKey);
   const { db } = initFirebaseAdmin();
@@ -437,6 +498,46 @@ async function applyXpAndStats({ uid, xp, outcome, roomId, mode, bet }) {
   runtimeStore.temporary.set(memoryKey, output, 24 * 3600000);
   return output;
 }
+async function awardFreeWinReward({ uid, roomId }) {
+  if (!uid || !roomId) return { ok: false, rewarded: false, reason: 'INVALID_REQUEST', amount: 0, used: 0, limit: FREE_DAILY_WIN_LIMIT };
+  const dateKey = istanbulDateKey();
+  const amount = FREE_WIN_REWARD_MC;
+  const { db } = initFirebaseAdmin();
+  if (!db) {
+    const claimKey = `chess:free-win:${dateKey}:${roomId}:${uid}`;
+    if (runtimeStore.temporary.get(claimKey)) return runtimeStore.temporary.get(claimKey);
+    const countKey = `chess:free-win-count:${dateKey}:${uid}`;
+    const usedBefore = Number(runtimeStore.temporary.get(countKey) || 0);
+    if (usedBefore >= FREE_DAILY_WIN_LIMIT) return { ok: true, rewarded: false, reason: 'DAILY_LIMIT', amount: 0, used: usedBefore, limit: FREE_DAILY_WIN_LIMIT };
+    const credit = await creditBalance({ uid, amount, reason: 'chess-free-win-reward', idempotencyKey: claimKey, metadata: { roomId, dateKey } }).catch((error) => ({ ok: false, error: error.message }));
+    const out = { ok: !!credit.ok, rewarded: !!credit.ok, amount: credit.ok ? amount : 0, balance: credit.balance, used: usedBefore + (credit.ok ? 1 : 0), limit: FREE_DAILY_WIN_LIMIT, dateKey };
+    if (credit.ok) runtimeStore.temporary.set(countKey, usedBefore + 1, 36 * 3600000);
+    runtimeStore.temporary.set(claimKey, out, 36 * 3600000);
+    return out;
+  }
+  const claimRef = db.collection('idempotency').doc(`chess:free-win:${dateKey}:${roomId}:${uid}`);
+  const counterRef = db.collection('rewardCounters').doc(`chessFreeWin_${dateKey}_${uid}`);
+  let preflight = null;
+  await db.runTransaction(async (tx) => {
+    const claim = await tx.get(claimRef);
+    if (claim.exists) { preflight = claim.data().result; return; }
+    const counter = await tx.get(counterRef);
+    const used = Math.max(0, Number((counter.exists ? counter.data().used : 0) || 0));
+    if (used >= FREE_DAILY_WIN_LIMIT) {
+      preflight = { ok: true, rewarded: false, reason: 'DAILY_LIMIT', amount: 0, used, limit: FREE_DAILY_WIN_LIMIT, dateKey };
+      tx.set(claimRef, { key: claimRef.id, type: 'chess-free-win', uid, roomId, dateKey, createdAt: now(), result: preflight }, { merge: false });
+      return;
+    }
+    preflight = { ok: true, proceedCredit: true, usedBefore: used };
+    tx.set(counterRef, { uid, dateKey, used: used + 1, updatedAt: now() }, { merge: true });
+  });
+  if (preflight && !preflight.proceedCredit) return preflight;
+  const credit = await creditBalance({ uid, amount, reason: 'chess-free-win-reward', idempotencyKey: `chess:free-win-credit:${dateKey}:${roomId}:${uid}`, metadata: { roomId, dateKey } }).catch((error) => ({ ok: false, error: error.message }));
+  const out = { ok: !!credit.ok, rewarded: !!credit.ok, amount: credit.ok ? amount : 0, balance: credit.balance, used: Number(preflight?.usedBefore || 0) + (credit.ok ? 1 : 0), limit: FREE_DAILY_WIN_LIMIT, dateKey };
+  await claimRef.set({ key: claimRef.id, type: 'chess-free-win', uid, roomId, dateKey, createdAt: now(), result: out }, { merge: true }).catch(() => null);
+  return out;
+}
+
 async function settleRoom(r, reason = '') {
   if (!r || r.settled) return r;
   if (r.status !== 'finished') return r;
@@ -444,27 +545,32 @@ async function settleRoom(r, reason = '') {
   r.finishedAt = r.finishedAt || now();
   r.settlement = r.settlement || {};
   r.xpAwards = r.xpAwards || {};
-  const isBetReal = r.bet > 0 && r.mode === 'bet' && r.players.length === 2;
+  r.freeRewards = r.freeRewards || {};
+  const humans = liveHumanPlayers(r);
+  const isBetReal = r.bet > 0 && r.mode === 'bet' && humans.length === 2;
+  const isFreeReal = r.mode === 'free' && humans.length === 2;
   const draw = r.winnerColor === 'draw' || ['draw','stalemate','fifty-move-draw'].includes(r.result);
   if (isBetReal) {
     if (draw) {
-      for (const p of r.players) {
-        const credit = await creditBalance({ uid: p.uid, amount: Math.floor(r.bet / 2), reason: 'chess-draw-half-refund', idempotencyKey: `chess:draw:${r.id}:${p.uid}`, metadata: { roomId: r.id, result: r.result } }).catch((error) => ({ ok: false, error: error.message }));
+      for (const p of humans) {
+        const credit = await creditBalance({ uid: p.uid, amount: Math.floor(r.bet / 2), reason: 'chess-draw-half-refund', idempotencyKey: `chess:draw:${r.id}:${p.uid}`, metadata: { roomId: r.id, result: r.result, xpAwarded: 0 } }).catch((error) => ({ ok: false, error: error.message }));
         r.settlement[p.uid] = credit;
       }
     } else if (r.winnerUid) {
       const credit = await creditBalance({ uid: r.winnerUid, amount: r.pot, reason: 'chess-win', idempotencyKey: `chess:win:${r.id}:${r.winnerUid}`, metadata: { roomId: r.id, result: r.result } }).catch((error) => ({ ok: false, error: error.message }));
       r.settlement[r.winnerUid] = credit;
     }
+    if (!draw) {
+      const xp = Math.max(BET_XP_PER_1000_MC, Math.floor(r.bet / 1000) * BET_XP_PER_1000_MC);
+      for (const p of humans) {
+        const outcome = p.uid === r.winnerUid ? 'win' : 'loss';
+        r.xpAwards[p.uid] = await applyXpAndStats({ uid: p.uid, xp, outcome, roomId: r.id, mode: r.mode, bet: r.bet }).catch((error) => ({ ok: false, xpAwarded: 0, error: error.message }));
+      }
+    }
+  } else if (isFreeReal && !draw && r.winnerUid) {
+    r.freeRewards[r.winnerUid] = await awardFreeWinReward({ uid: r.winnerUid, roomId: r.id }).catch((error) => ({ ok: false, rewarded: false, error: error.message, amount: 0 }));
   }
-  for (const p of r.players) {
-    if (r.mode === 'bot' || r.mode === 'free' || !isBetReal) continue;
-    const outcome = draw ? 'draw' : (p.uid === r.winnerUid ? 'win' : 'loss');
-    const base = Math.max(10, Math.floor(r.bet / 1000) * 10);
-    const xp = outcome === 'win' ? base * 2 : outcome === 'draw' ? Math.max(5, Math.floor(base / 2)) : base;
-    r.xpAwards[p.uid] = await applyXpAndStats({ uid: p.uid, xp, outcome, roomId: r.id, mode: r.mode, bet: r.bet }).catch((error) => ({ ok: false, xpAwarded: 0, error: error.message }));
-  }
-  console.info('[chess:settle]', JSON.stringify({ roomId: r.id, reason, result: r.result, winnerColor: r.winnerColor || '', bet: r.bet, pot: r.pot }));
+  console.info('[chess:settle]', JSON.stringify({ roomId: r.id, reason, result: r.result, winnerColor: r.winnerColor || '', mode: r.mode, bet: r.bet, pot: r.pot }));
   emitRoom(r);
   emitLobby();
   return r;
@@ -483,14 +589,18 @@ async function finishRoom(r, { result, winnerUid = '', winnerColor = '', reason 
 }
 async function createRoomFor(req, opts = {}) {
   const owner = uidOf(req);
-  const existing = activeRoomFor(owner);
-  if (existing) return existing;
   const betAmount = validateBetAmount(opts.bet, opts.mode);
   const mode = normalizeMode(opts.mode, betAmount);
+  const existing = activeRoomFor(owner);
+  if (existing) {
+    if (existing.mode !== mode || Number(existing.bet || 0) !== Number(mode === 'bet' ? betAmount : 0)) throw createHttpError(409, 'ALREADY_IN_ACTIVE_CHESS_ROOM');
+    return existing;
+  }
+  const ts = now();
   const player = await buildPlayer(req, 'w');
-  const r = { id: `ch_${now()}_${crypto.randomBytes(12).toString('hex')}`, status: mode === 'bot' ? 'playing' : 'waiting', mode, bet: mode === 'bot' ? 0 : betAmount, pot: mode === 'bot' ? 0 : betAmount, fen: INITIAL_FEN, turn: 'w', moves: [], moveIds: {}, stateVersion: 1, drawOfferBy: '', check: '', createdAt: now(), updatedAt: now(), finishedAt: 0, players: [player], clock: { lastTurnAt: now() }, settlement: {}, xpAwards: {} };
+  const r = { id: `ch_${ts}_${crypto.randomBytes(12).toString('hex')}`, status: mode === 'bot' ? 'playing' : 'waiting', mode, bet: mode === 'bot' ? 0 : betAmount, pot: mode === 'bot' ? 0 : betAmount, fen: INITIAL_FEN, turn: 'w', moves: [], moveIds: {}, stateVersion: 1, drawOfferBy: '', check: '', createdAt: ts, updatedAt: ts, finishedAt: 0, players: [player], clock: { lastTurnAt: ts }, settlement: {}, xpAwards: {}, freeRewards: {}, lifecycle: makeLifecycle(ts), lastGameActionAt: ts, lastMoveAt: 0 };
   if (mode === 'bot') {
-    r.players.push({ uid: `bot_${r.id}`, name: 'PlayMatrix Bot', username: 'PlayMatrix Bot', avatar: '', selectedFrame: 0, color: 'b', timeLeftMs: FREE_TIME_MS, connected: true, joinedAt: now(), lastSeenAt: now(), isBot: true });
+    r.players.push({ uid: `${BOT_PROFILE.uidPrefix}${r.id}`, name: BOT_PROFILE.name, username: BOT_PROFILE.username, avatar: BOT_PROFILE.avatar, selectedFrame: BOT_PROFILE.selectedFrame, frameUrl: BOT_PROFILE.frameUrl, color: 'b', timeLeftMs: FREE_TIME_MS, connected: true, joinedAt: ts, lastSeenAt: ts, isBot: true });
   }
   rooms.set(r.id, r);
   return r;
@@ -504,6 +614,124 @@ function emitLobby() {
   if (!ioRef) return;
   ioRef.to('chess:lobby').emit('chess:lobby', { ok: true, at: now() });
 }
+async function refundWaitingBet(r, uid, reason = 'chess-room-refund') {
+  if (!r?.bet || !uid) return null;
+  return creditBalance({ uid, amount: r.bet, reason, idempotencyKey: `${reason}:${r.id}:${uid}`, metadata: { roomId: r.id, mode: r.mode } }).catch((error) => ({ ok: false, error: error.message }));
+}
+async function cancelAndDeleteRoom(r, reason = 'room-cancelled') {
+  if (!r) return false;
+  for (const p of liveHumanPlayers(r)) await refundWaitingBet(r, p.uid, reason).catch(() => null);
+  r.status = 'finished';
+  r.result = reason;
+  r.winnerColor = 'draw';
+  r.finishedAt = now();
+  r.lifecycle = r.lifecycle || makeLifecycle(r.createdAt || now());
+  r.lifecycle.notice = reason;
+  emitRoom(r);
+  rooms.delete(r.id);
+  emitLobby();
+  return true;
+}
+async function enforceRoomLifecycle(r, context = '') {
+  if (!r || r.status !== 'playing') return false;
+  const t = now();
+  r.lifecycle = r.lifecycle || makeLifecycle(r.createdAt || t);
+  const humans = liveHumanPlayers(r);
+  if (humans.length >= 1 && !r.moves.length && t - (r.lastGameActionAt || r.createdAt || t) >= ROOM_IDLE_EMPTY_MS) {
+    await cancelAndDeleteRoom(r, 'inactivity-no-move');
+    return true;
+  }
+  const life = r.lifecycle;
+  if (life.extensionState === 'none' && t >= life.primaryDeadlineAt && humans.length >= 2 && r.moves.length) {
+    life.extensionState = 'pending';
+    life.promptAt = t;
+    life.promptExpiresAt = t + ROOM_EXTENSION_RESPONSE_MS;
+    life.responses = {};
+    life.notice = 'extension-pending';
+    r.stateVersion += 1;
+    emitRoom(r);
+    return false;
+  }
+  if (life.extensionState === 'pending') {
+    const values = humans.map((p) => life.responses?.[p.uid] || '');
+    if (values.includes('reject')) {
+      await finishRoom(r, { result: 'extension-rejected', winnerColor: 'draw', reason: 'extension-rejected' });
+      return true;
+    }
+    if (humans.length >= 2 && values.every((v) => v === 'accept')) {
+      life.extensionState = 'accepted';
+      life.decidedAt = t;
+      life.extensionDeadlineAt = t + ROOM_EXTENSION_MS;
+      life.finalDeadlineAt = life.extensionDeadlineAt;
+      life.notice = 'extension-accepted';
+      r.stateVersion += 1;
+      emitRoom(r);
+      return false;
+    }
+    if (t >= life.promptExpiresAt) {
+      await finishRoom(r, { result: 'extension-no-response', winnerColor: 'draw', reason: 'extension-no-response' });
+      return true;
+    }
+  }
+  if (life.extensionState === 'accepted' && life.finalDeadlineAt && t >= life.finalDeadlineAt) {
+    await finishRoom(r, { result: 'room-time-limit', winnerColor: 'draw', reason: 'room-time-limit' });
+    return true;
+  }
+  return false;
+}
+async function processExtensionResponse({ uid, roomId, accept }) {
+  const r = rooms.get(String(roomId || ''));
+  if (!r) throw createHttpError(404, 'ROOM_NOT_FOUND');
+  const player = r.players.find((p) => p.uid === uid);
+  if (!player) throw createHttpError(403, 'NOT_IN_ROOM');
+  r.lifecycle = r.lifecycle || makeLifecycle(r.createdAt || now());
+  if (r.lifecycle.extensionState !== 'pending') return { ok: true, room: publicRoom(r, uid), ignored: true };
+  r.lifecycle.responses = r.lifecycle.responses || {};
+  r.lifecycle.responses[uid] = accept ? 'accept' : 'reject';
+  r.stateVersion += 1;
+  touchRoom(r);
+  await enforceRoomLifecycle(r, 'extension-response');
+  return { ok: true, room: rooms.has(r.id) ? publicRoom(r, uid) : null };
+}
+async function processChessMove({ user, body }) {
+  const viewerUid = String(user?.uid || '');
+  const r = rooms.get(String(body.roomId || ''));
+  if (!r) throw createHttpError(404, 'ROOM_NOT_FOUND');
+  if (await enforceRoomLifecycle(r, 'before-move')) throw createHttpError(409, 'ROOM_FINISHED');
+  if (syncClock(r) && r.status === 'finished') { await settleRoom(r, 'timeout-before-move'); throw createHttpError(409, 'ROOM_FINISHED'); }
+  if (r.status !== 'playing') throw createHttpError(409, 'ROOM_NOT_PLAYING');
+  const player = r.players.find((p) => p.uid === viewerUid);
+  if (!player) throw createHttpError(403, 'NOT_IN_ROOM');
+  if (player.color !== r.turn) throw createHttpError(409, 'NOT_YOUR_TURN');
+  const clientMoveId = safeStr(body.clientMoveId || '', 140);
+  if (clientMoveId && r.moveIds[clientMoveId]) return { ok: true, duplicate: true, room: publicRoom(r, viewerUid) };
+  const expected = Number(body.expectedStateVersion || 0) || 0;
+  if (expected && expected !== r.stateVersion) throw Object.assign(createHttpError(409, 'STATE_VERSION_MISMATCH'), { room: publicRoom(r, viewerUid) });
+  const from = String(body.from || '');
+  const to = String(body.to || '');
+  if (!/^[a-h][1-8]$/.test(from) || !/^[a-h][1-8]$/.test(to) || from === to) throw createHttpError(400, 'INVALID_MOVE_FORMAT');
+  const state = parseFen(r.fen);
+  const legal = findLegalMove(state, from, to, body.promotion || 'q');
+  if (!legal) throw Object.assign(createHttpError(400, 'ILLEGAL_MOVE'), { room: publicRoom(r, viewerUid) });
+  const next = applyMove(state, legal);
+  r.fen = boardToFen(next);
+  r.turn = next.turn;
+  r.moves.push({ from, to, promotion: legal.promotion || '', by: viewerUid, color: player.color, fen: r.fen, at: now(), flags: legal.castle ? 'castle' : legal.enPassant ? 'ep' : legal.captured ? 'capture' : '' });
+  if (clientMoveId) r.moveIds[clientMoveId] = true;
+  r.drawOfferBy = '';
+  r.check = '';
+  r.stateVersion += 1;
+  r.clock = { lastTurnAt: now() };
+  markMeaningfulAction(r);
+  maybeFinishByBoard(r, player.color);
+  if (r.status === 'finished') await settleRoom(r, 'board-result');
+  touchRoom(r);
+  emitRoom(r);
+  emitLobby();
+  if (r.status === 'playing') await makeBotMoveIfNeeded(r);
+  return { ok: true, room: publicRoom(r, viewerUid) };
+}
+
 async function joinRoomFor(req, r) {
   const playerUid = uidOf(req);
   if (!r) throw createHttpError(404, 'ROOM_NOT_FOUND');
@@ -538,6 +766,7 @@ async function makeBotMoveIfNeeded(r) {
   r.turn = next.turn;
   r.moves.push({ from: chosen.from, to: chosen.to, promotion: chosen.promotion || '', by: 'bot', color: 'b', fen: r.fen, at: now(), flags: chosen.castle ? 'castle' : chosen.enPassant ? 'ep' : chosen.captured ? 'capture' : '' });
   r.stateVersion += 1;
+  markMeaningfulAction(r);
   maybeFinishByBoard(r, 'b');
   if (r.status === 'finished') await settleRoom(r, 'bot-board');
   touchRoom(r);
@@ -547,7 +776,7 @@ async function makeBotMoveIfNeeded(r) {
 router.get('/lobby', requireAuth, asyncRoute(async (req, res) => {
   const viewerUid = uidOf(req);
   for (const r of rooms.values()) syncClock(r);
-  const visible = [...rooms.values()].filter((r) => r.status !== 'finished' && r.mode !== 'private').map((r) => publicRoom(r, viewerUid));
+  const visible = [...rooms.values()].filter((r) => r.status !== 'finished' && r.mode !== 'private' && r.mode !== 'bot').map((r) => publicRoom(r, viewerUid));
   res.json({ ok: true, rooms: visible });
 }));
 router.get('/profile', requireAuth, asyncRoute(async (req, res) => {
@@ -592,6 +821,7 @@ router.get('/state/:roomId', requireAuth, asyncRoute(async (req, res) => {
   if (!r) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' });
   const viewerUid = uidOf(req);
   if (!r.players.some((p) => p.uid === viewerUid)) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
+  if (await enforceRoomLifecycle(r, 'state')) return res.status(404).json({ ok: false, error: 'ROOM_CLOSED' });
   if (syncClock(r) && r.status === 'finished') await settleRoom(r, 'timeout-state');
   res.json({ ok: true, room: publicRoom(r, viewerUid) });
 }));
@@ -601,45 +831,23 @@ router.post('/ping', requireAuth, asyncRoute(async (req, res) => {
   const player = r.players.find((p) => p.uid === uidOf(req));
   if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
   player.connected = true; player.lastSeenAt = now(); player.disconnectedAt = 0;
+  if (await enforceRoomLifecycle(r, 'ping')) return res.json({ ok: true, room: null });
   if (syncClock(r) && r.status === 'finished') await settleRoom(r, 'timeout-ping');
   touchRoom(r);
   res.json({ ok: true, room: publicRoom(r, uidOf(req)) });
 }));
 router.post('/move', requireAuth, asyncRoute(async (req, res) => {
-  const r = rooms.get(String(req.body.roomId));
-  if (!r) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' });
-  const viewerUid = uidOf(req);
-  if (syncClock(r) && r.status === 'finished') { await settleRoom(r, 'timeout-before-move'); return res.status(409).json({ ok: false, error: 'ROOM_FINISHED', room: publicRoom(r, viewerUid) }); }
-  if (r.status !== 'playing') return res.status(409).json({ ok: false, error: 'ROOM_NOT_PLAYING' });
-  const player = r.players.find((p) => p.uid === viewerUid);
-  if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
-  if (player.color !== r.turn) return res.status(409).json({ ok: false, error: 'NOT_YOUR_TURN', room: publicRoom(r, viewerUid) });
-  const clientMoveId = safeStr(req.body.clientMoveId || '', 140);
-  if (clientMoveId && r.moveIds[clientMoveId]) return res.json({ ok: true, duplicate: true, room: publicRoom(r, viewerUid) });
-  const expected = Number(req.body.expectedStateVersion || 0) || 0;
-  if (expected && expected !== r.stateVersion) return res.status(409).json({ ok: false, error: 'STATE_VERSION_MISMATCH', room: publicRoom(r, viewerUid) });
-  const from = String(req.body.from || '');
-  const to = String(req.body.to || '');
-  if (!/^[a-h][1-8]$/.test(from) || !/^[a-h][1-8]$/.test(to) || from === to) return res.status(400).json({ ok: false, error: 'INVALID_MOVE_FORMAT' });
-  const state = parseFen(r.fen);
-  const legal = findLegalMove(state, from, to, req.body.promotion || 'q');
-  if (!legal) return res.status(400).json({ ok: false, error: 'ILLEGAL_MOVE', room: publicRoom(r, viewerUid) });
-  const next = applyMove(state, legal);
-  r.fen = boardToFen(next);
-  r.turn = next.turn;
-  r.moves.push({ from, to, promotion: legal.promotion || '', by: viewerUid, color: player.color, fen: r.fen, at: now(), flags: legal.castle ? 'castle' : legal.enPassant ? 'ep' : legal.captured ? 'capture' : '' });
-  if (clientMoveId) r.moveIds[clientMoveId] = true;
-  r.drawOfferBy = '';
-  r.check = '';
-  r.stateVersion += 1;
-  r.clock = { lastTurnAt: now() };
-  maybeFinishByBoard(r, player.color);
-  if (r.status === 'finished') await settleRoom(r, 'board-result');
-  touchRoom(r);
-  emitRoom(r);
-  emitLobby();
-  if (r.status === 'playing') await makeBotMoveIfNeeded(r);
-  res.json({ ok: true, room: publicRoom(r, viewerUid) });
+  try {
+    const result = await processChessMove({ user: req.user, body: req.body || {} });
+    res.json(result);
+  } catch (error) {
+    if (error.room && error.statusCode) return res.status(error.statusCode).json({ ok: false, error: error.message, room: error.room });
+    throw error;
+  }
+}));
+router.post('/extend', requireAuth, asyncRoute(async (req, res) => {
+  const result = await processExtensionResponse({ uid: uidOf(req), roomId: req.body?.roomId, accept: !!req.body?.accept });
+  res.json(result);
 }));
 router.post('/resign', requireAuth, asyncRoute(async (req, res) => {
   const r = rooms.get(String(req.body.roomId));
@@ -657,6 +865,7 @@ router.post('/draw', requireAuth, asyncRoute(async (req, res) => {
   const player = r.players.find((p) => p.uid === uidOf(req));
   if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
   if (r.status !== 'playing') return res.status(409).json({ ok: false, error: 'ROOM_NOT_PLAYING' });
+  if (r.mode === 'bot') return res.status(409).json({ ok: false, error: 'DRAW_DISABLED_FOR_BOT' });
   if (r.drawOfferBy && r.drawOfferBy !== player.uid) {
     await finishRoom(r, { result: 'draw', winnerColor: 'draw', reason: 'draw-accepted' });
     return res.json({ ok: true, room: publicRoom(r, uidOf(req)) });
@@ -686,18 +895,60 @@ router.post('/leave', requireAuth, asyncRoute(async (req, res) => {
   }
   res.json({ ok: true, room: publicRoom(r, player.uid) });
 }));
+async function authenticateChessSocket(socket) {
+  try {
+    const token = String(socket.handshake?.auth?.token || '').trim();
+    if (!token) return false;
+    const { auth } = initFirebaseAdmin();
+    if (!auth) return false;
+    const decoded = await auth.verifyIdToken(token);
+    socket.data.chessUid = String(decoded.uid || '');
+    socket.data.chessEmail = String(decoded.email || '');
+    return !!socket.data.chessUid;
+  } catch (_) {
+    socket.data.chessUid = '';
+    socket.emit('chess:auth_error', { ok: false, error: 'INVALID_AUTH_TOKEN' });
+    return false;
+  }
+}
 function installSocket(io) {
   ioRef = io;
   io.on('connection', (socket) => {
-    socket.on('chess:lobby:subscribe', () => socket.join('chess:lobby'));
-    socket.on('chess:join', (roomId) => { if (roomId) socket.join(`chess:${String(roomId)}`); });
-    socket.on('chess:subscribe-user', (uid) => { if (uid) socket.join(`chess:user:${String(uid)}`); });
+    socket.on('chess:lobby:subscribe', async () => { if (await authenticateChessSocket(socket)) socket.join('chess:lobby'); });
+    socket.on('chess:join', async (roomId, ack) => {
+      try {
+        if (!(await authenticateChessSocket(socket))) { ack?.({ ok:false, error:'AUTH_REQUIRED' }); return; }
+        const r = rooms.get(String(roomId || ''));
+        if (!r || !r.players.some((p) => p.uid === socket.data.chessUid)) { ack?.({ ok:false, error:'NOT_IN_ROOM' }); return; }
+        socket.join(`chess:${r.id}`);
+        socket.join(`chess:user:${socket.data.chessUid}`);
+        ack?.({ ok:true, room: publicRoom(r, socket.data.chessUid) });
+      } catch (error) { ack?.({ ok:false, error:error.message || 'SOCKET_JOIN_FAILED' }); }
+    });
+    socket.on('chess:subscribe-user', async (_uid, ack) => { if (await authenticateChessSocket(socket)) { socket.join(`chess:user:${socket.data.chessUid}`); ack?.({ ok:true }); } else ack?.({ ok:false, error:'AUTH_REQUIRED' }); });
+    socket.on('chess:move', async (payload, ack) => {
+      try {
+        if (!(await authenticateChessSocket(socket))) { ack?.({ ok:false, error:'AUTH_REQUIRED' }); return; }
+        const result = await processChessMove({ user: { uid: socket.data.chessUid, email: socket.data.chessEmail }, body: payload || {} });
+        ack?.(result);
+      } catch (error) {
+        ack?.({ ok:false, error:error.message || 'MOVE_FAILED', room:error.room || null });
+      }
+    });
+    socket.on('chess:extend', async (payload, ack) => {
+      try {
+        if (!(await authenticateChessSocket(socket))) { ack?.({ ok:false, error:'AUTH_REQUIRED' }); return; }
+        const result = await processExtensionResponse({ uid: socket.data.chessUid, roomId: payload?.roomId, accept: !!payload?.accept });
+        ack?.(result);
+      } catch (error) { ack?.({ ok:false, error:error.message || 'EXTEND_FAILED' }); }
+    });
   });
 }
 setInterval(async () => {
-  const cutoff = now() - ROOM_TTL_MS;
   for (const [k, r] of rooms) {
     if (r.status === 'playing') {
+      const lifecycleClosed = await enforceRoomLifecycle(r, 'sweep');
+      if (lifecycleClosed) continue;
       const timedOut = syncClock(r);
       const disconnected = r.players.find((p) => !p.isBot && p.connected === false && p.disconnectedAt && now() - p.disconnectedAt > RECONNECT_GRACE_MS);
       if (timedOut) await settleRoom(r, 'timer-sweep');
@@ -706,9 +957,14 @@ setInterval(async () => {
         await finishRoom(r, { result: 'disconnect', winnerUid: winner?.uid || '', winnerColor: winner?.color || '', reason: 'disconnect' });
       }
     }
-    if (r.updatedAt < cutoff) {
-      if (r.status === 'waiting' && r.bet && r.players[0]?.uid) await creditBalance({ uid: r.players[0].uid, amount: r.bet, reason: 'chess-room-expire-refund', idempotencyKey: `chess:expire-refund:${r.id}:${r.players[0].uid}` }).catch(() => null);
+    if (r.status === 'waiting' && now() - (r.updatedAt || r.createdAt || now()) > ROOM_PRIMARY_MS) {
+      if (r.bet && r.players[0]?.uid) await refundWaitingBet(r, r.players[0].uid, 'chess-waiting-expire-refund').catch(() => null);
       rooms.delete(k);
+      emitLobby();
+    }
+    if (r.status === 'finished' && now() - (r.finishedAt || r.updatedAt || now()) > Number(process.env.CHESS_RESULT_RETENTION_MS || 120000)) {
+      rooms.delete(k);
+      emitLobby();
     }
   }
   const qcut = now() - QUEUE_TTL_MS;
