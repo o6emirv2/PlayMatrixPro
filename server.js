@@ -15,6 +15,7 @@ process.on('unhandledRejection', (reason) => console.error('[process:unhandledRe
 process.on('uncaughtException', (error) => console.error('[process:uncaughtException]', error && error.stack || error));
 initFirebaseAdmin();
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: env.allowedOrigins, credentials: true } });
 app.disable('x-powered-by');
@@ -57,24 +58,50 @@ async function captureClientError(req, res) {
 }
 app.post('/api/client/error', captureClientError);
 app.post('/api/client-errors', captureClientError);
-const gamePages = Object.freeze({
-  'crash': 'crash', 'chess': 'chess', 'satranc': 'chess', 'satranç': 'chess',
-  'pisti': 'pisti', 'pişti': 'pisti', 'snake': 'snake', 'snakepro': 'snake',
-  'space': 'space', 'spacepro': 'space', 'pattern-master': 'pattern-master',
+const activeGamePages = Object.freeze({
+  'snake': 'snake',
+  'snakepro': 'snake',
+  'space': 'space',
+  'spacepro': 'space',
+  'pattern-master': 'pattern-master',
   'patternmaster': 'pattern-master'
 });
-function sendGamePage(slug, res, next) {
-  const safeSlug = gamePages[String(slug || '').toLowerCase()] || '';
+const staticGamePages = Object.freeze({
+  'crash': 'crash',
+  'chess': 'chess',
+  'satranc': 'chess',
+  'satranç': 'chess',
+  'pisti': 'pisti',
+  'pişti': 'pisti'
+});
+function sendActiveGamePage(slug, res, next) {
+  const safeSlug = activeGamePages[String(slug || '').toLowerCase()] || '';
   if (!safeSlug) return next();
   res.setHeader('Cache-Control', 'no-store, max-age=0');
   return res.sendFile(path.join(__dirname, 'games', safeSlug, 'index.html'));
 }
-app.get('/games/:slug', (req, res, next) => sendGamePage(req.params.slug, res, next));
-app.get('/games/:slug/', (req, res, next) => sendGamePage(req.params.slug, res, next));
+function sendStaticGamePage(slug, res, next) {
+  const safeSlug = staticGamePages[String(slug || '').toLowerCase()] || '';
+  if (!safeSlug) return next();
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  return res.sendFile(path.join(__dirname, 'static-games', safeSlug, 'index.html'));
+}
+app.get('/games/:slug', (req, res, next) => {
+  const requested = String(req.params.slug || '').toLowerCase();
+  if (staticGamePages[requested]) return res.redirect(302, `/static-games/${staticGamePages[requested]}`);
+  return sendActiveGamePage(req.params.slug, res, next);
+});
+app.get('/games/:slug/', (req, res, next) => {
+  const requested = String(req.params.slug || '').toLowerCase();
+  if (staticGamePages[requested]) return res.redirect(302, `/static-games/${staticGamePages[requested]}`);
+  return sendActiveGamePage(req.params.slug, res, next);
+});
+app.get('/static-games/:slug', (req, res, next) => sendStaticGamePage(req.params.slug, res, next));
+app.get('/static-games/:slug/', (req, res, next) => sendStaticGamePage(req.params.slug, res, next));
 const legacyGameAliases = Object.freeze({
-  '/Online Oyunlar/Crash.html': '/games/crash', '/Online Oyunlar/Crash': '/games/crash', '/Online%20Oyunlar/Crash.html': '/games/crash', '/Crash.html': '/games/crash', '/crash': '/games/crash',
-  '/Online Oyunlar/Pisti.html': '/games/pisti', '/Online Oyunlar/Pisti': '/games/pisti', '/Online%20Oyunlar/Pisti.html': '/games/pisti', '/Pisti.html': '/games/pisti', '/pisti': '/games/pisti',
-  '/Online Oyunlar/Satranc.html': '/games/chess', '/Online Oyunlar/Satranc': '/games/chess', '/Online%20Oyunlar/Satranc.html': '/games/chess', '/Satranc.html': '/games/chess', '/satranc': '/games/chess',
+  '/Online Oyunlar/Crash.html': '/static-games/crash', '/Online Oyunlar/Crash': '/static-games/crash', '/Online%20Oyunlar/Crash.html': '/static-games/crash', '/Crash.html': '/static-games/crash', '/crash': '/static-games/crash',
+  '/Online Oyunlar/Pisti.html': '/static-games/pisti', '/Online Oyunlar/Pisti': '/static-games/pisti', '/Online%20Oyunlar/Pisti.html': '/static-games/pisti', '/Pisti.html': '/static-games/pisti', '/pisti': '/static-games/pisti',
+  '/Online Oyunlar/Satranc.html': '/static-games/chess', '/Online Oyunlar/Satranc': '/static-games/chess', '/Online%20Oyunlar/Satranc.html': '/static-games/chess', '/Satranc.html': '/static-games/chess', '/satranc': '/static-games/chess',
   '/Klasik Oyunlar/SnakePro.html': '/games/snake', '/Klasik Oyunlar/SnakePro': '/games/snake', '/Klasik%20Oyunlar/SnakePro.html': '/games/snake',
   '/Klasik Oyunlar/SpacePro.html': '/games/space', '/Klasik Oyunlar/SpacePro': '/games/space', '/Klasik%20Oyunlar/SpacePro.html': '/games/space',
   '/Klasik Oyunlar/PatternMaster.html': '/games/pattern-master', '/Klasik Oyunlar/PatternMaster': '/games/pattern-master', '/Klasik%20Oyunlar/PatternMaster.html': '/games/pattern-master'

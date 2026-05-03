@@ -1,5 +1,5 @@
 // Generated from ERKEK-PROFİL.JS.
-// Avatar URLs are normalized centrally in /public/data/avatar-catalog.js.
+// Avatar URLs are normalized centrally in public/data/avatar-catalog.js.
 export const MALE_PROFILE_AVATARS = Object.freeze([
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIZYEWydwVudKtrX3H1rqtVZ9C9UtU5B5M-t8zjEknqA&s=10",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSPnkz3R7ZMWGhnu5Ro4U_Z7qE3NHublXhkUYP09oIyCA&s=10",

@@ -1,5 +1,5 @@
 // Generated from ARABA-AVATAR.JS.
-// Avatar URLs are normalized centrally in /public/data/avatar-catalog.js.
+// Avatar URLs are normalized centrally in public/data/avatar-catalog.js.
 export const CAR_AVATARS = Object.freeze([
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfGyJQYvPP6iCLIpSd0v2JMQxgxA3dUEjyLmW4F82zYQ&s=10",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQKNQZDgKhgQChE_EnvSmGhGAXfRlgJjFhj3F9O0XBb5Q&s=10",

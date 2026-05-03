@@ -178,7 +178,8 @@ export async function adminFetch(path, options = {}) {
       if (response.ok && payload?.ok !== false) {
         if (base && window.__PM_API__?.setApiBase) window.__PM_API__.setApiBase(base);
         persistSessionTokenFromPayload(payload || {});
-        if (/\/auth\/admin\/matrix\/logout$|\/auth\/session\/logout$/i.test(String(path || ''))) clearSessionToken();
+        if (payload?.clientKey) setSecurityKey(payload.clientKey);
+        if (/\/auth\/admin\/matrix\/logout$|\/auth\/session\/logout$/i.test(String(path || ''))) { clearSessionToken(); clearSecurityKey(); }
         return payload;
       }
       const error = new Error(payload?.error || `HTTP ${response.status}`);

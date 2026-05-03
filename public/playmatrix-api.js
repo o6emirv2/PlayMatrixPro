@@ -6,7 +6,7 @@
     '127.0.0.1': 'http://localhost:3000'
   });
   const PM_API_STORAGE_KEY = 'pm_api_base';
-  const PM_API_TIMEOUT_MS = 2500;
+  const PM_API_TIMEOUT_MS = 10000;
   const RUNTIME_ENDPOINT_SUFFIX = '/api/public/runtime-config';
 
   function fetchWithTimeout(resource, options = {}, timeoutMs = PM_API_TIMEOUT_MS) {
@@ -113,7 +113,7 @@
           headers: { Accept: 'application/json' },
           credentials: 'omit',
           cache: 'no-store'
-        }, 1800);
+        }, 3500);
         if (!response.ok) continue;
         const contentType = String(response.headers.get('content-type') || '').toLowerCase();
         if (!contentType.includes('application/json')) continue;

@@ -784,8 +784,8 @@ body{
 
 .pm-runtime-toast-stack{position:fixed;right:14px;bottom:14px;z-index:999999;display:grid;gap:10px;max-width:min(92vw,360px)}
 .pm-runtime-toast{padding:14px 16px;border-radius:16px;backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.12);color:#fff;box-shadow:0 18px 48px rgba(0,0,0,.28);transition:opacity .18s ease,transform .18s ease}.pm-runtime-toast--error{background:rgba(127,29,29,.92)}.pm-runtime-toast--success{background:rgba(6,78,59,.92)}.pm-runtime-toast--info{background:rgba(17,24,39,.92)}.pm-runtime-toast.is-leaving{opacity:0;transform:translateY(8px)}.pm-runtime-toast__title{font-weight:700;margin-bottom:4px}.pm-runtime-toast__message{font-size:13px;line-height:1.45;opacity:.92}
-
-
+.pm-pisti-empty{color:var(--text-muted);text-align:center;font-style:italic}.pm-pisti-lock-icon{color:var(--gold-base);margin-right:6px}.pm-pisti-bet-value{color:var(--gold-light)}.pm-pisti-pool-unit{font-size:10px;color:var(--gold-base)}.pm-pisti-message-success{color:var(--green-neon);font-size:18px;font-weight:800}.pm-pisti-message-info{color:var(--gold-base);font-size:18px}.pm-pisti-message-error{color:var(--accent-red)}
+.pm-chess-empty{color:rgba(148,163,184,.95);text-align:center;margin-top:10px;font-size:13px}.pm-chess-empty-error{color:rgba(248,113,113,.95)}.pm-chess-status-waiting{color:#00ffa3}.pm-chess-status-playing{color:#f1c40f}
 .pm-snake-login-title{font-size:16px;color:var(--nokia-dark);margin-bottom:12px;text-shadow:2px 2px 0 rgba(0,0,0,.18)}.pm-snake-login-desc{font-size:8px;color:var(--nokia-dark);margin-bottom:12px;text-align:center;max-width:200px}.pm-snake-login-link{display:inline-flex;align-items:center;justify-content:center;min-width:120px;padding:10px 14px;border-radius:10px;background:#182700;color:#efffc6;text-decoration:none;font-size:10px;font-weight:800;letter-spacing:1px}
 .pm-admin-grid-span-all{grid-column:1/-1}
 

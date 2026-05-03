@@ -1,5 +1,5 @@
 // Generated from FUTBOOL-TAKIMLARI.JS.
-// Avatar URLs are normalized centrally in /public/data/avatar-catalog.js.
+// Avatar URLs are normalized centrally in public/data/avatar-catalog.js.
 export const FOOTBALL_TEAM_AVATARS = Object.freeze([
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRQwyXlGFYmEebbJwy3udOoiY1aHks5DHDL-LjNe-O2rw&s=10",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQujzeT1nbxD37pbAAGFoEQYZfH7nHKNHebtVxjQZo1vA&s=10",

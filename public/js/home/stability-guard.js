@@ -2,8 +2,8 @@
   'use strict';
 
   const VERSION = 'clean-runtime-fix-20260426h';
-  const ONLINE_GAME_RE = /a^/;
-  const ONLINE_NAMES = /a^/;
+  const ONLINE_GAME_RE = /\/games\/(crash|chess|pisti)(?:\/)?$/i;
+  const ONLINE_NAMES = /^(crash|satranç|satranc|pişti|pisti)$/i;
   const FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
 
   function $(id) { return document.getElementById(id); }
@@ -163,9 +163,9 @@
     return 'game-card--default';
   }
   const FALLBACK_GAMES = [
-    { name: 'Crash', category: 'online', access: 'auth', url: '/games/crash', icon: 'fa-arrow-trend-up', desc: 'Refleks ve zamanlama odaklı online multiplier oyunu.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'] },
-    { name: 'Satranç', category: 'online', access: 'auth', url: '/games/chess', icon: 'fa-chess', desc: 'Modern arayüzlü online satranç arenası.', tags: ['PvP', 'Strateji', 'Arena'] },
-    { name: 'Pişti', category: 'online', access: 'auth', url: '/games/pisti', icon: 'fa-layer-group', desc: 'Gerçek oyuncularla online pişti masaları.', tags: ['Kart', 'Online', 'Klasik'] },
+    { name: 'Crash', category: 'online', access: 'free', url: '/static-games/crash', icon: 'fa-arrow-trend-up', desc: 'Refleks ve zamanlama odaklı online multiplier oyunu.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'] },
+    { name: 'Satranç', category: 'online', access: 'free', url: '/static-games/chess', icon: 'fa-chess', desc: 'Modern arayüzlü online satranç arenası.', tags: ['PvP', 'Strateji', 'Arena'] },
+    { name: 'Pişti', category: 'online', access: 'free', url: '/static-games/pisti', icon: 'fa-layer-group', desc: 'Gerçek oyuncularla online pişti masaları.', tags: ['Kart', 'Online', 'Klasik'] },
     { name: 'Pattern Master', category: 'classic', access: 'free', url: '/games/pattern-master', icon: 'fa-shapes', desc: 'Dikkat ve görsel hafıza oyunu.', tags: ['Ücretsiz', 'Zeka', 'Refleks'] },
     { name: 'Space Pro', category: 'classic', access: 'free', url: '/games/space', icon: 'fa-user-astronaut', desc: 'Hızlı klasik arcade uzay oyunu.', tags: ['Arcade', 'Retro', 'Ücretsiz'] },
     { name: 'Snake Pro', category: 'classic', access: 'free', url: '/games/snake', icon: 'fa-wave-square', desc: 'Retro hisli akıcı snake oyunu.', tags: ['Retro', 'Arcade', 'Ücretsiz'] }
