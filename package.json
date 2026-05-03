@@ -1,9 +1,9 @@
 {
-  "name": "playmatrix-clean-production-v10",
+  "name": "playmatrix-clean-production",
   "version": "10.0.0",
   "private": true,
   "type": "commonjs",
-  "description": "PlayMatrix clean modular production build - V10 static legacy game cleanup and admin matrix hardening",
+  "description": "PlayMatrix clean modular production build - V10 maintenance online games removed, legacy admin matrix restored",
   "main": "server.js",
   "engines": {
     "node": ">=20 <23"
