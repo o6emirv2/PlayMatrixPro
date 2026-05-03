@@ -1141,3 +1141,14 @@
   .pm-game-topbar-avatar-host { width: 38px; height: 38px; flex-basis: 38px; }
   .pm-game-topbar-avatar-host .pm-avatar { width: 38px; height: 38px; }
 }
+
+/* Crash protocol hardening: processing/phase states */
+.action-btn.is-processing {
+  opacity: .78;
+  cursor: wait;
+  filter: saturate(.85) brightness(.95);
+}
+.multiplier-val.val-countdown {
+  color: rgba(255,255,255,.94);
+  text-shadow: 0 0 26px rgba(255,255,255,.14), 0 0 56px rgba(255,196,87,.14);
+}

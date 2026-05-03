@@ -19,6 +19,10 @@
     
 const INLINE_DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20128%20128%27%20role%3D%27img%27%20aria-label%3D%27PlayMatrix%20Avatar%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27pmg%27%20x1%3D%270%27%20x2%3D%271%27%20y1%3D%270%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%25%27%20stop-color%3D%27%23111827%27%2F%3E%3Cstop%20offset%3D%27100%25%27%20stop-color%3D%27%231f2937%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%27128%27%20height%3D%27128%27%20rx%3D%2728%27%20fill%3D%27url%28%23pmg%29%27%2F%3E%3Ccircle%20cx%3D%2764%27%20cy%3D%2750%27%20r%3D%2724%27%20fill%3D%27%23f59e0b%27%20fill-opacity%3D%27.94%27%2F%3E%3Cpath%20d%3D%27M26%20108c8-18%2024-28%2038-28s30%2010%2038%2028%27%20fill%3D%27%23fbbf24%27%20fill-opacity%3D%27.92%27%2F%3E%3Ctext%20x%3D%2764%27%20y%3D%27118%27%20text-anchor%3D%27middle%27%20font-family%3D%27Inter%2CArial%2Csans-serif%27%20font-size%3D%2716%27%20font-weight%3D%27700%27%20fill%3D%27%23f9fafb%27%3EPM%3C%2Ftext%3E%3C%2Fsvg%3E';
     const DEFAULT_AVATAR = window.PMAvatar?.FALLBACK_AVATAR || INLINE_DEFAULT_AVATAR;
+    const CRASH_MIN_BET = 1;
+    const CRASH_MAX_BET = 1000000;
+    const CRASH_MIN_AUTO_CASHOUT = 2;
+    const CRASH_MAX_AUTO_CASHOUT = 100;
 
     function installCrashFrameFallbacks() {
       document.addEventListener('error', (event) => {
@@ -32,7 +36,12 @@ const INLINE_DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3
     installCrashFrameFallbacks();
 
     function safeFloat(num) { return parseFloat((Number(num) || 0).toFixed(2)); }
-    function clampBetAmount(value) { return Math.max(1, safeFloat(value)); }
+    function safeMoney(num) { return Math.max(0, safeFloat(num)); }
+    function clampBetAmount(value) {
+        const normalized = String(value ?? '').trim().replace(',', '.');
+        const numeric = Math.trunc(Number(normalized) || 0);
+        return Math.max(CRASH_MIN_BET, Math.min(CRASH_MAX_BET, numeric));
+    }
     function parseAutoCashoutValue(value) {
         const normalized = String(value ?? '').trim().replace(',', '.');
         if (!normalized) return NaN;
@@ -42,12 +51,30 @@ const INLINE_DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3
     function clampAutoCashout(value) {
         const parsed = parseAutoCashoutValue(value);
         if (!Number.isFinite(parsed)) return 0;
-        return safeFloat(Math.min(100, Math.max(0, parsed)));
+        return safeFloat(Math.min(CRASH_MAX_AUTO_CASHOUT, Math.max(CRASH_MIN_AUTO_CASHOUT, parsed)));
     }
     function formatAutoCashoutInput(value) {
         const parsed = parseAutoCashoutValue(value);
         if (!Number.isFinite(parsed) || parsed <= 0) return '';
         return clampAutoCashout(parsed).toFixed(2);
+    }
+    function pickNumber(...values) {
+        for (const value of values) {
+            const number = Number(value);
+            if (Number.isFinite(number)) return number;
+        }
+        return null;
+    }
+    function pickProfile(payload) {
+        if (!payload || typeof payload !== 'object') return {};
+        if (payload.user && typeof payload.user === 'object') return payload.user;
+        if (payload.profile && typeof payload.profile === 'object') return payload.profile;
+        return payload;
+    }
+    function extractBalance(payload) {
+        const profile = pickProfile(payload);
+        const value = pickNumber(payload?.balance, payload?.mcBalance, payload?.wallet?.balance, profile?.balance, profile?.mcBalance, profile?.wallet?.balance);
+        return value === null ? null : safeMoney(value);
     }
     function getPlayerAccountLevel(player = {}) {
         const rawLevel = Number(player?.accountLevel ?? player?.progression?.accountLevel ?? player?.level ?? 1);
@@ -99,7 +126,7 @@ const INLINE_DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3
             })
           : (() => {
               const frameHtml = frameIndex > 0
-                ? `<img src="/Cerceve/frame-${frameIndex}.png" class="t-frame frame-${frameIndex}" alt="" aria-hidden="true" data-fallback="/Çerçeve/frame-${frameIndex}.png">`
+                ? `<img src="/public/assets/frames/frame-${frameIndex}.png" class="t-frame frame-${frameIndex}" alt="" aria-hidden="true" data-fallback="/public/assets/frames/frame-${frameIndex}.png">`
                 : '';
               return `<img src="${escapeHTML(avatarUrl || DEFAULT_AVATAR)}" class="t-avatar" alt="avatar">${frameHtml}`;
             })();
@@ -488,16 +515,18 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     }
 
     async function fetchBootProfile() {
-        const d = await api('/api/me');
-        if (!d?.ok) throw new Error(d?.error || 'PROFILE_LOAD_FAILED');
-        currentBalance = safeFloat(d.balance);
-        try { window.__PM_GAME_ACCOUNT_SYNC__?.apply?.(d); } catch (_) {}
+        const payload = await api('/api/me');
+        if (!payload?.ok) throw new Error(payload?.error || 'PROFILE_LOAD_FAILED');
+        const profile = pickProfile(payload);
+        const balance = extractBalance(payload);
+        if (balance !== null) currentBalance = balance;
+        try { window.__PM_GAME_ACCOUNT_SYNC__?.apply?.({ ...payload, balance: currentBalance }); } catch (_) {}
         if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        if(d.user) {
-            userInfo.avatar = d.user.avatar || '';
-            userInfo.username = d.user.username || 'Sen';
-            const accountLevel = getPlayerAccountLevel(d.user);
-            const accountProgress = getPlayerAccountProgressPct(d.user);
+        if(profile && Object.keys(profile).length) {
+            userInfo.avatar = profile.avatar || profile.photoURL || '';
+            userInfo.username = profile.username || profile.displayName || profile.fullName || 'Sen';
+            const accountLevel = getPlayerAccountLevel(profile);
+            const accountProgress = getPlayerAccountProgressPct(profile);
             if (elUiAccountLevelBar) elUiAccountLevelBar.style.width = accountProgress + '%';
             if (elUiAccountLevelPct) elUiAccountLevelPct.innerText = `${accountProgress.toFixed(1)}%`;
             if (elUiAccountLevelBadge) elUiAccountLevelBadge.innerText = accountLevel;
@@ -506,7 +535,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             const statFill = document.querySelector('.stat-bar-fill');
             if (statFill) statFill.style.background = '';
         }
-        return d;
+        return payload;
     }
 
     async function waitForSocketReady(sock, timeoutMs = 6500) {
@@ -610,6 +639,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     const elBgSpeedLayer = document.getElementById('bgSpeedLayer');
     const elHudPhase = document.getElementById('hudPhase');
     const elUiBalance = document.getElementById('uiBalance');
+    const elCrashCanvas = document.getElementById('crashCanvas');
 
     let lastDisplayedMultStr = '';
     let lastDisplayedCountdownStr = '';
@@ -710,10 +740,34 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             autoCashout: Number(data.autoCashout || 0) || 0,
             autoCashoutEnabled: !!data.autoCashoutEnabled,
             cashed: !!data.cashed,
+            lost: !!data.lost,
+            refunded: !!data.refunded,
             cashingOut: false,
             win: Number(data.win || 0) || 0,
             cashoutMult: Number(data.cashoutMult || 0) || 0
         };
+    }
+
+    function getServerMultiplier(data = {}) {
+        return pickNumber(data.currentMult, data.multiplier, data.crashPoint);
+    }
+
+    function getServerCountdownUntil(data = {}) {
+        return pickNumber(data.startTime, data.countdownUntil, data.countdownEndsAt);
+    }
+
+    function normalizeServerBet(raw = {}) {
+        const box = Number(raw.box) === 2 ? 2 : 1;
+        return normalizeLocalBetForBox(box, {
+            ...raw,
+            uid: raw.uid || (raw.isMine ? uid : raw.playerKey),
+            username: raw.isMine ? (userInfo.username || 'Sen') : (raw.username || 'Oyuncu'),
+            avatar: raw.isMine ? (userInfo.avatar || raw.avatar || DEFAULT_AVATAR) : (raw.avatar || DEFAULT_AVATAR),
+            win: raw.win ?? raw.winAmount ?? 0,
+            amount: raw.amount ?? raw.bet ?? 0,
+            bet: raw.bet ?? raw.amount ?? 0,
+            roundId: raw.roundId || currentRoundId
+        });
     }
 
     async function restoreActiveBets() {
@@ -722,11 +776,21 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             if (!payload?.ok) return;
             if (payload.roundId) currentRoundId = String(payload.roundId);
             if (payload.phase) sPhase = String(payload.phase || '').toUpperCase();
-            if (Number.isFinite(Number(payload.currentMult))) sMult = safeFloat(payload.currentMult);
-            (payload.bets || []).forEach((bet) => {
+            const mult = getServerMultiplier(payload);
+            if (Number.isFinite(mult)) sMult = safeFloat(mult);
+            const countdownUntil = getServerCountdownUntil(payload);
+            if (Number.isFinite(countdownUntil)) crashCountdownEnd = Number(countdownUntil);
+            const balance = extractBalance(payload);
+            if (balance !== null) {
+                currentBalance = balance;
+                if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+            const bets = Array.isArray(payload.myBets) ? payload.myBets : (Array.isArray(payload.bets) ? payload.bets : []);
+            bets.forEach((bet) => {
                 const box = Number(bet.box) === 2 ? 2 : 1;
-                myBets[getBoxKey(box)] = normalizeLocalBetForBox(box, { ...bet, uid, username: userInfo.username, avatar: userInfo.avatar, roundId: payload.roundId });
+                myBets[getBoxKey(box)] = normalizeServerBet({ ...bet, isMine: true });
             });
+            handleServerData(payload);
             updateButtons();
             updateHud();
         } catch (_) {}
@@ -744,8 +808,17 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             const btn = getActionButton(box);
             const bet = myBets[boxKey];
             if (!btn) return;
+            const amountLabel = formatCompactMc(clampBetAmount(getBetInput(box)?.value || 0));
             btn.disabled = false;
-            if (bet && !bet.cashed && String(bet.roundId || '') === String(currentRoundId || '')) {
+            btn.classList.toggle('is-processing', !!isProcessing[boxKey]);
+            if (isProcessing[boxKey]) {
+                setButtonMode(btn, bet && !bet.cashed && sPhase === 'FLYING' ? 'cashout' : 'bet');
+                btn.innerHTML = `İŞLENİYOR <span>Lütfen bekle</span>`;
+                btn.disabled = true;
+                setBoxStatus(box, 'İşlemde', 'processing');
+                return;
+            }
+            if (bet && !bet.cashed && !bet.refunded && String(bet.roundId || '') === String(currentRoundId || '')) {
                 if (sPhase === 'FLYING') {
                     setButtonMode(btn, 'cashout');
                     btn.innerHTML = `ÇIKIŞ AL <span>${formatCompactMc(currentCashoutEstimate(bet))}</span>`;
@@ -766,14 +839,14 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
 
             if (sPhase !== 'COUNTDOWN') {
                 setButtonMode(btn, 'bet');
-                btn.innerHTML = `MC KULLAN <span>${formatCompactMc(clampBetAmount(getBetInput(box)?.value || 0))}</span>`;
+                btn.innerHTML = `MC KULLAN <span>${amountLabel}</span>`;
                 btn.disabled = true;
                 setBoxStatus(box, sPhase === 'FLYING' ? 'Tur başladı' : 'Bekleniyor', 'waiting');
                 return;
             }
 
             setButtonMode(btn, 'bet');
-            btn.innerHTML = `MC KULLAN <span>${formatCompactMc(clampBetAmount(getBetInput(box)?.value || 0))}</span>`;
+            btn.innerHTML = `MC KULLAN <span>${amountLabel}</span>`;
             setBoxStatus(box, 'Hazır', 'ready');
         });
     }
@@ -795,10 +868,10 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
                     case 'plus100': next = current + 100; break;
                     case 'double': next = current * 2; break;
                     case 'half': next = Math.max(1, current / 2); break;
-                    case 'max': next = Math.max(1, currentBalance || current); break;
+                    case 'max': next = Math.max(CRASH_MIN_BET, Math.min(CRASH_MAX_BET, Math.trunc(currentBalance || current))); break;
                     default: next = current;
                 }
-                input.value = safeFloat(next);
+                input.value = clampBetAmount(next);
                 syncBetButtonAmounts();
                 updateButtons();
             });
@@ -834,13 +907,16 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         const boxKey = getBoxKey(box);
         if (myBets[boxKey] && String(myBets[boxKey].roundId || '') === String(currentRoundId || '')) return;
         const amount = clampBetAmount(getBetInput(box)?.value || 0);
+        if (amount > currentBalance) throw new Error('Bakiye yetersiz.');
         const autoCashEnabled = !!getAutoCashInput(box)?.checked;
         const autoCashout = autoCashEnabled ? clampAutoCashout(getAutoInput(box)?.value || 0) : 0;
         const payload = await api('/api/crash/bet', 'POST', { box, amount, autoCashout });
         if (!payload?.ok) throw new Error(payload?.error || 'Bahis alınamadı.');
-        myBets[boxKey] = normalizeLocalBetForBox(box, { uid, username: userInfo.username, avatar: userInfo.avatar, betId: `${currentRoundId}_${uid}_${box}`, roundId: currentRoundId, amount, autoCashout, autoCashoutEnabled: autoCashEnabled });
-        currentBalance = safeFloat(currentBalance - amount);
-        try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.({ ...payload, balance: payload?.balance ?? currentBalance }); } catch (_) {}
+        if (payload.roundId) currentRoundId = String(payload.roundId);
+        myBets[boxKey] = normalizeServerBet({ ...(payload.bet || {}), isMine: true, box, roundId: payload.roundId || currentRoundId, amount, autoCashout, autoCashoutEnabled: autoCashEnabled });
+        const balance = extractBalance(payload);
+        if (balance !== null) currentBalance = balance;
+        try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.({ ...payload, balance: currentBalance }); } catch (_) {}
         if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         if (!silent) window.showInlineError?.('Bahis sunucuya işlendi.');
         if (typeof pmRtEmitCrashBetPresence === 'function') pmRtEmitCrashBetPresence(amount);
@@ -859,13 +935,17 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         if (!bet || bet.cashed) return;
         const payload = await api('/api/crash/cashout', 'POST', { box });
         if (!payload?.ok) throw new Error(payload?.error || 'Çıkış alınamadı.');
-        bet.cashed = true;
-        bet.win = Number(payload.winAmount || 0) || 0;
-        bet.cashoutMult = Number(payload.cashoutMult || sMult) || sMult;
-        currentBalance = safeFloat(currentBalance + bet.win);
-        try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.({ ...payload, balance: payload?.balance ?? currentBalance, winAmount: bet.win, cashoutMult: bet.cashoutMult }); } catch (_) {}
+        const serverBet = payload.bet ? normalizeServerBet({ ...payload.bet, isMine: true }) : null;
+        const targetBet = serverBet || bet;
+        targetBet.cashed = true;
+        targetBet.win = Number(payload.winAmount ?? targetBet.win ?? 0) || 0;
+        targetBet.cashoutMult = Number(payload.cashoutMult ?? targetBet.cashoutMult ?? sMult) || sMult;
+        myBets[boxKey] = targetBet;
+        const balance = extractBalance(payload);
+        if (balance !== null) currentBalance = balance;
+        try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.({ ...payload, balance: currentBalance, winAmount: targetBet.win, cashoutMult: targetBet.cashoutMult }); } catch (_) {}
         if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        window.showWinStrip?.(userInfo.avatar || DEFAULT_AVATAR, userInfo.username || 'Sen', bet.cashoutMult, bet.win);
+        window.showWinStrip?.(userInfo.avatar || DEFAULT_AVATAR, userInfo.username || 'Sen', targetBet.cashoutMult, targetBet.win);
         showCrashResultSummary(payload.resultSummary);
         playCrashSfx('win');
         updateButtons();
@@ -887,12 +967,17 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         }
     }
 
+    function historyMultiplier(item) {
+        if (item && typeof item === 'object') return pickNumber(item.multiplier, item.currentMult, item.crashPoint) ?? 0;
+        return Number(item) || 0;
+    }
+
     function renderHistory(history = []) {
         if (!elHistory) return;
-        const normalized = (Array.isArray(history) ? history : []).slice(0, 15).map((item) => safeFloat(item));
+        const normalized = (Array.isArray(history) ? history : []).slice(0, 20).map(historyMultiplier).filter((value) => Number.isFinite(value) && value > 0);
         const html = normalized.map((mult) => {
             const cls = mult < 2 ? 'hist-red' : mult >= 10 ? 'hist-gold' : 'hist-green';
-            return `<span class="hist-pill ${cls}">${mult.toFixed(2)}x</span>`;
+            return `<span class="hist-pill ${cls}">${safeFloat(mult).toFixed(2)}x</span>`;
         }).join('');
         if (html !== lastHistoryHtml) {
             elHistory.innerHTML = html;
@@ -904,11 +989,11 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         if (!Array.isArray(activePlayers) || !uid) return;
         const seen = new Set();
         activePlayers.forEach((player) => {
-            if (String(player?.uid || '') !== String(uid)) return;
+            if (!player?.isMine) return;
             const box = Number(player.box || (String(player.betId || '').endsWith('_2') ? 2 : 1)) === 2 ? 2 : 1;
             const boxKey = getBoxKey(box);
             seen.add(boxKey);
-            myBets[boxKey] = normalizeLocalBetForBox(box, { ...player, amount: player.amount ?? player.bet, roundId: player.roundId || currentRoundId });
+            myBets[boxKey] = normalizeServerBet({ ...player, isMine: true, roundId: player.roundId || currentRoundId });
         });
         if (sPhase === 'COUNTDOWN') {
             [1, 2].forEach((box) => {
@@ -922,9 +1007,9 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         if (!elLiveTableBody) return;
         const rows = (Array.isArray(activePlayers) ? activePlayers : [])
             .slice()
-            .sort((a, b) => (Number(b.win || 0) - Number(a.win || 0)) || (Number(b.bet || b.amount || 0) - Number(a.bet || a.amount || 0)))
+            .sort((a, b) => (Number(b.win || b.winAmount || 0) - Number(a.win || a.winAmount || 0)) || (Number(b.bet || b.amount || 0) - Number(a.bet || a.amount || 0)))
             .slice(0, 80);
-        const signature = JSON.stringify(rows.map((p) => [p.uid, p.username, p.bet ?? p.amount, p.cashed, p.cashoutMult, p.win]));
+        const signature = JSON.stringify(rows.map((p) => [p.playerKey, p.isMine, p.username, p.bet ?? p.amount, p.cashed, p.cashoutMult, p.win ?? p.winAmount]));
         if (signature === lastRenderedTableData) return;
         lastRenderedTableData = signature;
         if (elLiveBetCount) elLiveBetCount.innerHTML = `<i class="fa-solid fa-user"></i>${rows.length} oyuncu`;
@@ -932,10 +1017,11 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         elLiveTableBody.innerHTML = rows.map((player) => {
             const amount = Number(player.bet ?? player.amount ?? 0) || 0;
             const mult = Number(player.cashoutMult || 0) || 0;
-            const win = Number(player.win || 0) || 0;
+            const win = Number(player.win ?? player.winAmount ?? 0) || 0;
             const avatar = renderCrashAvatar(player, player.avatar || DEFAULT_AVATAR);
+            const name = player.isMine ? (userInfo.username || 'Sen') : (player.username || 'Oyuncu');
             return `<div class="table-row ${player.cashed ? 'row-cashed' : ''}">
-                <div class="t-user">${avatar}<div class="t-meta"><span class="t-name">${escapeHTML(player.username || (player.uid === uid ? userInfo.username : 'Oyuncu'))}</span><span class="t-tier">${player.isBot ? 'BOT' : 'OYUNCU'}</span></div></div>
+                <div class="t-user">${avatar}<div class="t-meta"><span class="t-name">${escapeHTML(name)}</span><span class="t-tier">${player.isMine ? 'SEN' : 'OYUNCU'}</span></div></div>
                 <div class="t-bet">${formatCompactMc(amount)}</div>
                 <div class="t-mult">${mult > 0 ? `${safeFloat(mult).toFixed(2)}x` : '-'}</div>
                 <div class="t-win">${win > 0 ? '+' + formatCompactMc(win) : '-'}</div>
@@ -948,6 +1034,11 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         const phaseText = phaseMap[sPhase] || 'BAĞLANILIYOR';
         if (elUiPhase) elUiPhase.textContent = phaseText;
         if (elHudPhase) elHudPhase.textContent = phaseText;
+        if (elUiMultiplier) {
+            elUiMultiplier.classList.toggle('val-flying', sPhase === 'FLYING');
+            elUiMultiplier.classList.toggle('val-crashed', sPhase === 'CRASHED');
+            elUiMultiplier.classList.toggle('val-countdown', sPhase === 'COUNTDOWN');
+        }
         if (sPhase === 'COUNTDOWN') {
             const remaining = Math.max(0, Math.ceil((crashCountdownEnd - nowServer()) / 1000));
             const text = remaining > 0 ? `${remaining}` : '0';
@@ -973,6 +1064,61 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         updateButtons();
     }
 
+    function drawCrashCanvas() {
+        if (!elCrashCanvas) return;
+        const rect = elCrashCanvas.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        const width = Math.max(1, Math.floor(rect.width * dpr));
+        const height = Math.max(1, Math.floor(rect.height * dpr));
+        if (elCrashCanvas.width !== width || elCrashCanvas.height !== height) {
+            elCrashCanvas.width = width;
+            elCrashCanvas.height = height;
+        }
+        const ctx = elCrashCanvas.getContext('2d');
+        if (!ctx) return;
+        ctx.clearRect(0, 0, width, height);
+        ctx.save();
+        ctx.scale(dpr, dpr);
+        const w = rect.width;
+        const h = rect.height;
+        ctx.globalAlpha = 0.28;
+        ctx.strokeStyle = 'rgba(255,255,255,.14)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= w; x += 42) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        for (let y = 0; y <= h; y += 42) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+        const progress = sPhase === 'COUNTDOWN' ? 0 : Math.max(0.08, Math.min(1, Math.log(Math.max(1, sMult)) / Math.log(120)));
+        const startX = Math.max(24, w * 0.08);
+        const baseY = Math.max(40, h * 0.78);
+        const endX = startX + (w * 0.78 * progress);
+        const endY = baseY - (h * 0.55 * Math.pow(progress, 0.82));
+        const gradient = ctx.createLinearGradient(startX, baseY, endX, endY);
+        gradient.addColorStop(0, 'rgba(255,191,87,.18)');
+        gradient.addColorStop(1, sPhase === 'CRASHED' ? 'rgba(255,80,80,.95)' : 'rgba(255,183,75,.95)');
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(startX, baseY);
+        ctx.quadraticCurveTo(startX + (endX - startX) * 0.48, baseY - h * 0.08 - h * 0.20 * progress, endX, endY);
+        ctx.stroke();
+        ctx.fillStyle = sPhase === 'CRASHED' ? 'rgba(255,80,80,.95)' : 'rgba(255,198,83,.95)';
+        ctx.beginPath();
+        ctx.arc(endX, endY, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function startCanvasLoop() {
+        const loop = () => {
+            drawCrashCanvas();
+            window.requestAnimationFrame(loop);
+        };
+        window.requestAnimationFrame(loop);
+    }
+
+    startCanvasLoop();
+
     function handleRoundBoundary(nextRoundId) {
         const next = String(nextRoundId || '');
         if (!next || next === String(currentRoundId || '')) return;
@@ -980,6 +1126,12 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         currentRoundId = next;
         myBets = { box1: null, box2: null };
         autoBetPlacedForRound = { box1: null, box2: null };
+    }
+
+    function getActivePlayersFromPayload(data = {}) {
+        if (Array.isArray(data.activePlayers)) return data.activePlayers;
+        if (Array.isArray(data.activeBets)) return data.activeBets;
+        return [];
     }
 
     function handleServerData(data = {}) {
@@ -993,15 +1145,18 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
                 if (sPhase === 'CRASHED') playCrashSfx('crash');
             }
         }
-        if (Number.isFinite(Number(data.currentMult))) sMult = safeFloat(data.currentMult);
-        if (Number.isFinite(Number(data.startTime))) {
-            localStartTime = Number(data.startTime);
-            if (sPhase === 'COUNTDOWN') crashCountdownEnd = Number(data.startTime);
+        const mult = getServerMultiplier(data);
+        if (Number.isFinite(mult)) sMult = safeFloat(mult);
+        const countdownUntil = getServerCountdownUntil(data);
+        if (Number.isFinite(countdownUntil)) {
+            localStartTime = Number(countdownUntil);
+            if (sPhase === 'COUNTDOWN') crashCountdownEnd = Number(countdownUntil);
         }
         if (Array.isArray(data.history)) renderHistory(data.history);
-        if (Array.isArray(data.activePlayers)) {
-            syncMyBetsFromActivePlayers(data.activePlayers);
-            renderLiveTable(data.activePlayers);
+        const activePlayers = getActivePlayersFromPayload(data);
+        if (activePlayers.length || Array.isArray(data.activePlayers) || Array.isArray(data.activeBets)) {
+            syncMyBetsFromActivePlayers(activePlayers);
+            renderLiveTable(activePlayers);
         }
         updateHud();
         if (sPhase === 'COUNTDOWN') checkAutoBets();
@@ -1011,15 +1166,17 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         if (Number.isFinite(Number(data.serverNow))) serverTimeOffsetMs = Number(data.serverNow) - Date.now();
         if (data.roundId) handleRoundBoundary(data.roundId);
         if (data.phase) sPhase = String(data.phase || '').toUpperCase();
-        if (Number.isFinite(Number(data.currentMult))) {
-            sMult = safeFloat(data.currentMult);
+        const mult = getServerMultiplier(data);
+        if (Number.isFinite(mult)) {
+            sMult = safeFloat(mult);
             lastServerMult = sMult;
             lastServerMultAt = Date.now();
             lastServerTickAt = Number(data.serverNow || nowServer());
         }
-        if (Number.isFinite(Number(data.startTime))) {
-            localStartTime = Number(data.startTime);
-            if (sPhase === 'COUNTDOWN') crashCountdownEnd = Number(data.startTime);
+        const countdownUntil = getServerCountdownUntil(data);
+        if (Number.isFinite(countdownUntil)) {
+            localStartTime = Number(countdownUntil);
+            if (sPhase === 'COUNTDOWN') crashCountdownEnd = Number(countdownUntil);
         }
         updateHud();
         if (sPhase === 'COUNTDOWN') checkAutoBets();
@@ -1035,9 +1192,9 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
 
     function pmRtGameHref(gameKey = '', roomId = '') {
         const safeRoomId = encodeURIComponent(String(roomId || '').trim());
-        if (gameKey === 'chess') return `/Online Oyunlar/Satranc.html?room=${safeRoomId}`;
-        if (gameKey === 'pisti') return `/Online Oyunlar/Pisti.html?room=${safeRoomId}`;
-        return '/Online Oyunlar/Crash.html';
+        if (gameKey === 'chess') return `/games/chess?room=${safeRoomId}`;
+        if (gameKey === 'pisti') return `/games/pisti?room=${safeRoomId}`;
+        return '/games/crash';
     }
 
     function pmRtSetPendingJoin(gameKey = '', roomId = '') {
@@ -1189,13 +1346,12 @@ async function pmRtMaybeConfirmExit() {
     if (PM_REALTIME_PAGE_KEY !== 'crash') return true;
     try {
         const payload = await pmRtRequest('/api/crash/active-bets');
-        if (!payload?.hasActiveBet) return true;
+        const activeBets = Array.isArray(payload?.bets) ? payload.bets : [];
+        if (!payload?.hasActiveBet && !activeBets.length) return true;
         return await pmRtPrompt({
             title: 'Aktif Crash Bahsi',
-            message: payload.hasRiskyBet
-                ? 'Şu an otomatik çıkış tanımı olmayan aktif bir Crash turun var. Davete geçersen tur arka planda devam eder ve sonuç riski sana ait olur. Yine de devam etmek istiyor musun?'
-                : 'Şu an aktif bir Crash bahsin bulunuyor. Davete geçersen tur arka planda devam eder. Devam etmek istiyor musun?',
-            confirmText: 'Yine de Geç',
+            message: 'Davet kabul edilirse aktif Crash bahsin backend tarafından iade edilir ve turdan güvenli şekilde çıkarılırsın.',
+            confirmText: 'İade Et ve Geç',
             cancelText: 'Kal',
             iconClass: 'fa-bolt'
         });
@@ -1205,6 +1361,21 @@ async function pmRtMaybeConfirmExit() {
 }
 
 async function pmRtBeforeRedirect() {
+    if (PM_REALTIME_PAGE_KEY !== 'crash') return true;
+    try {
+        const payload = await pmRtRequest('/api/crash/refund-active', 'POST', {});
+        const balance = extractBalance(payload);
+        if (balance !== null) {
+            currentBalance = balance;
+            if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+        myBets = { box1: null, box2: null };
+        updateButtons();
+        if (Number(payload?.refunded || 0) > 0) window.showInlineError?.(`Crash bahsin iade edildi: ${formatCompactMc(payload.refunded)}`);
+    } catch (error) {
+        window.showInlineError?.(error?.message || 'Crash bahsi iade edilirken hata oluştu.');
+        throw error;
+    }
     return true;
 }
 
@@ -1218,7 +1389,8 @@ async function pmRtHandleInviteResponse(data, response) {
         if (response === 'accepted') {
             const canContinue = await pmRtMaybeConfirmExit();
             if (!canContinue) return;
-            await pmRtRequest('/api/chess/join', 'POST', { roomId });
+            const joinEndpoint = gameKey === 'pisti' ? '/api/pisti-online/join' : '/api/chess/join';
+            await pmRtRequest(joinEndpoint, 'POST', { roomId });
         }
 
         if (pmRealtimeSocket) {
