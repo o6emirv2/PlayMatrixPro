@@ -11,6 +11,9 @@ const { initFirebaseAdmin } = require('./server/config/firebaseAdmin');
 const { apiLimiter } = require('./server/core/security');
 const { routeData } = require('./server/core/smartDataRouter');
 const { runtimeStore } = require('./server/core/runtimeStore');
+const crashEngine = require('./server/games/crash');
+process.on('unhandledRejection', (reason) => console.error('[process:unhandledRejection]', reason && reason.stack || reason));
+process.on('uncaughtException', (error) => console.error('[process:uncaughtException]', error && error.stack || error));
 initFirebaseAdmin();
 const app = express();
 const server = http.createServer(app);
@@ -31,8 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(apiLimiter);
-app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: env.nodeEnv === 'production' ? '7d' : 0 }));
-app.use(express.static(__dirname, { extensions: ['html'], maxAge: env.nodeEnv === 'production' ? '1h' : 0 }));
+app.use(express.static(__dirname, { extensions: ['html'], maxAge: env.nodeEnv === 'production' ? '1h' : 0, redirect: false }));
 app.get('/healthz', (req,res)=>res.json({ ok:true, service:'playmatrix', env:env.nodeEnv, time:Date.now() }));
 app.use('/api', require('./server/routes/compat.routes'));
 app.use('/api', require('./server/routes/auth.routes'));
@@ -44,7 +46,7 @@ app.use('/api', require('./server/routes/social.routes'));
 app.use('/api', require('./server/routes/email.routes'));
 app.use('/api/games/pisti', require('./server/games/pisti').router);
 app.use('/api/games/chess', require('./server/games/chess').router);
-app.use('/api/games/crash', require('./server/games/crash').router);
+app.use('/api/games/crash', crashEngine.router);
 app.use('/api/games/snake', require('./server/games/snake').router);
 app.use('/api/games/space', require('./server/games/space').router);
 app.use('/api/games/pattern-master', require('./server/games/pattern-master').router);
@@ -81,6 +83,22 @@ const legacyGameAliases = Object.freeze({
 });
 for (const [from, to] of Object.entries(legacyGameAliases)) app.get(from, (_req, res) => res.redirect(302, to));
 io.on('connection', socket => { runtimeStore.presence.set(socket.id, { socketId: socket.id, at: Date.now() }); socket.on('presence:update', data => runtimeStore.presence.set(socket.id, { socketId: socket.id, ...data, at: Date.now() })); socket.on('client:error', data => { console.error('[socket:client:error]', JSON.stringify({ socketId: socket.id, data })); runtimeStore.errors.set(`socket_${Date.now()}_${socket.id}`, data || {}, 24*3600000); }); socket.on('matchmaking:join', data => socket.emit('matchmaking:status', { ok:true, queued:true, game:data?.game || 'unknown' })); socket.on('matchmaking:leave', data => socket.emit('matchmaking:left', { ok:true })); socket.on('disconnect', () => runtimeStore.presence.delete(socket.id)); });
+
+function startCrashBroadcastLoop() {
+  let lastRoundId = '';
+  setInterval(() => {
+    try {
+      const snapshot = crashEngine.publicSnapshot();
+      const type = snapshot.roundId === lastRoundId ? 'TICK' : 'STATE';
+      lastRoundId = snapshot.roundId;
+      io.emit('crash:update', { ...snapshot, type });
+    } catch (error) {
+      console.error('[crash:broadcast:error]', JSON.stringify({ message: error.message, stack: error.stack }));
+    }
+  }, 700).unref();
+}
+startCrashBroadcastLoop();
+
 setInterval(()=>{ Object.values(runtimeStore).forEach(store => store.prune && store.prune()); }, 60_000).unref();
 app.use((req,res)=>res.status(404).json({ ok:false, error:'NOT_FOUND' }));
 app.use((err,req,res,next)=>{ console.error('[server:error]', JSON.stringify({ message: err?.message || String(err), stack: err?.stack || '', path: req.originalUrl || req.url, method: req.method })); res.status(500).json({ ok:false, error:'INTERNAL_ERROR' }); });

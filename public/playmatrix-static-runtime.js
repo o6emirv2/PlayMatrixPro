@@ -26,7 +26,7 @@
 
   const apiBase = normalizeBase(PUBLIC_API_BASE);
   const runtime = Object.freeze({
-    version: 6,
+    version: 9,
     environment: 'production',
     publicBaseUrl: normalizeBase(PUBLIC_BASE_URL),
     apiBase,
@@ -66,5 +66,52 @@
     var reason = event.reason || {};
     reportClientRuntimeError('unhandledrejection', { message: reason.message || String(reason || ''), stack: reason.stack || '' });
   });
+
+
+  function parseActionArgs(raw) {
+    if (!raw) return [];
+    try { const parsed = JSON.parse(raw); return Array.isArray(parsed) ? parsed : [parsed]; } catch (_) { return []; }
+  }
+
+  function installActionDelegation() {
+    if (document.documentElement.dataset.pmActionDelegation === '1') return;
+    document.documentElement.dataset.pmActionDelegation = '1';
+    const run = function (target, event) {
+      const action = String(target?.dataset?.pmAction || '').trim();
+      if (!action) return;
+      const fn = action.split('.').reduce((obj, key) => obj && obj[key], window);
+      if (typeof fn !== 'function') return;
+      event.preventDefault();
+      event.stopPropagation();
+      Promise.resolve(fn.apply(window, parseActionArgs(target.dataset.pmArgs || '[]'))).catch(function (error) {
+        reportClientRuntimeError('data-pm-action', { action, message: error?.message || String(error || '') });
+      });
+    };
+    document.addEventListener('click', function (event) {
+      const target = event.target && event.target.closest && event.target.closest('[data-pm-action]');
+      if (!target || target.dataset.pmActionEvent === 'input') return;
+      run(target, event);
+    }, true);
+    document.addEventListener('input', function (event) {
+      const target = event.target && event.target.closest && event.target.closest('[data-pm-action][data-pm-action-event="input"]');
+      if (!target) return;
+      run(target, event);
+    }, true);
+  }
+
+  function installSmoothMobileScroll() {
+    document.documentElement.style.webkitOverflowScrolling = 'touch';
+    document.documentElement.style.overscrollBehaviorY = 'auto';
+    document.body.style.webkitOverflowScrolling = 'touch';
+    document.addEventListener('touchmove', function () {}, { passive: true });
+    document.addEventListener('wheel', function () {}, { passive: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { installActionDelegation(); installSmoothMobileScroll(); }, { once: true });
+  } else {
+    installActionDelegation();
+    installSmoothMobileScroll();
+  }
 
 })();
