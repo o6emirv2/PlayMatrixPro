@@ -414,6 +414,7 @@ async function initAndUnlockAudio() {
     const elUiAccountLevelBar = document.getElementById('uiAccountLevelBar');
     const elUiAccountLevelPct = document.getElementById('uiAccountLevelPct');
     const elUiAccountLevelBadge = document.getElementById('uiAccountLevelBadge');
+    const elUiAccountAvatarHost = document.getElementById('uiAccountAvatarHost');
     const elWsAvatar = document.getElementById('wsAvatar');
     const elWsUser = document.getElementById('wsUser');
     const elWsMult = document.getElementById('wsMult');
@@ -514,17 +515,43 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         return core.waitForAuthReady(timeoutMs);
     }
 
-    async function fetchBootProfile() {
-        const payload = await api('/api/me');
+    function renderCrashTopbarAvatar(profile = {}) {
+        if (!elUiAccountAvatarHost) return;
+        const avatarUrl = profile.avatar || profile.photoURL || profile.avatarUrl || DEFAULT_AVATAR;
+        const frameIndex = Number(profile.selectedFrame || profile.frame || 0) || 0;
+        const accountLevel = getPlayerAccountLevel(profile);
+        if (window.PMAvatar && typeof window.PMAvatar.buildHTML === 'function') {
+            elUiAccountAvatarHost.innerHTML = window.PMAvatar.buildHTML({
+                avatarUrl: avatarUrl || DEFAULT_AVATAR,
+                selectedFrame: frameIndex,
+                accountLevel,
+                size: 'game-topbar'
+            });
+            return;
+        }
+        const safeAvatar = String(avatarUrl || DEFAULT_AVATAR).replace(/"/g, '&quot;');
+        const frameSrc = frameIndex > 0 ? `/public/assets/frames/frame-${frameIndex}.png` : '';
+        elUiAccountAvatarHost.innerHTML = `
+            <div class="pm-avatar-frame pm-avatar-frame--game-topbar">
+                <img class="pm-avatar-frame__avatar" src="${safeAvatar}" alt="Avatar" loading="lazy" decoding="async">
+                ${frameSrc ? `<img class="pm-avatar-frame__frame" src="${frameSrc}" alt="" loading="lazy" decoding="async">` : ''}
+            </div>`;
+    }
+
+    function applyCrashProfilePayload(payload) {
         if (!payload?.ok) throw new Error(payload?.error || 'PROFILE_LOAD_FAILED');
+        lastProfilePayload = payload;
         const profile = pickProfile(payload);
         const balance = extractBalance(payload);
-        if (balance !== null) currentBalance = balance;
-        try { window.__PM_GAME_ACCOUNT_SYNC__?.apply?.({ ...payload, balance: currentBalance }); } catch (_) {}
+        if (balance !== null) {
+            currentBalance = balance;
+            balanceReady = true;
+        }
         if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         if(profile && Object.keys(profile).length) {
-            userInfo.avatar = profile.avatar || profile.photoURL || '';
+            userInfo.avatar = profile.avatar || profile.photoURL || profile.avatarUrl || '';
             userInfo.username = profile.username || profile.displayName || profile.fullName || 'Sen';
+            renderCrashTopbarAvatar(profile);
             const accountLevel = getPlayerAccountLevel(profile);
             const accountProgress = getPlayerAccountProgressPct(profile);
             if (elUiAccountLevelBar) elUiAccountLevelBar.style.width = accountProgress + '%';
@@ -535,7 +562,13 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             const statFill = document.querySelector('.stat-bar-fill');
             if (statFill) statFill.style.background = '';
         }
+        updateButtons();
         return payload;
+    }
+
+    async function fetchBootProfile() {
+        const payload = await api('/api/crash/profile');
+        return applyCrashProfilePayload(payload);
     }
 
     async function waitForSocketReady(sock, timeoutMs = 6500) {
@@ -556,7 +589,8 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             setBootProgress(26);
             setBootStatus('Profil ve bakiye hazırlanıyor...');
             await withTimeout(fetchBootProfile(), 7000, 'PROFILE_TIMEOUT').catch((error) => {
-                renderCrashRuntimeNotice('Profil/bakiye verisi gecikti. Crash ekranı temel modda açılıyor.', 'warning', 'Tekrar Dene', () => fetchBootProfile().catch(() => null));
+                balanceReady = false;
+                renderCrashRuntimeNotice('Profil/bakiye verisi alınamadı. Bakiye doğrulanana kadar bahis butonları kapalı kalacak.', 'warning', 'Tekrar Dene', () => fetchBootProfile().catch(() => null));
                 return null;
             });
             setBootProgress(42);
@@ -613,6 +647,9 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     let socket = null;
     let uid = null;
     let currentBalance = 0;
+    let balanceReady = false;
+    let balanceRefreshTimer = null;
+    let lastProfilePayload = null;
     let sPhase = 'COUNTDOWN';
     let sMult = 1.00;
     let currentRoundId = null;
@@ -783,6 +820,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             const balance = extractBalance(payload);
             if (balance !== null) {
                 currentBalance = balance;
+                balanceReady = true;
                 if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             }
             const bets = Array.isArray(payload.myBets) ? payload.myBets : (Array.isArray(payload.bets) ? payload.bets : []);
@@ -808,9 +846,12 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             const btn = getActionButton(box);
             const bet = myBets[boxKey];
             if (!btn) return;
-            const amountLabel = formatCompactMc(clampBetAmount(getBetInput(box)?.value || 0));
+            const amount = clampBetAmount(getBetInput(box)?.value || 0);
+            const amountLabel = formatCompactMc(amount);
+            const insufficientBalance = balanceReady && amount > currentBalance;
             btn.disabled = false;
             btn.classList.toggle('is-processing', !!isProcessing[boxKey]);
+            btn.classList.toggle('is-insufficient', !!insufficientBalance);
             if (isProcessing[boxKey]) {
                 setButtonMode(btn, bet && !bet.cashed && sPhase === 'FLYING' ? 'cashout' : 'bet');
                 btn.innerHTML = `İŞLENİYOR <span>Lütfen bekle</span>`;
@@ -837,16 +878,27 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
                 return;
             }
 
+            setButtonMode(btn, 'bet');
+            btn.innerHTML = `MC KULLAN <span>${amountLabel}</span>`;
+
+            if (!balanceReady) {
+                btn.disabled = true;
+                setBoxStatus(box, 'Bakiye doğrulanıyor', 'waiting');
+                return;
+            }
+
+            if (insufficientBalance) {
+                btn.disabled = true;
+                setBoxStatus(box, 'Bakiye yetersiz', 'closed');
+                return;
+            }
+
             if (sPhase !== 'COUNTDOWN') {
-                setButtonMode(btn, 'bet');
-                btn.innerHTML = `MC KULLAN <span>${amountLabel}</span>`;
                 btn.disabled = true;
                 setBoxStatus(box, sPhase === 'FLYING' ? 'Tur başladı' : 'Bekleniyor', 'waiting');
                 return;
             }
 
-            setButtonMode(btn, 'bet');
-            btn.innerHTML = `MC KULLAN <span>${amountLabel}</span>`;
             setBoxStatus(box, 'Hazır', 'ready');
         });
     }
@@ -868,7 +920,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
                     case 'plus100': next = current + 100; break;
                     case 'double': next = current * 2; break;
                     case 'half': next = Math.max(1, current / 2); break;
-                    case 'max': next = Math.max(CRASH_MIN_BET, Math.min(CRASH_MAX_BET, Math.trunc(currentBalance || current))); break;
+                    case 'max': next = currentBalance >= CRASH_MIN_BET ? Math.max(CRASH_MIN_BET, Math.min(CRASH_MAX_BET, Math.trunc(currentBalance))) : CRASH_MIN_BET; break;
                     default: next = current;
                 }
                 input.value = clampBetAmount(next);
@@ -907,6 +959,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         const boxKey = getBoxKey(box);
         if (myBets[boxKey] && String(myBets[boxKey].roundId || '') === String(currentRoundId || '')) return;
         const amount = clampBetAmount(getBetInput(box)?.value || 0);
+        if (!balanceReady) throw new Error('Bakiye doğrulanmadan bahis alınamaz.');
         if (amount > currentBalance) throw new Error('Bakiye yetersiz.');
         const autoCashEnabled = !!getAutoCashInput(box)?.checked;
         const autoCashout = autoCashEnabled ? clampAutoCashout(getAutoInput(box)?.value || 0) : 0;
@@ -1231,8 +1284,20 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     }
 
     function updateBal() {
-    fetchBootProfile().catch(() => {});
-}
+        return fetchBootProfile().catch(() => {
+            balanceReady = false;
+            updateButtons();
+            return null;
+        });
+    }
+
+    function startBalanceRefreshLoop() {
+        if (balanceRefreshTimer) return;
+        balanceRefreshTimer = setInterval(() => {
+            if (document.visibilityState === 'visible' && auth.currentUser) updateBal();
+        }, 12000);
+    }
+
 
 function scheduleCrashReconnect(delayMs = 1200) {
     clearTimeout(crashReconnectTimer);
@@ -1244,31 +1309,38 @@ function scheduleCrashReconnect(delayMs = 1200) {
 async function connectStream() {
     if (crashConnectPromise) return crashConnectPromise;
     crashConnectPromise = (async () => {
+        if (socket && socket.connected) {
+            try { socket.emit('crash:subscribe'); } catch (_) {}
+            return socket;
+        }
         socket = await core.createAuthedSocket(socket, { transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: 8, timeout: 6000 });
 
-        socket.on('crash:update', (d) => {
-            crashStreamReady = true;
-            renderCrashRuntimeNotice('');
-            if (d.type === 'TICK') handleTick(d); else handleServerData(d);
-        });
+        if (!socket.__pmCrashStreamBound) {
+            socket.__pmCrashStreamBound = true;
+            socket.on('crash:update', (d) => {
+                crashStreamReady = true;
+                renderCrashRuntimeNotice('');
+                if (d.type === 'TICK') handleTick(d); else handleServerData(d);
+            });
 
-        socket.on('connect', () => {
-            crashStreamReady = true;
-            renderCrashRuntimeNotice('');
-        });
+            socket.on('connect', () => {
+                crashStreamReady = true;
+                try { socket.emit('crash:subscribe'); } catch (_) {}
+                renderCrashRuntimeNotice('');
+            });
 
-        socket.on('connect_error', () => {
-            crashStreamReady = false;
-            renderCrashRuntimeNotice('Canlı akış şu an kurulamıyor. Ekran açık kalacak; arka planda tekrar denenecek.', 'warning', 'Tekrar Dene', () => connectStream().catch(() => null));
-            scheduleCrashReconnect(1200);
-        });
+            socket.on('connect_error', () => {
+                crashStreamReady = false;
+                renderCrashRuntimeNotice('Canlı akış şu an kurulamıyor. Socket.IO otomatik olarak yeniden bağlanacak.', 'warning', 'Tekrar Dene', () => connectStream().catch(() => null));
+            });
 
-        socket.on('disconnect', () => {
-            crashStreamReady = false;
-            renderCrashRuntimeNotice('Canlı akış bağlantısı geçici olarak koptu. Arka planda yeniden bağlanılıyor.', 'warning', 'Tekrar Dene', () => connectStream().catch(() => null));
-            scheduleCrashReconnect(1000);
-        });
+            socket.on('disconnect', () => {
+                crashStreamReady = false;
+                renderCrashRuntimeNotice('Canlı akış bağlantısı geçici olarak koptu. Socket.IO otomatik olarak yeniden bağlanıyor.', 'warning', 'Tekrar Dene', () => connectStream().catch(() => null));
+            });
+        }
 
+        try { socket.emit('crash:subscribe'); } catch (_) {}
         return socket;
     })().finally(() => {
         crashConnectPromise = null;
@@ -1282,6 +1354,7 @@ let crashUiStarted = false;
 async function startApp(skipConnect = false) {
     if (!auth.currentUser) throw new Error('NO_USER');
     uid = auth.currentUser.uid;
+    startBalanceRefreshLoop();
     updateBal();
     if (!crashUiStarted) {
         bindQuickButtons();
@@ -1367,6 +1440,7 @@ async function pmRtBeforeRedirect() {
         const balance = extractBalance(payload);
         if (balance !== null) {
             currentBalance = balance;
+            balanceReady = true;
             if (elUiBalance) elUiBalance.innerText = currentBalance.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
         myBets = { box1: null, box2: null };
@@ -1389,6 +1463,7 @@ async function pmRtHandleInviteResponse(data, response) {
         if (response === 'accepted') {
             const canContinue = await pmRtMaybeConfirmExit();
             if (!canContinue) return;
+            await pmRtBeforeRedirect();
             const joinEndpoint = gameKey === 'pisti' ? '/api/pisti-online/join' : '/api/chess/join';
             await pmRtRequest(joinEndpoint, 'POST', { roomId });
         }
@@ -1406,9 +1481,8 @@ async function pmRtHandleInviteResponse(data, response) {
         pmRtCloseModal();
 
         if (response === 'accepted') {
-            await pmRtBeforeRedirect();
             pmRtSetPendingJoin(gameKey, roomId);
-            pmRtToast('Oyuna geçiliyor', `${data.hostName || 'Arkadaşın'} ile satranç masasına bağlanıyorsun.`, 'success', { iconClass: 'fa-arrow-right' });
+            pmRtToast('Oyuna geçiliyor', `${data.hostName || 'Arkadaşın'} ile ${gameKey === 'pisti' ? 'Pişti' : 'Satranç'} masasına bağlanıyorsun.`, 'success', { iconClass: 'fa-arrow-right' });
             window.setTimeout(() => window.location.replace(pmRtGameHref(gameKey, roomId)), 220);
         } else {
             pmRtToast('Davet kapatıldı', `${data.hostName || 'Arkadaşın'} için gönderilen davet reddedildi.`, 'info', { iconClass: 'fa-xmark' });
@@ -1452,7 +1526,7 @@ async function pmRtHandleInviteAcceptedRedirect(payload) {
         if (payload?.hostUid && auth.currentUser?.uid && String(payload.hostUid) !== String(auth.currentUser.uid)) return;
         await pmRtBeforeRedirect();
         pmRtSetPendingJoin(gameKey, roomId);
-        pmRtToast('Oyuna geçiliyor', `${payload?.guestName || 'Arkadaşın'} ile satranç masasına bağlanıyorsun.`, 'success', { iconClass: 'fa-arrow-right' });
+        pmRtToast('Oyuna geçiliyor', `${payload?.guestName || 'Arkadaşın'} ile ${gameKey === 'pisti' ? 'Pişti' : 'Satranç'} masasına bağlanıyorsun.`, 'success', { iconClass: 'fa-arrow-right' });
         window.setTimeout(() => window.location.replace(pmRtGameHref(gameKey, roomId)), 220);
     } catch (error) {
         pmRtToast('Davet yönlendirme hatası', error?.message || 'Oyun odası açılamadı.', 'error');
@@ -1565,6 +1639,8 @@ async function initPlayMatrixRealtime() {
 
 function disposePlayMatrixRealtime() {
     pmRtCloseModal();
+    if (balanceRefreshTimer) { clearInterval(balanceRefreshTimer); balanceRefreshTimer = null; }
+    if (socket) { try { socket.emit('crash:unsubscribe'); } catch (_) {} }
     if (pmRealtimeSocket) {
         try { pmRealtimeSocket.close(); } catch (_) {}
     }
@@ -1573,6 +1649,8 @@ function disposePlayMatrixRealtime() {
 }
 
 window.addEventListener('beforeunload', () => {
+    if (balanceRefreshTimer) { clearInterval(balanceRefreshTimer); balanceRefreshTimer = null; }
+    if (socket) { try { socket.emit('crash:unsubscribe'); } catch (_) {} }
     if (pmRealtimeSocket) {
         try { pmRealtimeSocket.close(); } catch (_) {}
     }

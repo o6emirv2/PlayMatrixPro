@@ -1152,3 +1152,63 @@
   color: rgba(255,255,255,.94);
   text-shadow: 0 0 26px rgba(255,255,255,.14), 0 0 56px rgba(255,196,87,.14);
 }
+
+/* Crash hardening patch: final mobile/account/balance guards */
+.pm-game-topbar-avatar-host{
+  width:64px;
+  height:64px;
+  flex:0 0 64px;
+  display:grid;
+  place-items:center;
+  overflow:visible;
+}
+.pm-game-topbar-avatar-host .pm-avatar-frame,
+.pm-game-topbar-avatar-host .pm-avatar-frame--game-topbar{
+  width:58px;
+  height:58px;
+  max-width:58px;
+  max-height:58px;
+}
+.action-btn:disabled,
+.action-btn.is-insufficient{
+  cursor:not-allowed !important;
+  filter:saturate(.55) brightness(.72) !important;
+  opacity:.72 !important;
+  box-shadow:none !important;
+}
+.action-btn.is-insufficient span{ color:rgba(255,255,255,.86); }
+.bet-box-status[data-state="closed"]{ color:#fb7185; }
+.bet-box-status[data-state="waiting"]{ color:#fbbf24; }
+.bet-box-status[data-state="processing"]{ color:#93c5fd; }
+.auto-row{
+  display:grid !important;
+  grid-template-columns:44px 58px minmax(84px,116px) !important;
+  align-items:center !important;
+  justify-content:start !important;
+  gap:8px !important;
+  min-width:0 !important;
+}
+.auto-row .auto-icon-btn{ width:44px !important; min-width:44px !important; }
+.auto-row .toggle-switch-only{ justify-self:center !important; }
+.auto-row .auto-input-shell{
+  min-width:84px !important;
+  max-width:116px !important;
+  width:100% !important;
+  overflow:hidden !important;
+}
+.auto-row .auto-input-shell input{
+  min-width:0 !important;
+  width:100% !important;
+  text-align:center !important;
+}
+@media (max-width:520px){
+  .pm-game-topbar-avatar-host{ width:48px; height:48px; flex-basis:48px; }
+  .pm-game-topbar-avatar-host .pm-avatar-frame,
+  .pm-game-topbar-avatar-host .pm-avatar-frame--game-topbar{ width:44px; height:44px; max-width:44px; max-height:44px; }
+  .auto-row{ grid-template-columns:40px 50px minmax(78px,104px) !important; gap:6px !important; }
+  .auto-row .auto-icon-btn{ width:40px !important; min-width:40px !important; }
+}
+@media (max-width:380px){
+  .auto-row{ grid-template-columns:38px 46px minmax(72px,96px) !important; gap:5px !important; }
+  .auto-row .auto-icon-btn{ width:38px !important; min-width:38px !important; }
+}

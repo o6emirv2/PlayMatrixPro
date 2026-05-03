@@ -46,6 +46,7 @@ const state = {
   risk: validateRiskTable(DEFAULT_RISK, { useDefaultOnInvalid: true }).rows,
   riskLoaded: false,
   riskLoadPromise: null,
+  roundStartPromise: null,
   io: null,
   timer: null
 };
@@ -56,10 +57,24 @@ function makeHttpError(message, statusCode = 400) {
   return err;
 }
 
+function secureRandomFloat() {
+  const bytes = crypto.randomBytes(6).readUIntBE(0, 6);
+  return bytes / 0x1000000000000;
+}
+
 function safeDisplayName(user = {}) {
-  const raw = String(user.name || user.displayName || user.username || '').trim();
+  const raw = String(user.name || user.displayName || user.username || user.email?.split('@')[0] || '').trim();
   if (raw) return raw.slice(0, 32);
   return 'Oyuncu';
+}
+
+function safeAvatarUrl(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('data:image/')) return raw.slice(0, 3000);
+  if (raw.startsWith('/')) return raw.slice(0, 512);
+  if (/^https:\/\//i.test(raw)) return raw.slice(0, 512);
+  return '';
 }
 
 function parseBetAmount(value) {
@@ -82,15 +97,9 @@ function parseAutoCashout(value) {
 
 function validateRiskTable(rows = [], { useDefaultOnInvalid = false } = {}) {
   const input = Array.isArray(rows) ? rows : [];
-  const clean = input.map((row) => ({
-    min: round(row?.min, 2),
-    max: round(row?.max, 2),
-    weight: Number(row?.weight)
-  }));
-
+  const clean = input.map((row) => ({ min: round(row?.min, 2), max: round(row?.max, 2), weight: Number(row?.weight) }));
   const errors = [];
   if (!clean.length) errors.push('RISK_TABLE_EMPTY');
-
   clean.forEach((row, index) => {
     if (!Number.isFinite(row.min) || !Number.isFinite(row.max) || !Number.isFinite(row.weight)) errors.push(`ROW_${index + 1}_NOT_NUMERIC`);
     if (row.min < 1.01) errors.push(`ROW_${index + 1}_MIN_TOO_LOW`);
@@ -98,25 +107,22 @@ function validateRiskTable(rows = [], { useDefaultOnInvalid = false } = {}) {
     if (row.max < row.min) errors.push(`ROW_${index + 1}_MAX_LT_MIN`);
     if (row.weight <= 0) errors.push(`ROW_${index + 1}_WEIGHT_INVALID`);
   });
-
   const sorted = clean.slice().sort((a, b) => a.min - b.min || a.max - b.max);
+  if (sorted.length) {
+    if (round(sorted[0].min, 2) !== 1.01) errors.push('RISK_TABLE_MUST_START_AT_1_01');
+    if (round(sorted[sorted.length - 1].max, 2) !== MAX_MULT) errors.push('RISK_TABLE_MUST_END_AT_10000');
+  }
   for (let i = 1; i < sorted.length; i += 1) {
     if (sorted[i].min <= sorted[i - 1].max) errors.push(`ROW_${i + 1}_OVERLAPS_PREVIOUS`);
+    if (round(sorted[i].min, 2) !== round(sorted[i - 1].max + 0.01, 2)) errors.push(`ROW_${i + 1}_GAP_AFTER_PREVIOUS`);
   }
-
   const totalWeight = clean.reduce((sum, row) => sum + (Number.isFinite(row.weight) ? row.weight : 0), 0);
   if (totalWeight <= 0) errors.push('RISK_TABLE_WEIGHT_TOTAL_INVALID');
-
   if (errors.length) {
     if (useDefaultOnInvalid) return validateRiskTable(DEFAULT_RISK, { useDefaultOnInvalid: false });
     return { ok: false, rows: [], errors: [...new Set(errors)] };
   }
-
-  return {
-    ok: true,
-    rows: sorted.map((row) => ({ ...row, probability: row.weight / totalWeight })),
-    errors: []
-  };
+  return { ok: true, rows: sorted.map((row) => ({ ...row, probability: row.weight / totalWeight })), errors: [] };
 }
 
 async function loadRiskTable() {
@@ -127,8 +133,7 @@ async function loadRiskTable() {
       const { db } = initFirebaseAdmin();
       if (db) {
         const snap = await db.collection(RISK_DOC_COLLECTION).doc(RISK_DOC_ID).get();
-        const data = snap.exists ? snap.data() : null;
-        const parsed = validateRiskTable(data?.riskTable || [], { useDefaultOnInvalid: false });
+        const parsed = validateRiskTable((snap.exists ? snap.data() : null)?.riskTable || [], { useDefaultOnInvalid: false });
         if (parsed.ok) state.risk = parsed.rows;
       }
     } catch (error) {
@@ -156,10 +161,10 @@ async function persistRiskTable(rows, actorUid) {
 function pickCrashPoint() {
   const rows = validateRiskTable(state.risk, { useDefaultOnInvalid: true }).rows;
   const total = rows.reduce((sum, row) => sum + row.weight, 0);
-  let roll = Math.random() * total;
+  let roll = secureRandomFloat() * total;
   for (const row of rows) {
     roll -= row.weight;
-    if (roll <= 0) return round(row.min + Math.random() * (row.max - row.min), 2);
+    if (roll <= 0) return round(row.min + secureRandomFloat() * (row.max - row.min), 2);
   }
   return 1.25;
 }
@@ -168,6 +173,36 @@ function currentMultiplier() {
   if (state.phase !== 'FLYING') return round(state.multiplier, 2);
   const elapsed = Math.max(0, now() - state.startedAt) / 1000;
   return Math.min(MAX_MULT, Math.max(1, round(1 + elapsed * 0.10 + Math.pow(elapsed, 1.42) * 0.022, 2)));
+}
+
+async function readCrashProfile(req) {
+  const uid = uidOf(req);
+  let profile = {};
+  try {
+    const { db } = initFirebaseAdmin();
+    if (db && uid) {
+      const snap = await db.collection('users').doc(uid).get();
+      profile = snap.exists ? (snap.data() || {}) : {};
+    }
+  } catch (error) {
+    console.error('[crash:profile:read:error]', JSON.stringify({ message: error.message }));
+  }
+  const balance = await readBalance(uid);
+  const accountLevel = Math.max(1, Math.min(100, Math.trunc(Number(profile.accountLevel || profile.level || 1) || 1)));
+  const progression = profile.progression && typeof profile.progression === 'object' ? profile.progression : {};
+  const progressPercent = Math.max(0, Math.min(100, Number(progression.progressPercent ?? progression.accountLevelProgressPct ?? profile.accountLevelProgressPct ?? 0) || 0));
+  return {
+    uid,
+    username: safeDisplayName({ ...req.user, ...profile }),
+    displayName: safeDisplayName({ ...req.user, ...profile }),
+    avatar: safeAvatarUrl(profile.avatar || profile.photoURL || profile.avatarUrl || ''),
+    photoURL: safeAvatarUrl(profile.photoURL || profile.avatar || profile.avatarUrl || ''),
+    selectedFrame: Math.max(0, Math.min(100, Math.trunc(Number(profile.selectedFrame || profile.frame || 0) || 0))),
+    accountLevel,
+    accountLevelProgressPct: progressPercent,
+    progression: { ...progression, level: accountLevel, progressPercent, accountLevelProgressPct: progressPercent },
+    balance
+  };
 }
 
 function publicBet(bet, viewerUid = '') {
@@ -187,6 +222,8 @@ function publicBet(bet, viewerUid = '') {
     cashed: !!bet.cashed,
     lost: !!bet.lost,
     refunded: !!bet.refunded,
+    cashingOut: isMine ? !!bet.cashingOut : false,
+    refunding: isMine ? !!bet.refunding : false,
     cashoutMult: round(bet.cashoutMult || 0, 2),
     winAmount: bet.winAmount || 0,
     win: bet.winAmount || 0,
@@ -195,12 +232,7 @@ function publicBet(bet, viewerUid = '') {
 }
 
 function publicHistoryItem(item) {
-  return {
-    roundId: item.roundId,
-    multiplier: round(item.multiplier, 2),
-    currentMult: round(item.multiplier, 2),
-    at: item.at
-  };
+  return { roundId: item.roundId, multiplier: round(item.multiplier, 2), currentMult: round(item.multiplier, 2), at: item.at };
 }
 
 function snapshot({ viewerUid = '' } = {}) {
@@ -231,6 +263,7 @@ function snapshot({ viewerUid = '' } = {}) {
 function emitState() {
   if (!state.io) return;
   for (const socket of state.io.sockets.sockets.values()) {
+    if (!socket.data?.crashSubscribed) continue;
     socket.emit('crash:update', snapshot({ viewerUid: socket.data?.crashUid || '' }));
   }
 }
@@ -268,7 +301,7 @@ function startFlying() {
 
 async function settleLosses() {
   for (const bet of state.bets.values()) {
-    if (!bet.cashed && !bet.refunded) bet.lost = true;
+    if (!bet.cashed && !bet.refunded && !bet.cashingOut && !bet.refunding) bet.lost = true;
   }
 }
 
@@ -290,43 +323,41 @@ async function endRound() {
 async function cashoutBet(bet, { automatic = false } = {}) {
   if (!bet) return { ok: false, error: 'BET_NOT_FOUND', statusCode: 404 };
   if (bet.refunded) return { ok: false, error: 'BET_REFUNDED', statusCode: 409 };
+  if (bet.refunding) return { ok: false, error: 'REFUND_IN_PROGRESS', statusCode: 409 };
   if (bet.lost) return { ok: false, error: 'BET_ALREADY_LOST', statusCode: 409 };
-  if (bet.cashed) return { ok: true, duplicate: true, bet };
+  if (bet.cashed) return { ok: true, duplicate: true, bet, balance: await readBalance(bet.uid) };
   if (bet.cashingOut) return { ok: false, error: 'CASHOUT_IN_PROGRESS', statusCode: 409 };
   if (state.phase !== 'FLYING') return { ok: false, error: 'CASHOUT_NOT_AVAILABLE', statusCode: 409 };
-
   const mult = currentMultiplier();
   if (mult >= state.crashPoint) {
     bet.lost = true;
     return { ok: false, error: automatic ? 'AUTO_CASHOUT_MISSED' : 'CASHOUT_TOO_LATE', statusCode: 409 };
   }
-
   bet.cashingOut = true;
   try {
     const winAmount = Math.floor(bet.amount * mult);
-    const result = await creditBalance({
-      uid: bet.uid,
-      amount: winAmount,
-      reason: automatic ? 'crash-auto-cashout' : 'crash-cashout',
-      idempotencyKey: `crash:cashout:${bet.roundId}:${bet.uid}:${bet.box}`,
-      metadata: { roundId: bet.roundId, box: bet.box, multiplier: mult }
-    });
+    const result = await creditBalance({ uid: bet.uid, amount: winAmount, reason: automatic ? 'crash-auto-cashout' : 'crash-cashout', idempotencyKey: `crash:cashout:${bet.roundId}:${bet.uid}:${bet.box}`, metadata: { roundId: bet.roundId, box: bet.box, multiplier: mult } });
     if (!result.ok) throw makeHttpError(result.error || 'CASHOUT_FAILED', 409);
     bet.cashed = true;
+    bet.lost = false;
     bet.cashoutMult = mult;
     bet.winAmount = winAmount;
     bet.balance = result.balance;
     emitState();
     return { ok: true, bet, balance: result.balance };
+  } catch (error) {
+    if (state.phase === 'CRASHED' && !bet.cashed && !bet.refunded) bet.lost = true;
+    throw error;
   } finally {
     bet.cashingOut = false;
+    emitState();
   }
 }
 
 function tick() {
   state.multiplier = currentMultiplier();
   for (const bet of state.bets.values()) {
-    if (!bet.cashed && !bet.lost && !bet.refunded && bet.autoCashout && state.multiplier >= bet.autoCashout && state.multiplier < state.crashPoint) {
+    if (!bet.cashed && !bet.lost && !bet.refunded && !bet.cashingOut && !bet.refunding && bet.autoCashout && state.multiplier >= bet.autoCashout && state.multiplier < state.crashPoint) {
       cashoutBet(bet, { automatic: true }).catch((error) => console.error('[crash:auto-cashout:error]', JSON.stringify({ message: error.message })));
     }
   }
@@ -334,164 +365,125 @@ function tick() {
   else emitState();
 }
 
-function ensureRoundStarted() {
-  if (!state.roundId) startCountdown();
+async function ensureRoundStarted() {
+  if (state.roundId) return;
+  if (state.roundStartPromise) return state.roundStartPromise;
+  state.roundStartPromise = (async () => { await loadRiskTable(); if (!state.roundId) startCountdown(); })().finally(() => { state.roundStartPromise = null; });
+  return state.roundStartPromise;
 }
 
-router.get('/state', (_req, res) => {
-  ensureRoundStarted();
-  res.json(snapshot());
+router.get('/profile', requireAuth, async (req, res, next) => {
+  try { const profile = await readCrashProfile(req); res.json({ ok: true, user: profile, profile, balance: profile.balance }); } catch (error) { next(error); }
 });
-
-router.get('/resume', requireAuth, async (req, res) => {
-  ensureRoundStarted();
-  const viewerUid = uidOf(req);
-  const myBets = [...state.bets.values()].filter((bet) => bet.uid === viewerUid).map((bet) => publicBet(bet, viewerUid));
-  const balance = await readBalance(viewerUid);
-  res.json({ ...snapshot({ viewerUid }), balance, myBets, bets: myBets });
+router.get('/state', async (_req, res, next) => { try { await ensureRoundStarted(); res.json(snapshot()); } catch (error) { next(error); } });
+router.get('/resume', requireAuth, async (req, res, next) => {
+  try {
+    await ensureRoundStarted();
+    const viewerUid = uidOf(req);
+    const myBets = [...state.bets.values()].filter((bet) => bet.uid === viewerUid).map((bet) => publicBet(bet, viewerUid));
+    const balance = await readBalance(viewerUid);
+    res.json({ ...snapshot({ viewerUid }), balance, myBets, bets: myBets });
+  } catch (error) { next(error); }
 });
-
-router.get('/active-bets', requireAuth, (req, res) => {
-  ensureRoundStarted();
-  const viewerUid = uidOf(req);
-  const bets = [...state.bets.values()].filter((bet) => bet.uid === viewerUid && !bet.cashed && !bet.lost && !bet.refunded).map((bet) => publicBet(bet, viewerUid));
-  res.json({ ok: true, hasActiveBet: bets.length > 0, hasRiskyBet: bets.some((bet) => !bet.autoCashout), bets });
+router.get('/active-bets', requireAuth, async (req, res, next) => {
+  try {
+    await ensureRoundStarted();
+    const viewerUid = uidOf(req);
+    const bets = [...state.bets.values()].filter((bet) => bet.uid === viewerUid && !bet.cashed && !bet.lost && !bet.refunded).map((bet) => publicBet(bet, viewerUid));
+    res.json({ ok: true, hasActiveBet: bets.length > 0, hasRiskyBet: bets.some((bet) => !bet.autoCashout), bets });
+  } catch (error) { next(error); }
 });
-
 router.post('/bet', requireAuth, async (req, res, next) => {
   try {
-    ensureRoundStarted();
+    await ensureRoundStarted();
     if (state.phase !== 'COUNTDOWN') return res.status(409).json({ ok: false, error: 'BET_WINDOW_CLOSED' });
     const uid = uidOf(req);
     const box = Math.max(1, Math.min(2, Math.trunc(Number(req.body.box) || 1)));
     const amount = parseBetAmount(req.body.amount);
     const autoCashout = parseAutoCashout(req.body.autoCashout);
     const key = `${state.roundId}:${uid}:${box}`;
-    if (state.bets.has(key)) return res.status(409).json({ ok: false, error: 'BET_ALREADY_PLACED' });
-    const debit = await debitBalance({
-      uid,
-      amount,
-      reason: 'crash-bet',
-      idempotencyKey: `crash:bet:${key}`,
-      metadata: { roundId: state.roundId, box, autoCashout }
-    });
+    const existing = state.bets.get(key);
+    if (existing) return res.json({ ok: true, duplicate: true, bet: publicBet(existing, uid), balance: await readBalance(uid), roundId: state.roundId });
+    const debit = await debitBalance({ uid, amount, reason: 'crash-bet', idempotencyKey: `crash:bet:${key}`, metadata: { roundId: state.roundId, box, autoCashout } });
     if (!debit.ok) return res.status(409).json(debit);
-    const bet = {
-      betId: key,
-      roundId: state.roundId,
-      uid,
-      username: safeDisplayName(req.user),
-      avatar: '',
-      selectedFrame: 0,
-      box,
-      amount,
-      autoCashout,
-      cashed: false,
-      lost: false,
-      refunded: false,
-      winAmount: 0,
-      cashoutMult: 0,
-      at: now()
-    };
+    const profile = await readCrashProfile(req).catch(() => ({ username: safeDisplayName(req.user), avatar: '', selectedFrame: 0 }));
+    const bet = { betId: key, roundId: state.roundId, uid, username: profile.username || safeDisplayName(req.user), avatar: safeAvatarUrl(profile.avatar || profile.photoURL || ''), selectedFrame: Number(profile.selectedFrame || 0) || 0, box, amount, autoCashout, cashed: false, lost: false, refunded: false, refunding: false, cashingOut: false, winAmount: 0, cashoutMult: 0, at: now() };
     state.bets.set(key, bet);
     emitState();
     res.json({ ok: true, bet: publicBet(bet, uid), balance: debit.balance, roundId: state.roundId });
-  } catch (error) {
-    if (error.statusCode) return res.status(error.statusCode).json({ ok: false, error: error.message });
-    next(error);
-  }
+  } catch (error) { if (error.statusCode) return res.status(error.statusCode).json({ ok: false, error: error.message }); next(error); }
 });
-
 router.post('/cashout', requireAuth, async (req, res, next) => {
   try {
-    ensureRoundStarted();
+    await ensureRoundStarted();
     const uid = uidOf(req);
     const box = Math.max(1, Math.min(2, Math.trunc(Number(req.body.box) || 1)));
-    const bet = state.bets.get(`${state.roundId}:${uid}:${box}`);
-    const result = await cashoutBet(bet);
+    const result = await cashoutBet(state.bets.get(`${state.roundId}:${uid}:${box}`));
     if (!result.ok) return res.status(result.statusCode || 409).json({ ok: false, error: result.error });
     const cashed = result.bet;
-    res.json({
-      ok: true,
-      bet: publicBet(cashed, uid),
-      winAmount: cashed.winAmount,
-      cashoutMult: cashed.cashoutMult,
-      balance: result.balance,
-      resultSummary: { message: `${cashed.cashoutMult.toFixed(2)}x çıkış alındı.` }
-    });
-  } catch (error) {
-    if (error.statusCode) return res.status(error.statusCode).json({ ok: false, error: error.message });
-    next(error);
-  }
+    res.json({ ok: true, bet: publicBet(cashed, uid), winAmount: cashed.winAmount, cashoutMult: cashed.cashoutMult, balance: result.balance, resultSummary: { message: `${cashed.cashoutMult.toFixed(2)}x çıkış alındı.` } });
+  } catch (error) { if (error.statusCode) return res.status(error.statusCode).json({ ok: false, error: error.message }); next(error); }
 });
-
-router.post('/refund-active', requireAuth, async (req, res) => {
-  ensureRoundStarted();
-  const uid = uidOf(req);
-  let refunded = 0;
-  const refundedBets = [];
-  for (const [key, bet] of state.bets) {
-    if (bet.uid !== uid || bet.cashed || bet.lost || bet.refunded || state.phase === 'CRASHED') continue;
-    const result = await creditBalance({
-      uid,
-      amount: bet.amount,
-      reason: 'crash-invite-refund',
-      idempotencyKey: `crash:refund:${key}`,
-      metadata: { roundId: bet.roundId, box: bet.box }
-    });
-    if (result.ok) {
-      bet.refunded = true;
-      refunded += bet.amount;
-      refundedBets.push(publicBet(bet, uid));
-      state.bets.delete(key);
+router.post('/refund-active', requireAuth, async (req, res, next) => {
+  try {
+    await ensureRoundStarted();
+    const uid = uidOf(req);
+    let refunded = 0;
+    const refundedBets = [];
+    for (const [key, bet] of state.bets) {
+      if (bet.uid !== uid || bet.cashed || bet.lost || bet.refunded || bet.cashingOut || bet.refunding || state.phase === 'CRASHED') continue;
+      bet.refunding = true;
+      try {
+        const result = await creditBalance({ uid, amount: bet.amount, reason: 'crash-invite-refund', idempotencyKey: `crash:refund:${key}`, metadata: { roundId: bet.roundId, box: bet.box } });
+        if (result.ok) { bet.refunded = true; refunded += bet.amount; refundedBets.push(publicBet(bet, uid)); state.bets.delete(key); }
+      } finally { bet.refunding = false; }
     }
-  }
-  emitState();
-  res.json({ ok: true, refunded, refundedBets, balance: await readBalance(uid), hasActiveBet: false });
+    emitState();
+    res.json({ ok: true, refunded, refundedBets, balance: await readBalance(uid), hasActiveBet: false });
+  } catch (error) { next(error); }
 });
-
-router.get('/admin/risk-table', requireAuth, requireAdmin, async (_req, res) => {
-  await loadRiskTable();
-  res.json({ ok: true, riskTable: state.risk });
-});
-
+router.get('/admin/risk-table', requireAuth, requireAdmin, async (_req, res, next) => { try { await loadRiskTable(); res.json({ ok: true, riskTable: state.risk }); } catch (error) { next(error); } });
 router.post('/admin/risk-table', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const parsed = validateRiskTable(req.body.rows || req.body.riskTable || [], { useDefaultOnInvalid: false });
     if (!parsed.ok) return res.status(400).json({ ok: false, error: 'INVALID_RISK_TABLE', details: parsed.errors });
     state.risk = parsed.rows;
-    await persistRiskTable(state.risk, req.user?.uid).catch((error) => console.error('[crash:risk-table:persist:error]', JSON.stringify({ message: error.message })));
-    console.info('[admin:crash-risk-table]', JSON.stringify({ uid: req.user.uid, ranges: state.risk.length }));
-    res.json({ ok: true, riskTable: state.risk });
-  } catch (error) {
-    next(error);
-  }
+    const persisted = await persistRiskTable(state.risk, req.user?.uid);
+    console.info('[admin:crash-risk-table]', JSON.stringify({ uid: req.user.uid, ranges: state.risk.length, persisted }));
+    res.json({ ok: true, persisted, riskTable: state.risk });
+  } catch (error) { console.error('[crash:risk-table:persist:error]', JSON.stringify({ message: error.message })); next(error); }
 });
 
 async function authenticateCrashSocket(socket) {
   try {
     const token = String(socket.handshake?.auth?.token || '').trim();
-    if (!token) return;
+    if (!token) return false;
     const { auth } = initFirebaseAdmin();
-    if (!auth) return;
+    if (!auth) return false;
     const decoded = await auth.verifyIdToken(token);
     socket.data.crashUid = String(decoded.uid || '');
+    return !!socket.data.crashUid;
   } catch (_) {
     socket.data.crashUid = '';
+    socket.emit('crash:auth_error', { ok: false, error: 'INVALID_AUTH_TOKEN' });
+    return false;
   }
 }
 
 function installSocket(io) {
   state.io = io;
-  loadRiskTable().catch(() => null);
-  ensureRoundStarted();
+  ensureRoundStarted().catch((error) => console.error('[crash:boot:error]', JSON.stringify({ message: error.message })));
   io.on('connection', (socket) => {
-    authenticateCrashSocket(socket).finally(() => {
+    socket.on('crash:subscribe', async () => {
+      await ensureRoundStarted().catch(() => null);
+      await authenticateCrashSocket(socket);
+      socket.data.crashSubscribed = true;
+      socket.join?.('crash');
       socket.emit('crash:update', snapshot({ viewerUid: socket.data?.crashUid || '' }));
     });
+    socket.on('crash:unsubscribe', () => { socket.data.crashSubscribed = false; socket.leave?.('crash'); });
   });
 }
 
-ensureRoundStarted();
-
+ensureRoundStarted().catch((error) => console.error('[crash:boot:error]', JSON.stringify({ message: error.message })));
 module.exports = { router, installSocket, _state: state, _validateRiskTable: validateRiskTable };
