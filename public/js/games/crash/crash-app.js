@@ -1,16 +1,32 @@
-/* PlayMatrix FAZ 3: Crash application module extracted from HTML shell. */
+/* PlayMatrix Crash application module. */
+window.__PLAYMATRIX_ROUTE_NORMALIZER_DISABLED__ = true;
     import { initPlayMatrixOnlineCore } from "../../../pm-online-core.js";
 
 const __PM_CRASH_CLIENT_REPORTER__ = (() => {
+  const EXPECTED = new Set(['LOAD FAILED','FAILED TO FETCH','NETWORKERROR','ABORTERROR','CASHOUT_NOT_AVAILABLE','CASHOUT_TOO_LATE','BET_ALREADY_LOST','BET_REFUNDED','REFUND_IN_PROGRESS','AUTO_CASHOUT_MISSED','SOCKET_TIMEOUT','SOCKET_OFFLINE']);
+  const seen = new Map();
   function apiBase(){ try { return window.__PLAYMATRIX_API_URL__ || window.__PM_RUNTIME?.apiBase || window.location.origin; } catch (_) { return window.location.origin; } }
+  function shouldReport(scope, payload = {}) {
+    const message = String(payload.message || payload.error || '').trim();
+    const upper = message.toUpperCase();
+    if (EXPECTED.has(upper) || /load failed|failed to fetch|networkerror|abort/i.test(message)) return false;
+    const source = String(payload.source || '').toLowerCase();
+    if (source && !source.includes('/games/crash') && !source.includes('crash-app') && !source.includes('/api/crash')) return false;
+    const key = `${scope}:${upper}:${source}:${payload.line || ''}`;
+    const last = seen.get(key) || 0;
+    if (Date.now() - last < 10 * 60 * 1000) return false;
+    seen.set(key, Date.now());
+    return true;
+  }
   function report(scope, payload = {}) {
     try {
+      if (!shouldReport(scope, payload)) return;
       const body = { game:'crash', scope:String(scope||'frontend'), type:'crash-client', message:String(payload.message || payload.error || scope || 'Crash istemci olayı').slice(0,500), path:location.pathname, source:payload.source || 'public/js/games/crash/crash-app.js', line:payload.line || null, stack:String(payload.stack || '').slice(0,1200), at:Date.now() };
       fetch(`${apiBase()}/api/client/error`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), keepalive:true }).catch(()=>null);
     } catch (_) {}
   }
   window.addEventListener('error', (event) => report('window.error', { message:event.message, source:event.filename, line:event.lineno, stack:event.error?.stack }), true);
-  window.addEventListener('unhandledrejection', (event) => report('promise.rejection', { message:event.reason?.message || String(event.reason || ''), stack:event.reason?.stack }), true);
+  window.addEventListener('unhandledrejection', (event) => report('promise.rejection', { message:event.reason?.message || String(event.reason || ''), source:event.reason?.source || '', stack:event.reason?.stack }), true);
   return { report };
 })();
 
@@ -580,7 +596,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     function renderCrashTopbarAvatar(profile = {}) {
         if (!elUiAccountAvatarHost) return;
         const avatarUrl = profile.avatar || profile.photoURL || profile.avatarUrl || DEFAULT_AVATAR;
-        const safeAvatar = escapeHTML(avatarUrl || DEFAULT_AVATAR);
+        const safeAvatar = escapeHTML((window.PMAvatar?.safeAvatarUrl ? window.PMAvatar.safeAvatarUrl(avatarUrl) : avatarUrl) || DEFAULT_AVATAR);
         const signature = JSON.stringify({ avatar: safeAvatar });
         if (elUiAccountAvatarHost.dataset.pmAvatarSig === signature && elUiAccountAvatarHost.childElementCount) return;
         elUiAccountAvatarHost.dataset.pmAvatarSig = signature;

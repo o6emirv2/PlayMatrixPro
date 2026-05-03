@@ -226,7 +226,7 @@ function buildIssueCard(item = {}) {
   const card = el('div', 'issue');
   const area = item.area || item.game || item.scope || 'Alan';
   const errorText = item.error || item.title || item.message || 'Hata';
-  const reasonText = item.reason || item.body || item.path || '—';
+  const reasonText = item.reason || item.body || item.path || (item.status ? `HTTP ${item.status}` : '—');
   const solutionText = item.solution || (String(item.game || '').match(/chess|crash/i) ? 'İlgili oyun dosyası / API akışı kontrol edilmeli.' : '—');
   const reason = document.createElement('div');
   reason.className = 'issue-reason';
@@ -234,7 +234,9 @@ function buildIssueCard(item = {}) {
   const solution = document.createElement('div');
   solution.className = 'issue-solution';
   solution.textContent = `Çözüm: ${solutionText}`;
-  card.append(el('span', 'meta', area), el('strong', '', errorText), reason, solution);
+  const detail = item.path || item.source || item.endpoint || '';
+  if (detail) card.append(el('span', 'meta', area), el('strong', '', errorText), el('small', 'meta', detail), reason, solution);
+  else card.append(el('span', 'meta', area), el('strong', '', errorText), reason, solution);
   return card;
 }
 

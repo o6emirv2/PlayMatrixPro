@@ -374,7 +374,9 @@ function resultSummaryFor(r, viewerUid = '') {
   const freeReward = r.freeRewards?.[viewerUid] || null;
   const outcome = draw ? 'draw' : won ? 'win' : 'loss';
   let message = '';
-  if (r.mode === 'bot') message = 'Bot oyunu eğlence modudur. MC, XP ve level ödülü verilmez.';
+  if (r.result === 'player-exit') message = won ? 'Rakip oyundan ayrıldı. Oda kapatıldı ve sonuç işlendi.' : 'Oyundan ayrıldın. Oda kapatıldı ve rakibe bildirildi.';
+  else if (r.result === 'inactivity-timeout') message = won ? 'Rakip 5 dakika hamle yapmadığı için oyun kapatıldı ve sonuç işlendi.' : '5 dakika hamle yapılmadığı için oyun kapatıldı.';
+  else if (r.mode === 'bot') message = 'Bot oyunu eğlence modudur. MC, XP ve level ödülü verilmez.';
   else if (draw && r.mode === 'bet') message = `Bahisli Satranç berabere bitti. Bahsin yarısı iade edildi. Beraberlikte XP verilmez.`;
   else if (draw) message = 'Satranç berabere bitti. Bu sonuçta ödül verilmez.';
   else if (r.mode === 'free' && won) {
@@ -652,6 +654,12 @@ async function enforceRoomLifecycle(r, context = '') {
     await cancelAndDeleteRoom(r, 'inactivity-no-move');
     return true;
   }
+  if (humans.length >= 2 && r.moves.length && t - (r.lastMoveAt || r.lastGameActionAt || r.createdAt || t) >= ROOM_IDLE_EMPTY_MS) {
+    const inactive = r.players.find((p) => p.color === r.turn && isHumanPlayer(p));
+    const winner = humans.find((p) => p.uid !== inactive?.uid) || null;
+    await finishRoom(r, { result: 'inactivity-timeout', winnerUid: winner?.uid || '', winnerColor: winner?.color || 'draw', reason: 'inactivity-timeout' });
+    return true;
+  }
   const life = r.lifecycle;
   if (life.extensionState === 'none' && t >= life.primaryDeadlineAt && humans.length >= 2 && r.moves.length) {
     life.extensionState = 'pending';
@@ -916,8 +924,10 @@ router.post('/leave', requireAuth, asyncRoute(async (req, res) => {
     player.connected = false; player.disconnectedAt = now(); touchRoom(r); emitRoom(r); return res.json({ ok: true, room: publicRoom(r, player.uid), reconnectGraceMs: RECONNECT_GRACE_MS });
   }
   if (r.status === 'playing') {
+    r.lifecycle = r.lifecycle || makeLifecycle(r.createdAt || now());
+    r.lifecycle.notice = reason === 'player-exit' ? 'player-exit' : 'leave';
     const winner = r.players.find((p) => p.uid !== player.uid);
-    await finishRoom(r, { result: 'leave', winnerUid: winner?.uid || '', winnerColor: winner?.color || '', reason: 'leave' });
+    await finishRoom(r, { result: reason === 'player-exit' ? 'player-exit' : 'leave', winnerUid: winner?.uid || '', winnerColor: winner?.color || '', reason: reason === 'player-exit' ? 'player-exit' : 'leave' });
   }
   res.json({ ok: true, room: publicRoom(r, player.uid) });
 }));

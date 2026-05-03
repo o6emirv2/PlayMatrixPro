@@ -1341,3 +1341,12 @@
 .t-avatar-wrap .pm-avatar{width:40px!important;height:40px!important;position:relative!important;display:grid!important;place-items:center!important;}
 .t-avatar-wrap .t-avatar,.t-avatar-wrap .pm-avatar-img{position:absolute!important;left:50%!important;top:50%!important;width:calc(100% * var(--pm-avatar-fit, .78))!important;height:calc(100% * var(--pm-avatar-fit, .78))!important;transform:translate(-50%,-50%)!important;border-radius:50%!important;object-fit:cover!important;z-index:2!important;}
 .t-avatar-wrap .t-frame,.t-avatar-wrap .pm-frame-image,.t-avatar-wrap .pm-avatar-shell__frame{position:absolute!important;left:50%!important;top:50%!important;width:calc(100% * var(--pm-frame-scale, 1.12))!important;height:calc(100% * var(--pm-frame-scale, 1.12))!important;transform:translate(calc(-50% + var(--pm-frame-shift-x, 0px)),calc(-50% + var(--pm-frame-shift-y, 0px)))!important;object-fit:contain!important;z-index:3!important;pointer-events:none!important;}
+
+
+/* FINAL: Crash avatar/topbar standardı */
+.pm-game-topbar-avatar-host .pm-frame-image,.pm-game-topbar-avatar-host .pm-avatar-shell__frame,.pm-game-topbar-avatar-host .pm-game-frame,.pm-game-topbar-avatar-host .t-frame{display:none!important;}
+.pm-game-topbar-avatar-host [data-pm-avatar="true"]{--pm-frame-scale:0!important;}
+.t-avatar-wrap{inline-size:42px!important;block-size:42px!important;display:grid!important;place-items:center!important;overflow:visible!important;}
+.t-avatar-wrap > [data-pm-avatar="true"],.t-avatar-wrap > .pm-avatar{inline-size:42px!important;block-size:42px!important;position:relative!important;overflow:visible!important;}
+.t-avatar-wrap .pm-avatar-img,.t-avatar-wrap .t-avatar{inline-size:100%!important;block-size:100%!important;transform:translate(-50%,-50%) scale(var(--pm-avatar-scale,.84))!important;}
+.t-avatar-wrap .pm-frame-image,.t-avatar-wrap .pm-avatar-shell__frame,.t-avatar-wrap .t-frame{inline-size:calc(100% * var(--pm-frame-scale,1.24))!important;block-size:calc(100% * var(--pm-frame-scale,1.24))!important;}

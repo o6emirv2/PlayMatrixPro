@@ -34,8 +34,8 @@ function resolveGameScopeFromPath(value = '') {
   return 'system';
 }
 function shouldRecordApiIssue(req, statusCode) {
-  const game = resolveGameScopeFromPath(req.originalUrl || req.url);
-  if (game === 'chess' || game === 'crash') return true;
+  // Beklenen oyun akışları (geç cashout, state sync, oda yok vb. 4xx) admin hata merkezini kirletmemeli.
+  // Kritik backend hataları 5xx olarak kaydedilir; oyun içi beklenen 4xx durumları client UI'da uyarı olarak kalır.
   return Number(statusCode) >= 500;
 }
 app.use((req, res, next) => {
@@ -102,19 +102,30 @@ app.use('/api/games/pattern-master', require('./server/games/pattern-master').ro
 async function captureClientError(req, res) {
   const payload = { ...(req.body || {}), path: req.body?.path || req.headers.referer || '', userAgent: req.headers['user-agent'] || '', at: Date.now() };
   const game = String(payload.game || resolveGameScopeFromPath(`${payload.path || ''} ${payload.source || ''}`)).toLowerCase();
-  const sourceText = `${payload.path || ''} ${payload.source || ''} ${payload.scope || ''}`.toLowerCase();
-  const isSupportedGame = game === 'chess' || game === 'crash' || sourceText.includes('/games/chess') || sourceText.includes('/games/crash') || sourceText.includes('crash-app') || sourceText.includes('satranc');
-  if (!isSupportedGame) return res.status(202).json({ ok:true, discarded:true });
+  const sourceText = `${payload.path || ''} ${payload.source || ''} ${payload.scope || ''} ${payload.endpoint || ''}`.toLowerCase();
+  const isSupportedGame = game === 'chess' || game === 'crash' || sourceText.includes('/games/chess') || sourceText.includes('/api/chess') || sourceText.includes('/games/crash') || sourceText.includes('/api/crash') || sourceText.includes('crash-app') || sourceText.includes('satranc');
+  if (!isSupportedGame) return res.status(202).json({ ok:true, discarded:'not-game' });
   const normalizedGame = game === 'crash' || sourceText.includes('crash') ? 'crash' : 'chess';
+  const message = String(payload.message || payload.error || '').trim();
+  const code = message.toUpperCase();
+  const scope = String(payload.scope || payload.type || 'client.error');
+  const status = Number(payload.status || 0) || 0;
+  const expectedCodes = new Set(['LOAD FAILED','FAILED TO FETCH','NETWORKERROR','ABORTERROR','SOCKET_TIMEOUT','SOCKET_OFFLINE','STATE_VERSION_MISMATCH','ROOM_NOT_FOUND','ROOM_CLOSED','CASHOUT_NOT_AVAILABLE','CASHOUT_TOO_LATE','BET_ALREADY_LOST','BET_REFUNDED','REFUND_IN_PROGRESS','AUTO_CASHOUT_MISSED']);
+  if (expectedCodes.has(code) || (status >= 400 && status < 500) || /load failed|failed to fetch|networkerror|abort/i.test(message)) {
+    return res.status(202).json({ ok:true, discarded:'expected-game-flow' });
+  }
+  const dedupeKey = `clientIssue:${normalizedGame}:${scope}:${message.slice(0,120)}:${String(payload.source || '').slice(-80)}:${payload.line || ''}`;
+  if (runtimeStore.temporary.get(dedupeKey)) return res.status(202).json({ ok:true, deduped:true });
+  runtimeStore.temporary.set(dedupeKey, true, 10 * 60 * 1000);
   const row = {
     ...payload,
     id:`client_${normalizedGame}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     game: normalizedGame,
-    scope: String(payload.scope || payload.type || 'client.error'),
+    scope,
     area: normalizedGame === 'chess' ? 'Satranç Frontend' : 'Crash Frontend',
     error: String(payload.message || payload.error || 'Frontend hata kaydı').slice(0, 400),
-    reason: String(payload.reason || 'Oyun istemcisinde yakalanan hata veya reddedilen işlem.').slice(0, 400),
-    solution: String(payload.solution || 'İlgili oyun script, socket veya API cevabı kontrol edilmeli.').slice(0, 400),
+    reason: String(payload.reason || `Kaynak: ${String(payload.source || payload.endpoint || 'bilinmiyor').slice(0, 180)}${payload.line ? `:${payload.line}` : ''}`).slice(0, 400),
+    solution: String(payload.solution || 'İlgili oyun script dosyası, socket ACK akışı ve backend API cevabı gerçek hata detayıyla kontrol edilmeli.').slice(0, 400),
     createdAt: Date.now(),
     severity: payload.severity || 'error'
   };
@@ -177,7 +188,7 @@ setInterval(()=>{ Object.values(runtimeStore).forEach(store => store.prune && st
 })();
 
 app.use((req,res)=>res.status(404).json({ ok:false, error:'NOT_FOUND' }));
-app.use((err,req,res,next)=>{ const row = { id:`server_${Date.now()}_${Math.random().toString(36).slice(2)}`, scope:'server.error', game:String(req.originalUrl || req.url).includes('/chess') ? 'chess' : String(req.originalUrl || req.url).includes('/crash') ? 'crash' : 'system', message:err?.message || String(err), stack:String(err?.stack || '').slice(0,2000), path:req.originalUrl || req.url, method:req.method, status:err.statusCode || 500, createdAt:Date.now(), severity:'error' }; runtimeStore.errors.set(row.id, row, 24*3600000); console.error('[server:error]', JSON.stringify({ message: row.message, stack: row.stack, path: row.path, method: row.method, game: row.game })); res.status(err.statusCode || 500).json({ ok:false, error: err.message === 'INSUFFICIENT_BALANCE' ? 'INSUFFICIENT_BALANCE' : 'INTERNAL_ERROR' }); });
+app.use((err,req,res,next)=>{ const status = Number(err?.statusCode || 500) || 500; const game = String(req.originalUrl || req.url).includes('/chess') ? 'chess' : String(req.originalUrl || req.url).includes('/crash') ? 'crash' : 'system'; if (status >= 500) { const row = { id:`server_${Date.now()}_${Math.random().toString(36).slice(2)}`, scope:'server.error', game, area: game === 'chess' ? 'Satranç Backend' : game === 'crash' ? 'Crash Backend' : 'Sunucu', error:err?.message || String(err), message:err?.message || String(err), reason:'Backend exception oluştu.', solution:'Render logundaki stack trace ile ilgili route/modül kontrol edilmeli.', stack:String(err?.stack || '').slice(0,2000), path:req.originalUrl || req.url, method:req.method, status, createdAt:Date.now(), severity:'error' }; runtimeStore.errors.set(row.id, row, 24*3600000); console.error('[server:error]', JSON.stringify({ message: row.message, stack: row.stack, path: row.path, method: row.method, game: row.game })); } res.status(status).json({ ok:false, error: status >= 500 ? (err.message === 'INSUFFICIENT_BALANCE' ? 'INSUFFICIENT_BALANCE' : 'INTERNAL_ERROR') : (err?.message || 'REQUEST_REJECTED') }); });
 const port = Number(process.env.PORT || 3000);
 if (require.main === module) server.listen(port, () => console.log(`[playmatrix] listening on ${port}`));
 module.exports = { app, server, io };

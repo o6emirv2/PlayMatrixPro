@@ -31,7 +31,7 @@
     16: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
     17: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
     18: Object.freeze({ scale: 1.46, avatar: 0.78, shiftX: '0px', shiftY: '4px' }),
-    100: Object.freeze({ scale: 1.02, avatar: 0.72, shiftX: '0px', shiftY: '0px' })
+    100: Object.freeze({ scale: 1.18, avatar: 0.88, shiftX: '0px', shiftY: '0px' })
   });
 
   function normalizeAssetPath(value = '') {
@@ -262,6 +262,7 @@
     isFrameUnlocked,
     getSafeSelectedFrame,
     isRegisteredAvatarUrl,
+    safeAvatarUrl,
     isRegisteredFrameAssetIndex,
     buildHTML,
     applyNodeProfile,

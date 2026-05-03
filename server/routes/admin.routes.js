@@ -227,8 +227,8 @@ router.get('/admin/matrix/issues', (_req, res) => {
       scope,
       area: x.area || (game === 'chess' ? 'Satranç' : game === 'crash' ? 'Crash' : 'Sistem'),
       error: x.error || message,
-      reason: x.reason || (x.status ? `HTTP ${x.status} / ${scope}` : scope),
-      solution: x.solution || (game === 'chess' || game === 'crash' ? 'İlgili oyun frontend/backend dosyası ve son API cevabı kontrol edilmeli.' : 'Sistem kaydı ayrı incelenmeli.'),
+      reason: x.reason || (x.status ? `HTTP ${x.status} / ${scope}${path ? ` / ${path}` : ''}` : scope),
+      solution: x.solution || (game === 'chess' || game === 'crash' ? 'Dosya, endpoint, status ve stack bilgisiyle yalnızca gerçek hata kaynağı kontrol edilmeli; beklenen oyun uyarısı hata olarak işlenmemeli.' : 'Sistem kaydı ayrı incelenmeli.'),
       message,
       path,
       status: x.status || '',
@@ -239,6 +239,7 @@ router.get('/admin/matrix/issues', (_req, res) => {
   };
   const gameIssues = all
     .filter(x => ['chess','crash'].includes(String(x.game || '').toLowerCase()))
+    .filter(x => String(x.severity || 'error') === 'error' || String(x.severity || '') === 'critical' || Number(x.status || 0) >= 500)
     .map(normalizeIssue)
     .slice(0, 30);
   const systemIssues = all

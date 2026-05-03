@@ -538,13 +538,8 @@ async function cashoutBet(bet, { automatic = false, forcedMultiplier = null } = 
 
 function tick() {
   state.multiplier = currentMultiplier();
-  for (const bet of state.bets.values()) {
-    if (!bet.cashed && !bet.lost && !bet.refunded && !bet.cashingOut && !bet.refunding && bet.autoCashout && state.multiplier >= bet.autoCashout && Number(bet.autoCashout) < Number(state.crashPoint)) {
-      cashoutBet(bet, { automatic: true, forcedMultiplier: bet.autoCashout }).catch((error) => {
-        if (error?.message !== 'AUTO_CASHOUT_MISSED') console.error('[crash:auto-cashout:error]', JSON.stringify({ message: error.message }));
-      });
-    }
-  }
+  // Auto cashout tek kaynaklıdır: scheduleAutoCashout() timer'ı tam hedef çarpana kurulur.
+  // Tick içinde tekrar cashout denemesi yapılmaz; bu sayede 409 duplicate/pending kayıtları azalır.
   if (state.multiplier >= state.crashPoint) endRound().catch((error) => console.error('[crash:end:error]', JSON.stringify({ message: error.message })));
   else emitState();
 }
@@ -664,7 +659,12 @@ function installSocket(io) {
   io.on('connection', (socket) => {
     socket.on('crash:subscribe', async () => {
       await ensureRoundStarted().catch(() => null);
-      await authenticateCrashSocket(socket);
+      const authenticated = await authenticateCrashSocket(socket);
+      if (!authenticated) {
+        socket.data.crashSubscribed = false;
+        socket.emit('crash:auth_error', { ok:false, error:'AUTH_REQUIRED' });
+        return;
+      }
       socket.data.crashSubscribed = true;
       socket.join?.('crash');
       socket.emit('crash:update', snapshot({ viewerUid: socket.data?.crashUid || '' }));

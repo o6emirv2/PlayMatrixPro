@@ -1,3 +1,4 @@
+window.__PLAYMATRIX_ROUTE_NORMALIZER_DISABLED__ = true;
 import { initPlayMatrixOnlineCore } from "/public/pm-online-core.js";
 
     const core = await initPlayMatrixOnlineCore();
@@ -427,8 +428,25 @@ function resetToLobby() {
   if (game) game.style.display = 'none';
   startLobbyPolling();
 }
-function handleChessExit(){
-  if (currentRoomId) { resetToLobby(); showLobbyNotice('Satranç lobisine döndün.', 'info'); return; }
+async function handleChessExit(event){
+  try { event?.preventDefault?.(); } catch (_) {}
+  if (currentRoomId) {
+    if (isProcessingMove) return;
+    isProcessingMove = true;
+    const roomId = currentRoomId;
+    showGameNotice('Oda kapatılıyor ve rakibe bildiriliyor...', 'warning');
+    try {
+      const res = await fetchAPI('/api/chess/leave', 'POST', { roomId, reason: 'player-exit' });
+      if (res?.room) syncBoardUI(res.room);
+      resetToLobby();
+      showLobbyNotice('Oda kapatıldı. Rakibe bildirim gönderildi.', 'info');
+    } catch (error) {
+      showGameNotice('Oda kapatılamadı. Bağlantını kontrol edip tekrar dene.', 'error', 'Tekrar Dene', () => handleChessExit());
+    } finally {
+      isProcessingMove = false;
+    }
+    return;
+  }
   window.location.href = 'https://playmatrix.com.tr/';
 }
 Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, showHowToPlay, showMatrixModal, resetToLobby, handleChessExit });
@@ -576,17 +594,33 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       return Math.max(0, Math.min(100, value));
     }
 
+    const CHESS_EXPECTED_CLIENT_ERRORS = new Set(['LOAD FAILED','FAILED TO FETCH','NETWORKERROR','ABORTERROR','SOCKET_TIMEOUT','SOCKET_OFFLINE','STATE_VERSION_MISMATCH','ROOM_NOT_FOUND','ROOM_CLOSED','ROOM_FINISHED','NOT_YOUR_TURN','ROOM_NOT_PLAYING']);
+    const chessIssueDedupe = new Map();
+    function shouldReportChessIssue(scope, payload = {}) {
+      const message = String(payload.message || payload.error || '').trim();
+      const upper = message.toUpperCase();
+      if (CHESS_EXPECTED_CLIENT_ERRORS.has(upper)) return false;
+      if (/load failed|failed to fetch|networkerror|abort/i.test(message)) return false;
+      const source = String(payload.source || '').toLowerCase();
+      if (source && !source.includes('/games/chess') && !source.includes('satranc') && !source.includes('/api/chess')) return false;
+      const key = `${scope}:${upper}:${source}:${payload.line || ''}`;
+      const last = chessIssueDedupe.get(key) || 0;
+      if (Date.now() - last < 10 * 60 * 1000) return false;
+      chessIssueDedupe.set(key, Date.now());
+      return true;
+    }
     function reportChessClientIssue(scope, payload = {}) {
       try {
+        if (!shouldReportChessIssue(scope, payload)) return;
         const body = { game:'chess', scope:String(scope||'frontend'), type:'chess-client', message:String(payload.message || payload.error || scope || 'Satranç istemci olayı').slice(0,500), path: location.pathname, source: payload.source || 'games/chess/Satranc.phase4-module-1.js', line: payload.line || null, stack: String(payload.stack || '').slice(0,1200), roomId: currentRoomId || '', stateVersion: currentRoomState?.stateVersion || 0, at: Date.now() };
         fetch(`${getApiBase()}/api/client/error`, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body), keepalive:true }).catch(()=>null);
       } catch (_) {}
     }
     window.addEventListener('error', (event) => reportChessClientIssue('window.error', { message:event.message, source:event.filename, line:event.lineno, stack:event.error?.stack }), true);
-    window.addEventListener('unhandledrejection', (event) => reportChessClientIssue('promise.rejection', { message:event.reason?.message || String(event.reason || ''), stack:event.reason?.stack }), true);
+    window.addEventListener('unhandledrejection', (event) => reportChessClientIssue('promise.rejection', { message:event.reason?.message || String(event.reason || ''), source: event.reason?.source || '', stack:event.reason?.stack }), true);
     async function fetchAPI(endpoint, method = 'GET', body = null, attempt = 0) {
       try { return await core.requestWithAuth(endpoint, { method, body, timeoutMs: 8000, retries: attempt === 0 ? 1 : 0 }); }
-      catch (error) { reportChessClientIssue(`api.${method}.${endpoint}`, { message:error.message, endpoint, method, body }); throw error; }
+      catch (error) { reportChessClientIssue(`api.${method}.${endpoint}`, { message:error.message, endpoint, method, body, source:`/api/chess${String(endpoint).startsWith('/api/chess') ? '' : endpoint}` }); throw error; }
     }
 
     async function restoreChessSession(roomId, suppressError = false) {
@@ -890,7 +924,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       playSfx('start');
       syncBoardUI(roomData);
       showGameNotice('');
-      pollingInterval = setInterval(pollGameState, 2500);
+      pollingInterval = setInterval(pollGameState, 6000);
       startGamePing();
     }
 
@@ -954,7 +988,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
             avatarUrl: safeAvatar,
             level: 0,
             exactFrameIndex,
-            sizePx: 54,
+            sizePx: 64,
             extraClass: 'pm-game-avatar-shell',
             imageClass: 'p-avatar',
             wrapperClass: 'pm-avatar',
@@ -1022,6 +1056,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       if (drawBtn) {
         const hideDraw = r.mode === 'bot' || r.status !== 'playing';
         drawBtn.hidden = hideDraw;
+        drawBtn.style.display = hideDraw ? 'none' : '';
         drawBtn.disabled = hideDraw;
         drawBtn.textContent = r.drawOfferBy === 'opponent' ? 'BERABERLİĞİ KABUL ET' : r.drawOfferBy === 'me' ? 'TEKLİF GÖNDERİLDİ' : 'BERABERLİK TEKLİF ET';
       }
