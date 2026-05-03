@@ -462,3 +462,64 @@
   .pm-game-topbar-avatar-host { width: 38px; height: 38px; flex-basis: 38px; }
   .pm-game-topbar-avatar-host .pm-avatar { width: 38px; height: 38px; }
 }
+
+/* PlayMatrix Chess hardening additions */
+.chess-room-controls{
+  width:min(560px,100%);
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(140px,.65fr);
+  gap:10px;
+  margin-top:14px;
+  position:relative;
+  z-index:1;
+}
+.chess-field{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:10px 12px;
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.035));
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 28px rgba(0,0,0,.18);
+}
+.chess-field span{font-size:10px;font-weight:900;letter-spacing:1.4px;text-transform:uppercase;color:rgba(226,232,240,.72)}
+.chess-field select,.chess-field input{
+  width:100%;
+  border:0;
+  outline:0;
+  color:#f8fafc;
+  font-weight:900;
+  border-radius:13px;
+  padding:10px 11px;
+  background:rgba(0,0,0,.28);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+  font-family:inherit;
+}
+.chess-field select option{background:#10131c;color:#f8fafc}
+.room-meta{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:10px;flex-wrap:wrap}
+.room-meta span{font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:rgba(226,232,240,.8);padding:6px 9px;border-radius:999px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08)}
+.chess-game-actions{display:flex;gap:10px;align-items:center;justify-content:center;width:min(520px,92vw);margin:0 auto 18px}
+.btn-draw,.btn-resign{flex:1;min-height:46px}
+.btn-draw{
+  border:0;
+  padding:12px 14px;
+  border-radius:18px;
+  cursor:pointer;
+  color:#07110c;
+  font-weight:900;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  font-size:12px;
+  background:linear-gradient(180deg,#b7ffe4,#00ffa3);
+  box-shadow:0 14px 30px rgba(0,255,163,.16),inset 0 1px 0 rgba(255,255,255,.38);
+}
+.pm-level-pulse{animation:pmLevelPulse .8s ease both}
+@keyframes pmLevelPulse{0%{filter:brightness(1)}45%{filter:brightness(1.65) drop-shadow(0 0 12px rgba(0,255,163,.55))}100%{filter:brightness(1)}}
+.pm-game-topbar-avatar-fallback{width:100%;height:100%;object-fit:cover;border-radius:50%}
+@media (max-width:560px){
+  .chess-room-controls{grid-template-columns:1fr;gap:8px}
+  .chess-game-actions{width:calc(100vw - 24px);gap:8px}
+  .btn-draw,.btn-resign{font-size:11px;padding:11px 10px}
+}

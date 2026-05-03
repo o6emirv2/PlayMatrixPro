@@ -180,7 +180,135 @@ const elStudioIntro = document.getElementById('studioIntro');
     let isProcessingMove = false;
     let currentRoomState = null;
     let lastResultSummaryKey = '';
-    const gameLogic = new Chess();
+    const CLIENT_INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    function createMiniChessClient() {
+      let state = parseClientFen(CLIENT_INITIAL_FEN);
+      function parseClientFen(fen = CLIENT_INITIAL_FEN) {
+        const parts = String(fen || CLIENT_INITIAL_FEN).split(/\s+/);
+        const rows = (parts[0] || CLIENT_INITIAL_FEN.split(' ')[0]).split('/');
+        const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+        for (let r = 0; r < 8; r += 1) {
+          let c = 0;
+          for (const ch of rows[r] || '8') {
+            if (/\d/.test(ch)) c += Number(ch);
+            else if ('prnbqkPRNBQK'.includes(ch) && c < 8) board[r][c++] = ch;
+          }
+        }
+        return { board, turn: parts[1] === 'b' ? 'b' : 'w' };
+      }
+      const filesLocal = 'abcdefgh';
+      const toPos = (sq) => ({ row: 8 - Number(sq[1]), col: filesLocal.indexOf(sq[0]) });
+      const toSq = (row, col) => `${filesLocal[col]}${8 - row}`;
+      const inB = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+      const colorOfPiece = (p) => p === p.toUpperCase() ? 'w' : 'b';
+      const pieceObj = (p) => p ? { type: p.toLowerCase(), color: colorOfPiece(p) } : null;
+      function push(moves, fr, fc, tr, tc) {
+        if (!inB(tr, tc)) return;
+        const p = state.board[fr][fc];
+        const t = state.board[tr][tc];
+        if (t && colorOfPiece(t) === colorOfPiece(p)) return;
+        moves.push({ from: toSq(fr, fc), to: toSq(tr, tc), captured: t || '' });
+      }
+      return {
+        load(fen) { state = parseClientFen(fen); return true; },
+        board() { return state.board.map(row => row.map(pieceObj)); },
+        get(sq) { const { row, col } = toPos(sq); return inB(row, col) ? pieceObj(state.board[row][col]) : null; },
+        turn() { return state.turn; },
+        in_check() { return false; },
+        moves({ square } = {}) {
+          const { row: r, col: c } = toPos(square || 'a1');
+          if (!inB(r, c)) return [];
+          const p = state.board[r][c];
+          if (!p) return [];
+          const moves = [];
+          const color = colorOfPiece(p);
+          const type = p.toLowerCase();
+          if (type === 'p') {
+            const dir = color === 'w' ? -1 : 1;
+            if (inB(r + dir, c) && !state.board[r + dir][c]) push(moves, r, c, r + dir, c);
+            for (const dc of [-1, 1]) if (inB(r + dir, c + dc) && state.board[r + dir][c + dc] && colorOfPiece(state.board[r + dir][c + dc]) !== color) push(moves, r, c, r + dir, c + dc);
+          } else if (type === 'n') {
+            [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => push(moves,r,c,r+dr,c+dc));
+          } else if (type === 'k') {
+            for (let dr=-1; dr<=1; dr+=1) for (let dc=-1; dc<=1; dc+=1) if (dr||dc) push(moves,r,c,r+dr,c+dc);
+          } else {
+            const dirs = type === 'b' ? [[-1,-1],[-1,1],[1,-1],[1,1]] : type === 'r' ? [[-1,0],[1,0],[0,-1],[0,1]] : [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]];
+            for (const [dr,dc] of dirs) { let tr=r+dr, tc=c+dc; while(inB(tr,tc)){ const target=state.board[tr][tc]; if(!target) push(moves,r,c,tr,tc); else { if(colorOfPiece(target)!==color) push(moves,r,c,tr,tc); break; } tr+=dr; tc+=dc; } }
+          }
+          return moves;
+        },
+        move({ from, to, promotion = 'q' } = {}) {
+          const a = toPos(from), b = toPos(to);
+          if (!inB(a.row,a.col) || !inB(b.row,b.col)) return null;
+          const p = state.board[a.row][a.col];
+          if (!p) return null;
+          const captured = state.board[b.row][b.col] || '';
+          state.board[a.row][a.col] = null;
+          state.board[b.row][b.col] = (p.toLowerCase() === 'p' && (b.row === 0 || b.row === 7)) ? (colorOfPiece(p) === 'w' ? promotion.toUpperCase() : promotion.toLowerCase()) : p;
+          state.turn = state.turn === 'w' ? 'b' : 'w';
+          return { from, to, captured };
+        }
+      };
+    }
+    const gameLogic = window.Chess ? new Chess() : createMiniChessClient();
+    let lobbySearchQuery = '';
+    let chessSocket = null;
+    const PIECE_UNICODE = Object.freeze({ K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' });
+    const PIECE_IMGS = Object.freeze(Object.fromEntries(Object.entries(PIECE_UNICODE).map(([key, glyph]) => {
+      const fg = key === key.toUpperCase() ? '#f8fafc' : '#0f172a';
+      const stroke = key === key.toUpperCase() ? '#64748b' : '#e5e7eb';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" fill="transparent"/><text x="64" y="91" text-anchor="middle" font-size="86" font-family="Georgia,serif" font-weight="700" fill="${fg}" stroke="${stroke}" stroke-width="3">${glyph}</text></svg>`;
+      return [key, `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`];
+    })));
+
+    function normalizePlayer(player = {}) {
+      if (!player || typeof player !== 'object') return { username: 'Bekleniyor...', name: 'Bekleniyor...', color: '', avatar: '', selectedFrame: 0, isMe: false, uid: '' };
+      return {
+        ...player,
+        username: player.username || player.name || player.displayName || 'Oyuncu',
+        name: player.name || player.username || player.displayName || 'Oyuncu',
+        avatar: player.avatar || '',
+        selectedFrame: Number(player.selectedFrame || 0) || 0,
+        isMe: !!player.isMe || (!!player.uid && player.uid === userUid),
+        uid: player.uid || ''
+      };
+    }
+
+    function getRoomPlayers(room = {}) {
+      const players = Array.isArray(room.players) ? room.players.map(normalizePlayer) : [];
+      const host = normalizePlayer(typeof room.host === 'object' ? room.host : { username: room.host || room.hostName || 'Bilinmeyen', color: 'w', uid: room.hostUid || '' });
+      const guest = room.guest ? normalizePlayer(typeof room.guest === 'object' ? room.guest : { username: room.guest || room.guestName || 'Bekleniyor...', color: 'b', uid: room.guestUid || '' }) : normalizePlayer(players.find(p => p.color === 'b') || { username: 'Bekleniyor...', color: 'b' });
+      return { players, host: players.find(p => p.color === 'w') || host, guest: players.find(p => p.color === 'b') || guest };
+    }
+
+    function applyProgressionFromPayload(payload = {}) {
+      const profile = payload.user || payload.profile || payload;
+      const progression = profile?.progression || payload.progression || {};
+      const accountLevel = Math.max(1, Number(progression.accountLevel ?? profile.accountLevel ?? profile.level ?? 1) || 1);
+      const progress = Math.max(0, Math.min(100, Number(progression.progressPercent ?? progression.accountLevelProgressPct ?? profile.accountLevelProgressPct ?? 0) || 0));
+      const levelBarEl = document.getElementById('uiAccountLevelBar');
+      const levelPctEl = document.getElementById('uiAccountLevelPct');
+      const levelBadgeEl = document.getElementById('uiAccountLevelBadge');
+      if (levelBarEl) { levelBarEl.style.width = progress + '%'; levelBarEl.classList.add('pm-level-pulse'); setTimeout(() => levelBarEl.classList.remove('pm-level-pulse'), 800); }
+      if (levelPctEl) levelPctEl.innerText = progress.toFixed(1) + '%';
+      if (levelBadgeEl) levelBadgeEl.innerText = accountLevel;
+    }
+
+    function applyTopbarAvatar(profile = {}) {
+      const host = document.getElementById('uiAccountAvatarHost');
+      if (!host) return;
+      try {
+        if (window.PMAvatar && typeof window.PMAvatar.renderAvatarNode === 'function') {
+          host.replaceChildren(window.PMAvatar.renderAvatarNode({ avatar: profile.avatar || '', selectedFrame: profile.selectedFrame || 0, extraClass: 'pm-game-topbar-avatar', sizeTag: 'topbar', alt: 'Hesap avatarı' }));
+          return;
+        }
+      } catch (_) {}
+      const img = document.createElement('img');
+      img.className = 'pm-game-topbar-avatar-fallback';
+      img.alt = 'Hesap avatarı';
+      img.src = profile.avatar || DEFAULT_AVATAR;
+      host.replaceChildren(img);
+    }
 
     function renderRuntimeNotice(target, message = '', tone = 'warning', actionLabel = '', actionHandler = null) {
       if (!target) return;
@@ -212,6 +340,7 @@ function setModalActive(id, active = true) {
   const isActive = !!active;
   el.hidden = !isActive;
   el.classList.toggle('active', isActive);
+  el.classList.toggle('show', isActive);
   el.setAttribute('aria-hidden', isActive ? 'false' : 'true');
 }
 function closeConfirmModal() { setModalActive('confirmModal', false); }
@@ -247,7 +376,39 @@ function closeMatrixModal() {
   setModalActive('matrixModal', false);
   if (shouldLobby) resetToLobby();
 }
-Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
+function showConfirmModal(title, message, onConfirm) {
+  const titleEl = document.getElementById('confirmModalTitle');
+  const descEl = document.getElementById('confirmModalDesc');
+  const yesBtn = document.getElementById('confirmYesBtn');
+  if (titleEl) titleEl.textContent = String(title || 'Onay');
+  if (descEl) descEl.textContent = String(message || 'İşlemi onaylıyor musun?');
+  if (yesBtn) {
+    yesBtn.onclick = async () => {
+      yesBtn.disabled = true;
+      try { if (typeof onConfirm === 'function') await onConfirm(); }
+      finally { yesBtn.disabled = false; closeConfirmModal(); }
+    };
+  }
+  setModalActive('confirmModal', true);
+}
+function resetToLobby() {
+  clearInterval(pollingInterval);
+  clearInterval(pingInterval);
+  try { chessSocket?.emit?.('chess:join', ''); } catch (_) {}
+  currentRoomId = '';
+  currentRoomState = null;
+  selectedSq = null;
+  validMovesForSelected = [];
+  lastFen = '';
+  lastStatus = '';
+  try { localStorage.removeItem('activeChessRoom'); } catch (_) {}
+  const lobby = document.getElementById('lobbyArea');
+  const game = document.getElementById('gameArea');
+  if (lobby) lobby.style.display = '';
+  if (game) game.style.display = 'none';
+  startLobbyPolling();
+}
+Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, showHowToPlay, showMatrixModal, resetToLobby });
 
     function clearRuntimeNotices() { showLobbyNotice(''); showGameNotice(''); }
     function setBootBusyState(isBusy) { if (elBtnEnterGame) elBtnEnterGame.disabled = !!isBusy; if (elBtnRetryBoot) elBtnRetryBoot.disabled = !!isBusy; }
@@ -329,6 +490,7 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
         setBootProgress(66);
         setBootStatus('Lobi ve oyun verileri HTTP eşitleme modunda hazırlanıyor...');
         await withTimeout(Promise.resolve(preparePollingSync()).catch(() => null), 1200, 'SYNC_TIMEOUT').catch(() => null);
+        ensureChessSocket().catch(() => null);
         try {
           if (typeof hydrateFriendCounts === 'function') {
             await withTimeout(Promise.resolve(hydrateFriendCounts(true)).catch(() => null), 4000, 'FRIEND_COUNTS_TIMEOUT').catch(() => null);
@@ -459,26 +621,18 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
     }
 
     async function fetchBalance() {
-      try { 
-        const res = await fetchAPI('/api/me'); 
+      try {
+        const res = await fetchAPI('/api/chess/profile?t=' + Date.now());
         if (!(res && res.ok)) return;
-
-        try { window.__PM_GAME_ACCOUNT_SYNC__?.apply?.(res); } catch (_) {}
-        const balanceEl = document.getElementById("ui-balance") || document.getElementById("uiBalance");
-        if (balanceEl) balanceEl.innerText = Number(res.balance || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
         const profile = (res && typeof res.user === 'object' && res.user) ? res.user : {};
-        const accountLevel = Math.max(1, Number(profile.accountLevel) || 1);
-        const accountProgress = Math.max(0, Math.min(100, Number(profile?.progression?.accountLevelProgressPct) || 0));
-
-        const levelBarEl = document.getElementById('uiAccountLevelBar');
-        const levelPctEl = document.getElementById('uiAccountLevelPct');
-        const levelBadgeEl = document.getElementById('uiAccountLevelBadge');
-
-        if (levelBarEl) levelBarEl.style.width = accountProgress + '%';
-        if (levelPctEl) levelPctEl.innerText = accountProgress.toFixed(1) + '%';
-        if (levelBadgeEl) levelBadgeEl.innerText = accountLevel;
-      } catch(e){}
+        try { window.__PM_GAME_ACCOUNT_SYNC__?.apply?.({ ok: true, user: profile }); } catch (_) {}
+        const balanceEl = document.getElementById("ui-balance") || document.getElementById("uiBalance");
+        if (balanceEl) balanceEl.innerText = Number(profile.balance || 0).toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        applyProgressionFromPayload(profile);
+        applyTopbarAvatar(profile);
+      } catch(e){
+        showLobbyNotice('Profil bilgileri güncellenemedi. Bağlantı tekrar denenecek.', 'warning');
+      }
     }
 
     function startLobbyPolling() {
@@ -489,8 +643,9 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
 
     function roomMatchesSearch(r){
       if(!lobbySearchQuery) return true;
-      const hostName = (r.host || "").toString().toLowerCase();
-      const guestName = (r.guest || "").toString().toLowerCase();
+      const { host, guest } = getRoomPlayers(r);
+      const hostName = (host.username || host.name || '').toString().toLowerCase();
+      const guestName = (guest.username || guest.name || '').toString().toLowerCase();
       return hostName.includes(lobbySearchQuery) || guestName.includes(lobbySearchQuery);
     }
 
@@ -516,9 +671,12 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
         }
 
         const html = filtered.map((r) => {
-          const isMe = r.hostUid === userUid;
-          const p1 = escapeHTML(r.host);
-          const p2 = r.guest === 'Bilinmeyen' ? '?' : escapeHTML(r.guest);
+          const { host, guest } = getRoomPlayers(r);
+          const isMe = !!host.isMe;
+          const p1 = escapeHTML(host.username || host.name || 'Bilinmeyen');
+          const p2 = !guest || guest.username === 'Bekleniyor...' ? '?' : escapeHTML(guest.username || guest.name || 'Bilinmeyen');
+          const betLabel = Number(r.bet || 0) > 0 ? `${Number(r.bet).toLocaleString('tr-TR')} MC` : 'Bahissiz';
+          const modeLabel = r.mode === 'bot' ? 'Bot' : r.mode === 'bet' ? 'Bahisli' : r.mode === 'private' ? 'Özel' : 'Bahissiz';
           let statusText = '';
           let btnHtml = '';
           if (r.status === 'waiting') {
@@ -535,6 +693,7 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
                 '<div class="vs-badge">VS</div>',
                 '<div class="player-name">' + p2 + '</div>',
               '</div>',
+              '<div class="room-meta"><span>' + modeLabel + '</span><span>' + betLabel + '</span></div>',
               '<div class="room-footer">',
                 '<div class="room-status">' + statusText + '</div>',
                 btnHtml,
@@ -543,6 +702,7 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
           ].join('');
         }).join('');
         list.innerHTML = html;
+        list.querySelectorAll('[data-room-id]').forEach((btn) => btn.addEventListener('click', () => window.joinRoom(btn.dataset.roomId)));
       } catch(error) {
         if (initial) {
           const list = document.getElementById('roomList');
@@ -553,15 +713,58 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
       }
     }
 
+    function readRoomOptions() {
+      const modeEl = document.getElementById('chessRoomMode');
+      const betEl = document.getElementById('chessBetAmount');
+      const mode = String(modeEl?.value || 'free');
+      const bet = mode === 'bet' ? Math.max(1000, Math.min(10000, Math.trunc(Number(betEl?.value || 1000) || 1000))) : 0;
+      return { mode, bet };
+    }
+
     window.createRoom = async () => {
-      try { const res = await fetchAPI('/api/chess/create', 'POST'); try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {} enterGame(res.room); }
-      catch(e) { showMatrixModal("Hata", e.message, "error"); }
+      try {
+        const opts = readRoomOptions();
+        const res = await fetchAPI('/api/chess/create', 'POST', opts);
+        try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {}
+        await fetchBalance().catch(() => null);
+        enterGame(res.room);
+      }
+      catch(e) { showMatrixModal("Hata", translateError(e.message), "error"); }
     };
 
     window.joinRoom = async (id) => {
-      try { const res = await fetchAPI('/api/chess/join', 'POST', id ? {roomId: id} : {}); try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {} enterGame(res.room); }
-      catch(e) { showMatrixModal("Hata", e.message, "error"); }
+      try {
+        const opts = id ? { roomId: id } : readRoomOptions();
+        const res = await fetchAPI('/api/chess/join', 'POST', opts);
+        try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {}
+        await fetchBalance().catch(() => null);
+        enterGame(res.room);
+      }
+      catch(e) { showMatrixModal("Hata", translateError(e.message), "error"); }
     };
+
+    function translateError(code = '') {
+      const key = String(code || '').toUpperCase();
+      const map = {
+        ROOM_FULL: 'Oda dolu.', ROOM_NOT_FOUND: 'Oda bulunamadı.', NOT_YOUR_TURN: 'Sıra sende değil.', ILLEGAL_MOVE: 'Bu hamle satranç kurallarına göre geçersiz.', INVALID_MOVE_FORMAT: 'Hamle formatı geçersiz.', INSUFFICIENT_BALANCE: 'Bakiye yetersiz.', BET_MIN_1000_MC: 'Bahisli Satranç için minimum bahis 1.000 MC.', BET_MAX_10000_MC: 'Bahisli Satranç için maksimum bahis 10.000 MC.', ALREADY_IN_ACTIVE_CHESS_ROOM: 'Zaten aktif bir Satranç odan var.'
+      };
+      return map[key] || String(code || 'İşlem tamamlanamadı.');
+    }
+
+    async function ensureChessSocket() {
+      try {
+        if (chessSocket && chessSocket.connected) return chessSocket;
+        chessSocket = await core.createAuthedSocket(chessSocket, { transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: 6, timeout: 6000 });
+        chessSocket.on('connect', () => {
+          try { chessSocket.emit('chess:lobby:subscribe'); } catch (_) {}
+          try { if (userUid) chessSocket.emit('chess:subscribe-user', userUid); } catch (_) {}
+          try { if (currentRoomId) chessSocket.emit('chess:join', currentRoomId); } catch (_) {}
+        });
+        chessSocket.on('chess:lobby', () => { if (!currentRoomId) fetchLobby(false).catch(() => null); });
+        chessSocket.on('chess:room', (room) => { if (room?.id && room.id === currentRoomId) syncBoardUI(room); });
+        return chessSocket;
+      } catch (_) { return null; }
+    }
 
     function startGamePing() {
       pingInterval = setInterval(async () => {
@@ -583,12 +786,15 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
       isProcessingMove = false;
       localStorage.setItem('activeChessRoom', String(roomData.id || ''));
       clearPendingAutoJoin('chess', roomData.id);
+      ensureChessSocket().then((sock) => { try { sock?.emit?.('chess:join', roomData.id); } catch (_) {} }).catch(() => null);
       document.getElementById("lobbyArea").style.display = "none";
       document.getElementById("gameArea").style.display = "flex";
       showLobbyNotice('');
       showGameNotice('Oyun verisi hazırlanıyor...', 'warning');
 
-      myColor = roomData.host.uid === userUid ? 'w' : 'b';
+      const roomPlayers = getRoomPlayers(roomData);
+      const mePlayer = roomPlayers.players.find(p => p.isMe || p.uid === userUid) || roomPlayers.host;
+      myColor = mePlayer.color === 'b' ? 'b' : 'w';
 
       document.getElementById("myColorBox").style.background = myColor === 'w' ? '#fff' : '#000';
       document.getElementById("oppColorBox").style.background = myColor === 'w' ? '#000' : '#fff';
@@ -671,60 +877,67 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
         return;
       }
       frameEl.hidden = false;
-      frameEl.src = `/Cerceve/frame-${frameIndex}.png`;
-      frameEl.dataset.fallback = `/Çerçeve/frame-${frameIndex}.png`;
+      frameEl.src = `/public/assets/frames/frame-${frameIndex}.png`;
+      frameEl.dataset.fallback = `/public/assets/frames/frame-${frameIndex}.png`;
     }
 
     function syncBoardUI(r) {
       if (!r) return;
       currentRoomState = r;
-      const isHost = r.host.uid === userUid;
-      const me = isHost ? r.host : (r.guest || {username:'Sen'});
-      const opp = isHost ? (r.guest || {username:'Bekleniyor...'}) : r.host;
+      const { players, host, guest } = getRoomPlayers(r);
+      const me = players.find(p => p.isMe || p.uid === userUid) || (myColor === 'w' ? host : guest);
+      const opp = players.find(p => p.color && p.color !== myColor) || (myColor === 'w' ? guest : host);
 
-      document.getElementById("myName").innerText = me.username;
+      const myNameEl = document.getElementById("myName");
+      const oppNameEl = document.getElementById("oppName");
+      if (myNameEl) myNameEl.innerText = me.username || me.name || 'Sen';
       applyFramedAvatar("myAvatar", "myAvatarFrame", me.avatar, me.selectedFrame);
-      document.getElementById("myPlate").className = (r.turn === myColor) ? "player-plate active" : "player-plate";
+      const myPlate = document.getElementById("myPlate");
+      if (myPlate) myPlate.className = (r.turn === myColor && r.status === 'playing') ? "player-plate active" : "player-plate";
 
-      document.getElementById("oppName").innerText = opp.username;
+      if (oppNameEl) oppNameEl.innerText = opp.username || opp.name || 'Bekleniyor...';
       applyFramedAvatar("oppAvatar", "oppAvatarFrame", opp.avatar, opp.selectedFrame);
-      document.getElementById("oppPlate").className = (r.turn !== myColor && r.status === 'playing') ? "player-plate active" : "player-plate";
+      const oppPlate = document.getElementById("oppPlate");
+      if (oppPlate) oppPlate.className = (r.turn !== myColor && r.status === 'playing') ? "player-plate active" : "player-plate";
 
       const statusTxt = document.getElementById("gameStatusTxt");
+      if (!statusTxt) return;
       if (r.status === 'waiting') {
         statusTxt.innerText = "RAKİP BEKLENİYOR...";
         statusTxt.style.color = "rgba(148,163,184,.95)";
       } else if (r.status === 'playing') {
         const myTurn = r.turn === myColor;
-        statusTxt.innerText = myTurn ? "SIRA SENDE" : "SIRA RAKİPTE";
+        const checkText = r.check ? ' • ŞAH' : '';
+        const drawText = r.drawOfferBy === 'opponent' ? ' • BERABERLİK TEKLİFİ VAR' : r.drawOfferBy === 'me' ? ' • BERABERLİK TEKLİFİ GÖNDERİLDİ' : '';
+        statusTxt.innerText = (myTurn ? "SIRA SENDE" : "SIRA RAKİPTE") + checkText + drawText;
         statusTxt.style.color = myTurn ? "#00ffa3" : "#f1c40f";
       } else if (r.status === 'finished') {
         clearInterval(pollingInterval);
         clearInterval(pingInterval);
-
         statusTxt.innerText = "OYUN BİTTİ";
         statusTxt.style.color = "#ff3b30";
+        try { if (r.resultSummary?.progression) applyProgressionFromPayload({ progression: r.resultSummary.progression }); } catch (_) {}
         if (r.resultSummary) {
           if (r.resultSummary.outcome === 'win') playSfx('win');
           else if (r.resultSummary.outcome === 'loss') playSfx('end');
           showGameResultSummary(r.resultSummary, 'Satranç Sonucu', 'Oyun sonucu işlendi.', 'info');
-        } else if(r.winner === 'draw') {
-          showGameResultSummary({ gameType: 'chess', resultCode: 'draw', settledAt: Date.now(), outcome: 'draw', title: 'BERABERE', message: 'Oyun berabere bitti.' }, 'BERABERE', 'Oyun berabere bitti.', 'info');
         } else {
-          const iWon = (r.winner === 'white' && myColor === 'w') || (r.winner === 'black' && myColor === 'b');
-          if (iWon) { playSfx('win'); showGameResultSummary({ gameType: 'chess', resultCode: 'win', settledAt: Date.now(), outcome: 'win', title: 'KAZANDIN!', message: 'Galibiyet ve ödül işlemleri işlendi.' }, 'KAZANDIN!', 'Galibiyet ve ödül işlemleri işlendi.', 'success'); }
+          const draw = r.winner === 'draw' || r.winnerColor === 'draw';
+          const iWon = r.winnerColor === myColor;
+          if (draw) showGameResultSummary({ gameType: 'chess', resultCode: 'draw', settledAt: Date.now(), outcome: 'draw', title: 'BERABERE', message: 'Oyun berabere bitti.' }, 'BERABERE', 'Oyun berabere bitti.', 'info');
+          else if (iWon) { playSfx('win'); showGameResultSummary({ gameType: 'chess', resultCode: 'win', settledAt: Date.now(), outcome: 'win', title: 'KAZANDIN!', message: 'Galibiyet ve ödül işlemleri işlendi.' }, 'KAZANDIN!', 'Galibiyet ve ödül işlemleri işlendi.', 'success'); }
           else { playSfx('end'); showGameResultSummary({ gameType: 'chess', resultCode: 'loss', settledAt: Date.now(), outcome: 'loss', title: 'KAYBETTİN', message: 'Rakip kazandı veya sen teslim oldun.' }, 'KAYBETTİN', 'Rakip kazandı veya sen teslim oldun.', 'error'); }
         }
+        try { localStorage.removeItem('activeChessRoom'); } catch (_) {}
         return;
       }
 
-      if (r.fen !== lastFen || r.status !== lastStatus) {
-        gameLogic.load(r.fen);
+      if (r.fen && (r.fen !== lastFen || r.status !== lastStatus)) {
+        const ok = gameLogic.load(r.fen);
+        if (!ok) console.warn('[PlayMatrix:Satranc] invalid FEN from backend', r.fen);
         drawBoard();
-
         if (lastFen !== "" && r.fen !== lastFen) {
-          if (gameLogic.in_check()) playSfx('check');
-          else if (r.fen.length < lastFen.length) playSfx('capture');
+          if (gameLogic.in_check && gameLogic.in_check()) playSfx('check');
           else playSfx('move');
         }
         lastFen = r.fen;
@@ -767,6 +980,7 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
             const char = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
             const img = document.createElement("img");
             img.src = PIECE_IMGS[char];
+            img.alt = PIECE_UNICODE[char] || char;
             img.className = "piece";
             sqDiv.appendChild(img);
           }
@@ -778,7 +992,7 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
     }
 
     async function handleSquareClick(sq) {
-      if (isProcessingMove || gameLogic.turn() !== myColor) return;
+      if (isProcessingMove || currentRoomState?.status !== 'playing' || gameLogic.turn() !== myColor) return;
 
       const moveObj = validMovesForSelected.find(m => m.to === sq);
       if (selectedSq && moveObj) {
@@ -800,7 +1014,7 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
           lastFen = res.room.fen;
           syncBoardUI(res.room);
         } catch(e) {
-          showMatrixModal("Hata", e.message, "error");
+          showMatrixModal("Hata", translateError(e.message), "error");
           gameLogic.load(lastFen);
           drawBoard();
         }
@@ -822,22 +1036,32 @@ Object.assign(window, { closeConfirmModal, showHowToPlay, showMatrixModal });
     }
 
     window.resignGame = () => {
-      showConfirmModal("Teslim Ol", "Teslim olmak istediğinize emin misiniz? (Rakibe galibiyet işlenir)", async () => {
-        try { const res = await fetchAPI('/api/chess/resign', 'POST', { roomId: currentRoomId }); try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {} } catch(e) {}
+      if (!currentRoomId) return;
+      showConfirmModal("Teslim Ol", "Teslim olmak istediğine emin misin? Bahisli oyunda rakibe galibiyet işlenir.", async () => {
+        try {
+          const res = await fetchAPI('/api/chess/resign', 'POST', { roomId: currentRoomId });
+          try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {}
+          if (res?.room) syncBoardUI(res.room);
+          await fetchBalance().catch(() => null);
+        } catch(e) { showMatrixModal('Hata', translateError(e.message), 'error'); }
       });
     };
 
+    window.offerDraw = async () => {
+      if (!currentRoomId) return;
+      try {
+        const res = await fetchAPI('/api/chess/draw', 'POST', { roomId: currentRoomId });
+        if (res?.room) syncBoardUI(res.room);
+      } catch(e) { showMatrixModal('Hata', translateError(e.message), 'error'); }
+    };
+
     window.addEventListener('beforeunload', () => {
-      if (!currentRoomId || !auth.currentUser) return;
-      auth.currentUser.getIdToken().then((token) => {
-        fetch(`${API_URL}/api/chess/leave`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomId: currentRoomId, reason: 'unload' }),
-          keepalive: true
-        }).catch(() => null);
-      }).catch(() => null);
+      // Sayfa yenileme veya mobil arka plana alma artık doğrudan kayıp sayılmaz.
+      // Backend reconnect grace penceresi ping/socket kopuşuna göre karar verir.
     });
+
+    document.getElementById('matrixModalCloseBtn')?.addEventListener('click', closeMatrixModal);
+    document.querySelector('#confirmModal .btn-no')?.addEventListener('click', closeConfirmModal);
 
     onAuthStateChanged(user => {
       if (!user) {

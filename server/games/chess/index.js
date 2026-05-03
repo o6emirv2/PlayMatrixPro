@@ -1,31 +1,718 @@
 const express = require('express');
 const crypto = require('crypto');
 const { requireAuth } = require('../../core/security');
-const { debitBalance, creditBalance } = require('../../core/economyService');
+const { debitBalance, creditBalance, readBalance } = require('../../core/economyService');
 const { runtimeStore } = require('../../core/runtimeStore');
+const { initFirebaseAdmin } = require('../../config/firebaseAdmin');
+const { getProgression, normalizeXpBigInt } = require('../../core/progressionService');
+
 const router = express.Router();
 const rooms = new Map();
+const queue = new Map();
+let ioRef = null;
+
 const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const FREE_TIME_MS = 10 * 60 * 1000;
+const RECONNECT_GRACE_MS = Number(process.env.CHESS_DISCONNECT_GRACE_MS || 90000);
+const QUEUE_TTL_MS = Number(process.env.MATCH_QUEUE_TTL_MS || 120000);
+const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
+const MIN_BET = 1000;
+const MAX_BET = 10000;
+const files = 'abcdefgh';
 const now = () => Date.now();
-function uid(req){ return String(req.user?.uid || ''); }
-function name(req){ return String(req.user?.email || req.user?.name || `Oyuncu-${uid(req).slice(0,5)}`); }
-function bet(v){ return Math.max(0, Math.min(10000, Math.trunc(Number(v) || 0))); }
-function id(){ return `ch_${now()}_${crypto.randomBytes(3).toString('hex')}`; }
-function publicRoom(r){ return { id:r.id, roomId:r.id, status:r.status, host:r.players[0]?.name || 'Bilinmeyen', guest:r.players[1]?.name || 'Bilinmeyen', hostUid:r.players[0]?.uid || '', guestUid:r.players[1]?.uid || '', players:r.players.map(p=>({ uid:p.uid, name:p.name, color:p.color, connected:true, timeLeftMs:p.timeLeftMs })), turn:r.turn, fen:r.fen, bet:r.bet, pot:r.pot, mode:r.mode, moves:r.moves, winnerUid:r.winnerUid || '', result:r.result || '', stateVersion:r.stateVersion, createdAt:r.createdAt, updatedAt:r.updatedAt } }
-function findOpen(){ return [...rooms.values()].find(r => r.status === 'waiting' && r.mode !== 'private' && r.players.length < 2); }
-async function chargeBet(req, r){ if (!r.bet) return { ok:true }; return debitBalance({ uid:uid(req), amount:r.bet, reason:'chess-bet', idempotencyKey:`chess:bet:${r.id}:${uid(req)}` }); }
-async function payWinner(r, winnerUid){ if (!r.bet || !winnerUid) return null; return creditBalance({ uid:winnerUid, amount:r.pot, reason:'chess-win', idempotencyKey:`chess:win:${r.id}:${winnerUid}` }); }
-async function settleDraw(r){ if (!r.bet) return null; const out=[]; for (const p of r.players) out.push(await creditBalance({ uid:p.uid, amount:Math.floor(r.bet/2), reason:'chess-draw-half-refund', idempotencyKey:`chess:draw:${r.id}:${p.uid}` })); return out; }
-function createRoom(req, opts={}){ const safeBet=bet(opts.bet); const r={ id:id(), status:'waiting', mode:opts.mode || (safeBet ? 'bet' : 'free'), bet:safeBet, pot:safeBet, fen:INITIAL_FEN, turn:'w', moves:[], stateVersion:1, createdAt:now(), updatedAt:now(), players:[{ uid:uid(req), name:name(req), color:'w', timeLeftMs:600000 }]}; rooms.set(r.id,r); return r; }
-router.get('/lobby', (_req,res)=>res.json({ ok:true, rooms:[...rooms.values()].filter(r=>r.status !== 'finished').map(publicRoom) }));
-router.post('/create', requireAuth, async (req,res)=>{ const r=createRoom(req,{ bet:req.body?.bet || 0, mode:req.body?.mode }); const charged=await chargeBet(req,r); if(!charged.ok){rooms.delete(r.id); return res.status(409).json(charged);} res.json({ ok:true, room:publicRoom(r), balance:charged.balance }); });
-router.post('/join', requireAuth, async (req,res)=>{ let r=req.body?.roomId ? rooms.get(String(req.body.roomId)) : findOpen(); if(!r) r=createRoom(req,{ bet:req.body?.bet || 0 }); if(r.players.some(p=>p.uid===uid(req))) return res.json({ ok:true, room:publicRoom(r) }); if(r.players.length>=2) return res.status(409).json({ ok:false,error:'ROOM_FULL' }); const charged=await chargeBet(req,r); if(!charged.ok) return res.status(409).json(charged); r.players.push({uid:uid(req), name:name(req), color:'b', timeLeftMs:600000}); r.pot += r.bet; r.status='playing'; r.updatedAt=now(); res.json({ ok:true, room:publicRoom(r), balance:charged.balance }); });
-router.get('/state/:roomId', requireAuth, (req,res)=>{ const r=rooms.get(String(req.params.roomId)); if(!r) return res.status(404).json({ ok:false,error:'ROOM_NOT_FOUND' }); res.json({ ok:true, room:publicRoom(r) }); });
-router.post('/ping', requireAuth, (req,res)=>{ const r=rooms.get(String(req.body.roomId)); if(!r) return res.status(404).json({ ok:false,error:'ROOM_NOT_FOUND' }); r.updatedAt=now(); res.json({ ok:true, room:publicRoom(r) }); });
-router.post('/move', requireAuth, (req,res)=>{ const r=rooms.get(String(req.body.roomId)); if(!r) return res.status(404).json({ ok:false,error:'ROOM_NOT_FOUND' }); if(r.status!=='playing') return res.status(409).json({ ok:false,error:'ROOM_NOT_PLAYING' }); const player=r.players.find(p=>p.uid===uid(req)); if(!player) return res.status(403).json({ ok:false,error:'NOT_IN_ROOM' }); if(player.color!==r.turn) return res.status(409).json({ ok:false,error:'NOT_YOUR_TURN' }); const from=String(req.body.from||''); const to=String(req.body.to||''); if(!/^[a-h][1-8]$/.test(from)||!/^[a-h][1-8]$/.test(to)||from===to) return res.status(400).json({ ok:false,error:'INVALID_MOVE_FORMAT' }); r.moves.push({from,to,by:uid(req),at:now()}); r.turn=r.turn==='w'?'b':'w'; r.stateVersion+=1; r.updatedAt=now(); res.json({ ok:true, room:publicRoom(r) }); });
-router.post('/resign', requireAuth, async (req,res)=>{ const r=rooms.get(String(req.body.roomId)); if(!r) return res.status(404).json({ok:false,error:'ROOM_NOT_FOUND'}); const loser=uid(req); const winner=r.players.find(p=>p.uid!==loser); r.status='finished'; r.result='resign'; r.winnerUid=winner?.uid||''; r.stateVersion+=1; const paid=winner?await payWinner(r,winner.uid):null; res.json({ok:true, room:publicRoom(r), balance:paid?.balance}); });
-router.post('/draw', requireAuth, async (req,res)=>{ const r=rooms.get(String(req.body.roomId)); if(!r) return res.status(404).json({ok:false,error:'ROOM_NOT_FOUND'}); r.status='finished'; r.result='draw'; r.stateVersion+=1; await settleDraw(r); res.json({ok:true, room:publicRoom(r)}); });
-router.post('/leave', requireAuth, async (req,res)=>{ const r=rooms.get(String(req.body.roomId)); if(!r) return res.json({ok:true}); if(r.status==='playing'){ const winner=r.players.find(p=>p.uid!==uid(req)); r.status='finished'; r.result='leave'; r.winnerUid=winner?.uid||''; if(winner) await payWinner(r,winner.uid); } else { rooms.delete(r.id); } res.json({ok:true, room:r.status?publicRoom(r):null}); });
-function installSocket(io){ io.on('connection', socket=>{ socket.on('chess:join', roomId=>{ socket.join(`chess:${roomId}`); }); }); }
-setInterval(()=>{ const cutoff=now()-2*60*60*1000; for(const [k,r] of rooms) if(r.updatedAt<cutoff) rooms.delete(k); },60000).unref();
-module.exports={ router, installSocket, _rooms:rooms };
+const uidOf = (req) => String(req.user?.uid || '');
+const isWhite = (p) => p && p === p.toUpperCase();
+const colorOf = (p) => isWhite(p) ? 'w' : 'b';
+const opposite = (c) => c === 'w' ? 'b' : 'w';
+const inBounds = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+const squareToPos = (sq) => ({ row: 8 - Number(sq[1]), col: files.indexOf(sq[0]) });
+const posToSquare = (row, col) => `${files[col]}${8 - row}`;
+const cloneBoard = (board) => board.map((row) => row.slice());
+const hashPlayerKey = (roomId, uid) => crypto.createHash('sha256').update(`${roomId}:${uid}`).digest('hex').slice(0, 12);
+
+function createHttpError(statusCode, error) {
+  const err = new Error(error);
+  err.statusCode = statusCode;
+  return err;
+}
+function asyncRoute(fn) {
+  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch((error) => {
+    if (error && error.statusCode && error.statusCode < 500) {
+      return res.status(error.statusCode).json({ ok: false, error: error.message || 'REQUEST_REJECTED' });
+    }
+    return next(error);
+  });
+}
+function safeStr(value, max = 80) {
+  return String(value ?? '').replace(/[<>]/g, '').trim().slice(0, max);
+}
+function displayNameFromProfile(profile = {}, fallbackUid = '') {
+  const raw = profile.username || profile.displayName || profile.fullName || profile.name || '';
+  if (raw && !String(raw).includes('@')) return safeStr(raw, 40);
+  return `Oyuncu-${String(fallbackUid || '').slice(0, 5) || 'PM'}`;
+}
+function validateBetAmount(value, mode = '') {
+  const amount = Math.trunc(Number(value) || 0);
+  if (String(mode || '').toLowerCase() === 'bot') return 0;
+  if (amount <= 0) return 0;
+  if (amount < MIN_BET) throw createHttpError(400, 'BET_MIN_1000_MC');
+  if (amount > MAX_BET) throw createHttpError(400, 'BET_MAX_10000_MC');
+  return amount;
+}
+function normalizeMode(rawMode, betAmount) {
+  const m = String(rawMode || '').toLowerCase();
+  if (m === 'bot') return 'bot';
+  if (m === 'private') return 'private';
+  if (betAmount > 0 || m === 'bet' || m === 'ranked') return 'bet';
+  return 'free';
+}
+function parseFen(fen = INITIAL_FEN) {
+  const parts = String(fen || INITIAL_FEN).trim().split(/\s+/);
+  const rows = (parts[0] || INITIAL_FEN.split(' ')[0]).split('/');
+  const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+  for (let r = 0; r < 8; r += 1) {
+    let c = 0;
+    for (const ch of rows[r] || '8') {
+      if (/\d/.test(ch)) c += Number(ch);
+      else if ('prnbqkPRNBQK'.includes(ch) && c < 8) board[r][c++] = ch;
+    }
+  }
+  return {
+    board,
+    turn: parts[1] === 'b' ? 'b' : 'w',
+    castling: parts[2] && parts[2] !== '-' ? parts[2] : '',
+    enPassant: /^[a-h][1-8]$/.test(parts[3] || '') ? parts[3] : '-',
+    halfmove: Math.max(0, Number(parts[4]) || 0),
+    fullmove: Math.max(1, Number(parts[5]) || 1)
+  };
+}
+function boardToFen(state) {
+  const rows = state.board.map((row) => {
+    let out = '';
+    let empty = 0;
+    for (const piece of row) {
+      if (!piece) empty += 1;
+      else {
+        if (empty) out += String(empty);
+        empty = 0;
+        out += piece;
+      }
+    }
+    if (empty) out += String(empty);
+    return out;
+  });
+  return `${rows.join('/')} ${state.turn} ${state.castling || '-'} ${state.enPassant || '-'} ${state.halfmove || 0} ${state.fullmove || 1}`;
+}
+function findKing(board, color) {
+  const king = color === 'w' ? 'K' : 'k';
+  for (let r = 0; r < 8; r += 1) for (let c = 0; c < 8; c += 1) if (board[r][c] === king) return { row: r, col: c };
+  return null;
+}
+function isSquareAttacked(state, row, col, byColor) {
+  const b = state.board;
+  const pawn = byColor === 'w' ? 'P' : 'p';
+  const pawnRow = byColor === 'w' ? row + 1 : row - 1;
+  for (const dc of [-1, 1]) if (inBounds(pawnRow, col + dc) && b[pawnRow][col + dc] === pawn) return true;
+  const knight = byColor === 'w' ? 'N' : 'n';
+  for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) if (inBounds(row+dr,col+dc) && b[row+dr][col+dc] === knight) return true;
+  const bishop = byColor === 'w' ? 'B' : 'b';
+  const rook = byColor === 'w' ? 'R' : 'r';
+  const queen = byColor === 'w' ? 'Q' : 'q';
+  for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+    let r = row + dr, c = col + dc;
+    while (inBounds(r,c)) {
+      const p = b[r][c];
+      if (p) { if (p === bishop || p === queen) return true; break; }
+      r += dr; c += dc;
+    }
+  }
+  for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+    let r = row + dr, c = col + dc;
+    while (inBounds(r,c)) {
+      const p = b[r][c];
+      if (p) { if (p === rook || p === queen) return true; break; }
+      r += dr; c += dc;
+    }
+  }
+  const king = byColor === 'w' ? 'K' : 'k';
+  for (let dr = -1; dr <= 1; dr += 1) for (let dc = -1; dc <= 1; dc += 1) if ((dr || dc) && inBounds(row+dr,col+dc) && b[row+dr][col+dc] === king) return true;
+  return false;
+}
+function isInCheck(state, color) {
+  const king = findKing(state.board, color);
+  return king ? isSquareAttacked(state, king.row, king.col, opposite(color)) : true;
+}
+function pushMove(moves, state, fromRow, fromCol, toRow, toCol, extras = {}) {
+  if (!inBounds(toRow,toCol)) return;
+  const piece = state.board[fromRow][fromCol];
+  const target = state.board[toRow][toCol];
+  if (target && colorOf(target) === colorOf(piece)) return;
+  moves.push({ from: posToSquare(fromRow, fromCol), to: posToSquare(toRow, toCol), piece, captured: target || '', ...extras });
+}
+function generatePseudoMoves(state, color, { includeCastling = true } = {}) {
+  const moves = [];
+  const b = state.board;
+  for (let r = 0; r < 8; r += 1) {
+    for (let c = 0; c < 8; c += 1) {
+      const piece = b[r][c];
+      if (!piece || colorOf(piece) !== color) continue;
+      const type = piece.toLowerCase();
+      if (type === 'p') {
+        const dir = color === 'w' ? -1 : 1;
+        const startRow = color === 'w' ? 6 : 1;
+        const promoteRow = color === 'w' ? 0 : 7;
+        const one = r + dir;
+        if (inBounds(one,c) && !b[one][c]) {
+          pushMove(moves, state, r,c,one,c, one === promoteRow ? { promotion: 'q' } : {});
+          const two = r + dir * 2;
+          if (r === startRow && inBounds(two,c) && !b[two][c]) pushMove(moves, state, r,c,two,c, { doublePawn: true });
+        }
+        for (const dc of [-1, 1]) {
+          const tr = r + dir, tc = c + dc;
+          if (!inBounds(tr,tc)) continue;
+          const target = b[tr][tc];
+          if (target && colorOf(target) !== color) pushMove(moves, state, r,c,tr,tc, tr === promoteRow ? { promotion: 'q' } : {});
+          if (state.enPassant && state.enPassant !== '-' && posToSquare(tr, tc) === state.enPassant) pushMove(moves, state, r,c,tr,tc, { enPassant: true, captured: color === 'w' ? 'p' : 'P' });
+        }
+      } else if (type === 'n') {
+        for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) pushMove(moves, state, r,c,r+dr,c+dc);
+      } else if (['b','r','q'].includes(type)) {
+        const dirs = type === 'b' ? [[-1,-1],[-1,1],[1,-1],[1,1]] : type === 'r' ? [[-1,0],[1,0],[0,-1],[0,1]] : [[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dr, dc] of dirs) {
+          let tr = r + dr, tc = c + dc;
+          while (inBounds(tr,tc)) {
+            const target = b[tr][tc];
+            if (!target) pushMove(moves, state, r,c,tr,tc);
+            else { if (colorOf(target) !== color) pushMove(moves, state, r,c,tr,tc); break; }
+            tr += dr; tc += dc;
+          }
+        }
+      } else if (type === 'k') {
+        for (let dr = -1; dr <= 1; dr += 1) for (let dc = -1; dc <= 1; dc += 1) if (dr || dc) pushMove(moves, state, r,c,r+dr,c+dc);
+        if (includeCastling && !isInCheck(state, color)) {
+          if (color === 'w' && r === 7 && c === 4) {
+            if (state.castling.includes('K') && !b[7][5] && !b[7][6] && b[7][7] === 'R' && !isSquareAttacked(state,7,5,'b') && !isSquareAttacked(state,7,6,'b')) pushMove(moves, state, r,c,7,6, { castle: 'K' });
+            if (state.castling.includes('Q') && !b[7][3] && !b[7][2] && !b[7][1] && b[7][0] === 'R' && !isSquareAttacked(state,7,3,'b') && !isSquareAttacked(state,7,2,'b')) pushMove(moves, state, r,c,7,2, { castle: 'Q' });
+          }
+          if (color === 'b' && r === 0 && c === 4) {
+            if (state.castling.includes('k') && !b[0][5] && !b[0][6] && b[0][7] === 'r' && !isSquareAttacked(state,0,5,'w') && !isSquareAttacked(state,0,6,'w')) pushMove(moves, state, r,c,0,6, { castle: 'k' });
+            if (state.castling.includes('q') && !b[0][3] && !b[0][2] && !b[0][1] && b[0][0] === 'r' && !isSquareAttacked(state,0,3,'w') && !isSquareAttacked(state,0,2,'w')) pushMove(moves, state, r,c,0,2, { castle: 'q' });
+          }
+        }
+      }
+    }
+  }
+  return moves;
+}
+function stripCastling(castling, chars) {
+  let next = castling || '';
+  for (const ch of chars) next = next.replace(ch, '');
+  return next;
+}
+function applyMove(state, move) {
+  const next = { ...state, board: cloneBoard(state.board) };
+  const { row: fr, col: fc } = squareToPos(move.from);
+  const { row: tr, col: tc } = squareToPos(move.to);
+  const piece = next.board[fr][fc];
+  const target = next.board[tr][tc];
+  const color = colorOf(piece);
+  next.board[fr][fc] = null;
+  if (move.enPassant) next.board[color === 'w' ? tr + 1 : tr - 1][tc] = null;
+  let placed = piece;
+  if (piece.toLowerCase() === 'p' && (tr === 0 || tr === 7)) placed = color === 'w' ? String(move.promotion || 'q').toUpperCase() : String(move.promotion || 'q').toLowerCase();
+  next.board[tr][tc] = placed;
+  if (move.castle) {
+    if (move.castle === 'K') { next.board[7][7] = null; next.board[7][5] = 'R'; }
+    if (move.castle === 'Q') { next.board[7][0] = null; next.board[7][3] = 'R'; }
+    if (move.castle === 'k') { next.board[0][7] = null; next.board[0][5] = 'r'; }
+    if (move.castle === 'q') { next.board[0][0] = null; next.board[0][3] = 'r'; }
+  }
+  if (piece === 'K') next.castling = stripCastling(next.castling, 'KQ');
+  if (piece === 'k') next.castling = stripCastling(next.castling, 'kq');
+  if (piece === 'R' && fr === 7 && fc === 0) next.castling = stripCastling(next.castling, 'Q');
+  if (piece === 'R' && fr === 7 && fc === 7) next.castling = stripCastling(next.castling, 'K');
+  if (piece === 'r' && fr === 0 && fc === 0) next.castling = stripCastling(next.castling, 'q');
+  if (piece === 'r' && fr === 0 && fc === 7) next.castling = stripCastling(next.castling, 'k');
+  if (target === 'R' && tr === 7 && tc === 0) next.castling = stripCastling(next.castling, 'Q');
+  if (target === 'R' && tr === 7 && tc === 7) next.castling = stripCastling(next.castling, 'K');
+  if (target === 'r' && tr === 0 && tc === 0) next.castling = stripCastling(next.castling, 'q');
+  if (target === 'r' && tr === 0 && tc === 7) next.castling = stripCastling(next.castling, 'k');
+  next.enPassant = '-';
+  if (piece.toLowerCase() === 'p' && Math.abs(tr - fr) === 2) next.enPassant = posToSquare((tr + fr) / 2, fc);
+  next.halfmove = (piece.toLowerCase() === 'p' || target || move.enPassant) ? 0 : (Number(next.halfmove) || 0) + 1;
+  if (state.turn === 'b') next.fullmove = (Number(next.fullmove) || 1) + 1;
+  next.turn = opposite(state.turn);
+  return next;
+}
+function legalMoves(state, color) {
+  return generatePseudoMoves(state, color).filter((m) => {
+    const next = applyMove(state, m);
+    return !isInCheck(next, color);
+  });
+}
+function findLegalMove(state, from, to, promotion = 'q') {
+  const color = state.turn;
+  const safePromotion = String(promotion || 'q').toLowerCase()[0] || 'q';
+  return legalMoves(state, color).find((m) => m.from === from && m.to === to && (!m.promotion || m.promotion === safePromotion || safePromotion)) || null;
+}
+function maybeFinishByBoard(r, movedByColor) {
+  const state = parseFen(r.fen);
+  const side = state.turn;
+  const moves = legalMoves(state, side);
+  const check = isInCheck(state, side);
+  r.check = check ? side : '';
+  if (moves.length === 0) {
+    r.status = 'finished';
+    r.result = check ? 'checkmate' : 'stalemate';
+    r.winnerColor = check ? movedByColor : 'draw';
+    const winner = check ? r.players.find((p) => p.color === movedByColor) : null;
+    r.winnerUid = winner?.uid || '';
+    return true;
+  }
+  if ((state.halfmove || 0) >= 100) {
+    r.status = 'finished';
+    r.result = 'fifty-move-draw';
+    r.winnerColor = 'draw';
+    return true;
+  }
+  return false;
+}
+async function readProfile(uid) {
+  const { db } = initFirebaseAdmin();
+  if (!db || !uid) return { uid, username: `Oyuncu-${String(uid).slice(0,5)}`, avatar: '', selectedFrame: 0, accountXp: 0 };
+  const snap = await db.collection('users').doc(uid).get().catch(() => null);
+  const data = snap?.exists ? (snap.data() || {}) : {};
+  return { uid, ...data };
+}
+async function buildPlayer(req, color) {
+  const uid = uidOf(req);
+  const profile = await readProfile(uid);
+  const name = displayNameFromProfile(profile, uid);
+  return {
+    uid,
+    name,
+    username: name,
+    avatar: safeStr(profile.avatar || profile.photoURL || '', 300),
+    selectedFrame: Math.max(0, Math.trunc(Number(profile.selectedFrame || profile.frame || 0) || 0)),
+    color,
+    timeLeftMs: FREE_TIME_MS,
+    connected: true,
+    joinedAt: now(),
+    lastSeenAt: now(),
+    disconnectedAt: 0
+  };
+}
+function publicPlayer(p, r, viewerUid = '') {
+  if (!p) return null;
+  return {
+    uid: viewerUid === p.uid ? p.uid : '',
+    playerKey: hashPlayerKey(r.id, p.uid),
+    username: p.username || p.name || 'Oyuncu',
+    name: p.username || p.name || 'Oyuncu',
+    avatar: p.avatar || '',
+    selectedFrame: Number(p.selectedFrame || 0) || 0,
+    color: p.color,
+    connected: !!p.connected,
+    timeLeftMs: Math.max(0, Math.trunc(Number(p.timeLeftMs) || 0)),
+    isMe: viewerUid === p.uid
+  };
+}
+function resultSummaryFor(r, viewerUid = '') {
+  if (r.status !== 'finished') return null;
+  const me = r.players.find((p) => p.uid === viewerUid);
+  const won = !!me && r.winnerUid === me.uid;
+  const draw = r.winnerColor === 'draw' || r.result === 'draw' || r.result === 'stalemate' || r.result === 'fifty-move-draw';
+  const xp = r.xpAwards?.[viewerUid]?.xpAwarded || 0;
+  const balance = r.settlement?.[viewerUid]?.balance;
+  const outcome = draw ? 'draw' : won ? 'win' : 'loss';
+  return {
+    gameType: 'chess', resultCode: r.result || 'finished', outcome, settledAt: r.finishedAt || r.updatedAt || now(),
+    title: draw ? 'BERABERE' : won ? 'KAZANDIN!' : 'KAYBETTİN',
+    message: draw
+      ? `Satranç berabere bitti.${xp ? ` +${xp} XP işlendi.` : ''}`
+      : won
+        ? `Satranç galibiyeti işlendi.${r.bet ? ` Pot: ${r.pot.toLocaleString('tr-TR')} MC.` : ''}${xp ? ` +${xp} XP.` : ''}`
+        : `Satranç maçı kayıp olarak işlendi.${xp ? ` +${xp} XP.` : ''}`,
+    xpAwarded: xp,
+    balance,
+    progression: r.xpAwards?.[viewerUid]?.progression || null
+  };
+}
+function publicRoom(r, viewerUid = '') {
+  const host = publicPlayer(r.players[0], r, viewerUid) || { username: 'Bilinmeyen', name: 'Bilinmeyen', color: 'w' };
+  const guest = publicPlayer(r.players[1], r, viewerUid) || null;
+  return {
+    id: r.id, roomId: r.id, status: r.status, mode: r.mode, bet: r.bet, pot: r.pot,
+    host, guest,
+    hostName: host.username, guestName: guest?.username || 'Bilinmeyen',
+    hostUid: host.uid || '', guestUid: guest?.uid || '',
+    players: r.players.map((p) => publicPlayer(p, r, viewerUid)),
+    turn: r.turn, fen: r.fen, moves: r.moves, winnerUid: viewerUid === r.winnerUid ? r.winnerUid : '', winnerColor: r.winnerColor || '', winner: r.winnerColor || '', result: r.result || '', resultSummary: resultSummaryFor(r, viewerUid), drawOfferBy: r.drawOfferBy && r.drawOfferBy !== viewerUid ? 'opponent' : r.drawOfferBy === viewerUid ? 'me' : '', check: r.check || '', stateVersion: r.stateVersion, createdAt: r.createdAt, updatedAt: r.updatedAt, finishedAt: r.finishedAt || 0
+  };
+}
+function activeRoomFor(uid) {
+  return [...rooms.values()].find((r) => r.status !== 'finished' && r.players.some((p) => p.uid === uid));
+}
+function findOpen({ uid, mode = 'free', bet = 0 } = {}) {
+  return [...rooms.values()].find((r) => r.status === 'waiting' && r.mode !== 'private' && r.mode !== 'bot' && r.mode === mode && Number(r.bet || 0) === Number(bet || 0) && r.players.length < 2 && !r.players.some((p) => p.uid === uid));
+}
+function touchRoom(r) { r.updatedAt = now(); }
+function syncClock(r) {
+  if (!r || r.status !== 'playing') return false;
+  const t = now();
+  if (!r.clock) r.clock = { lastTurnAt: t };
+  const current = r.players.find((p) => p.color === r.turn);
+  if (!current) return false;
+  const elapsed = Math.max(0, t - (r.clock.lastTurnAt || t));
+  if (elapsed > 0) {
+    current.timeLeftMs = Math.max(0, Math.trunc(Number(current.timeLeftMs || 0) - elapsed));
+    r.clock.lastTurnAt = t;
+  }
+  if (current.timeLeftMs <= 0) {
+    const winner = r.players.find((p) => p.uid !== current.uid);
+    r.status = 'finished';
+    r.result = 'timeout';
+    r.winnerUid = winner?.uid || '';
+    r.winnerColor = winner?.color || '';
+    r.finishedAt = t;
+    r.stateVersion += 1;
+    return true;
+  }
+  return false;
+}
+async function chargePlayer(req, r) {
+  if (!r.bet) return { ok: true, balance: await readBalance(uidOf(req)).catch(() => 0) };
+  return debitBalance({ uid: uidOf(req), amount: r.bet, reason: 'chess-bet', idempotencyKey: `chess:bet:${r.id}:${uidOf(req)}`, metadata: { roomId: r.id, mode: r.mode } });
+}
+async function applyXpAndStats({ uid, xp, outcome, roomId, mode, bet }) {
+  if (!uid || !xp) return { ok: true, xpAwarded: 0, progression: getProgression(0) };
+  const key = `chess:xp:${roomId}:${uid}:${outcome}`;
+  const memoryKey = `idem:${key}`;
+  if (runtimeStore.temporary.get(memoryKey)) return runtimeStore.temporary.get(memoryKey);
+  const { db } = initFirebaseAdmin();
+  if (!db) {
+    const xpKey = `xp:${uid}`;
+    const current = normalizeXpBigInt(runtimeStore.temporary.get(xpKey) || 0);
+    const next = current + BigInt(Math.max(0, Math.trunc(xp)));
+    const progression = getProgression(next);
+    runtimeStore.temporary.set(xpKey, next.toString(), 30 * 86400000);
+    const out = { ok: true, firestore: false, xpAwarded: xp, progression };
+    runtimeStore.temporary.set(memoryKey, out, 24 * 3600000);
+    return out;
+  }
+  const userRef = db.collection('users').doc(uid);
+  const idemRef = db.collection('idempotency').doc(key);
+  let output = null;
+  await db.runTransaction(async (tx) => {
+    const idem = await tx.get(idemRef);
+    if (idem.exists) { output = idem.data().result; return; }
+    const snap = await tx.get(userRef);
+    const data = snap.exists ? (snap.data() || {}) : {};
+    const current = normalizeXpBigInt(data.xp ?? data.accountXp ?? 0);
+    const next = current + BigInt(Math.max(0, Math.trunc(xp)));
+    const progression = getProgression(next);
+    const gameStats = data.gameStats && typeof data.gameStats === 'object' ? data.gameStats : {};
+    const chess = gameStats.chess && typeof gameStats.chess === 'object' ? gameStats.chess : {};
+    const total = gameStats.total && typeof gameStats.total === 'object' ? gameStats.total : {};
+    const patchChess = {
+      ...chess,
+      rounds: Number(chess.rounds || 0) + 1,
+      wins: Number(chess.wins || 0) + (outcome === 'win' ? 1 : 0),
+      losses: Number(chess.losses || 0) + (outcome === 'loss' ? 1 : 0),
+      draws: Number(chess.draws || 0) + (outcome === 'draw' ? 1 : 0)
+    };
+    patchChess.winRatePct = patchChess.rounds ? Math.round((patchChess.wins / patchChess.rounds) * 1000) / 10 : 0;
+    const patchTotal = {
+      ...total,
+      rounds: Number(total.rounds || 0) + 1,
+      wins: Number(total.wins || 0) + (outcome === 'win' ? 1 : 0),
+      losses: Number(total.losses || 0) + (outcome === 'loss' ? 1 : 0),
+      draws: Number(total.draws || 0) + (outcome === 'draw' ? 1 : 0)
+    };
+    patchTotal.winRatePct = patchTotal.rounds ? Math.round((patchTotal.wins / patchTotal.rounds) * 1000) / 10 : 0;
+    output = { ok: true, xpAwarded: xp, progression };
+    tx.set(userRef, { xp: progression.xp, accountXp: progression.currentXp, accountLevel: progression.accountLevel, level: progression.accountLevel, accountLevelProgressPct: progression.accountLevelProgressPct, progression, gameStats: { ...gameStats, chess: patchChess, total: patchTotal }, monthlyActiveScore: Number(data.monthlyActiveScore || 0) + 1, updatedAt: now() }, { merge: true });
+    tx.set(idemRef, { key, type: 'chess-xp', uid, roomId, mode, bet, outcome, createdAt: now(), result: output }, { merge: false });
+  });
+  runtimeStore.temporary.set(memoryKey, output, 24 * 3600000);
+  return output;
+}
+async function settleRoom(r, reason = '') {
+  if (!r || r.settled) return r;
+  if (r.status !== 'finished') return r;
+  r.settled = true;
+  r.finishedAt = r.finishedAt || now();
+  r.settlement = r.settlement || {};
+  r.xpAwards = r.xpAwards || {};
+  const isBetReal = r.bet > 0 && r.mode === 'bet' && r.players.length === 2;
+  const draw = r.winnerColor === 'draw' || ['draw','stalemate','fifty-move-draw'].includes(r.result);
+  if (isBetReal) {
+    if (draw) {
+      for (const p of r.players) {
+        const credit = await creditBalance({ uid: p.uid, amount: Math.floor(r.bet / 2), reason: 'chess-draw-half-refund', idempotencyKey: `chess:draw:${r.id}:${p.uid}`, metadata: { roomId: r.id, result: r.result } }).catch((error) => ({ ok: false, error: error.message }));
+        r.settlement[p.uid] = credit;
+      }
+    } else if (r.winnerUid) {
+      const credit = await creditBalance({ uid: r.winnerUid, amount: r.pot, reason: 'chess-win', idempotencyKey: `chess:win:${r.id}:${r.winnerUid}`, metadata: { roomId: r.id, result: r.result } }).catch((error) => ({ ok: false, error: error.message }));
+      r.settlement[r.winnerUid] = credit;
+    }
+  }
+  for (const p of r.players) {
+    if (r.mode === 'bot' || r.mode === 'free' || !isBetReal) continue;
+    const outcome = draw ? 'draw' : (p.uid === r.winnerUid ? 'win' : 'loss');
+    const base = Math.max(10, Math.floor(r.bet / 1000) * 10);
+    const xp = outcome === 'win' ? base * 2 : outcome === 'draw' ? Math.max(5, Math.floor(base / 2)) : base;
+    r.xpAwards[p.uid] = await applyXpAndStats({ uid: p.uid, xp, outcome, roomId: r.id, mode: r.mode, bet: r.bet }).catch((error) => ({ ok: false, xpAwarded: 0, error: error.message }));
+  }
+  console.info('[chess:settle]', JSON.stringify({ roomId: r.id, reason, result: r.result, winnerColor: r.winnerColor || '', bet: r.bet, pot: r.pot }));
+  emitRoom(r);
+  emitLobby();
+  return r;
+}
+async function finishRoom(r, { result, winnerUid = '', winnerColor = '', reason = '' } = {}) {
+  if (!r || r.status === 'finished') return r;
+  r.status = 'finished';
+  r.result = result || 'finished';
+  r.winnerUid = winnerUid || '';
+  r.winnerColor = winnerColor || (winnerUid ? r.players.find((p) => p.uid === winnerUid)?.color || '' : 'draw');
+  r.finishedAt = now();
+  r.stateVersion += 1;
+  touchRoom(r);
+  await settleRoom(r, reason || result);
+  return r;
+}
+async function createRoomFor(req, opts = {}) {
+  const owner = uidOf(req);
+  const existing = activeRoomFor(owner);
+  if (existing) return existing;
+  const betAmount = validateBetAmount(opts.bet, opts.mode);
+  const mode = normalizeMode(opts.mode, betAmount);
+  const player = await buildPlayer(req, 'w');
+  const r = { id: `ch_${now()}_${crypto.randomBytes(12).toString('hex')}`, status: mode === 'bot' ? 'playing' : 'waiting', mode, bet: mode === 'bot' ? 0 : betAmount, pot: mode === 'bot' ? 0 : betAmount, fen: INITIAL_FEN, turn: 'w', moves: [], moveIds: {}, stateVersion: 1, drawOfferBy: '', check: '', createdAt: now(), updatedAt: now(), finishedAt: 0, players: [player], clock: { lastTurnAt: now() }, settlement: {}, xpAwards: {} };
+  if (mode === 'bot') {
+    r.players.push({ uid: `bot_${r.id}`, name: 'PlayMatrix Bot', username: 'PlayMatrix Bot', avatar: '', selectedFrame: 0, color: 'b', timeLeftMs: FREE_TIME_MS, connected: true, joinedAt: now(), lastSeenAt: now(), isBot: true });
+  }
+  rooms.set(r.id, r);
+  return r;
+}
+function emitRoom(r) {
+  if (!ioRef || !r) return;
+  for (const p of r.players) if (p.uid && !p.isBot) ioRef.to(`chess:user:${p.uid}`).emit('chess:room', publicRoom(r, p.uid));
+  ioRef.to(`chess:${r.id}`).emit('chess:room_public', publicRoom(r, ''));
+}
+function emitLobby() {
+  if (!ioRef) return;
+  ioRef.to('chess:lobby').emit('chess:lobby', { ok: true, at: now() });
+}
+async function joinRoomFor(req, r) {
+  const playerUid = uidOf(req);
+  if (!r) throw createHttpError(404, 'ROOM_NOT_FOUND');
+  if (r.status === 'finished') throw createHttpError(409, 'ROOM_FINISHED');
+  if (r.players.some((p) => p.uid === playerUid)) { const p = r.players.find((x) => x.uid === playerUid); p.connected = true; p.lastSeenAt = now(); p.disconnectedAt = 0; return { room: r, charged: { ok: true, balance: await readBalance(playerUid).catch(() => 0) } }; }
+  if (r.players.length >= 2 || r.status !== 'waiting') throw createHttpError(409, 'ROOM_FULL');
+  const active = activeRoomFor(playerUid);
+  if (active && active.id !== r.id) throw createHttpError(409, 'ALREADY_IN_ACTIVE_CHESS_ROOM');
+  const reqAsPlayer = await buildPlayer(req, 'b');
+  const charged = await chargePlayer(req, r);
+  if (!charged.ok) throw createHttpError(409, charged.error || 'BET_CHARGE_FAILED');
+  r.players.push(reqAsPlayer);
+  r.pot += r.bet;
+  r.status = 'playing';
+  r.clock = { lastTurnAt: now() };
+  r.stateVersion += 1;
+  touchRoom(r);
+  emitRoom(r);
+  emitLobby();
+  return { room: r, charged };
+}
+async function makeBotMoveIfNeeded(r) {
+  if (!r || r.mode !== 'bot' || r.status !== 'playing' || r.turn !== 'b') return;
+  const state = parseFen(r.fen);
+  const moves = legalMoves(state, 'b');
+  if (!moves.length) return;
+  const capture = moves.find((m) => m.captured);
+  const checkMoves = moves.filter((m) => isInCheck(applyMove(state, m), 'w'));
+  const chosen = checkMoves[0] || capture || moves[Math.floor(Math.random() * moves.length)];
+  const next = applyMove(state, chosen);
+  r.fen = boardToFen(next);
+  r.turn = next.turn;
+  r.moves.push({ from: chosen.from, to: chosen.to, promotion: chosen.promotion || '', by: 'bot', color: 'b', fen: r.fen, at: now(), flags: chosen.castle ? 'castle' : chosen.enPassant ? 'ep' : chosen.captured ? 'capture' : '' });
+  r.stateVersion += 1;
+  maybeFinishByBoard(r, 'b');
+  if (r.status === 'finished') await settleRoom(r, 'bot-board');
+  touchRoom(r);
+  emitRoom(r);
+}
+
+router.get('/lobby', requireAuth, asyncRoute(async (req, res) => {
+  const viewerUid = uidOf(req);
+  for (const r of rooms.values()) syncClock(r);
+  const visible = [...rooms.values()].filter((r) => r.status !== 'finished' && r.mode !== 'private').map((r) => publicRoom(r, viewerUid));
+  res.json({ ok: true, rooms: visible });
+}));
+router.get('/profile', requireAuth, asyncRoute(async (req, res) => {
+  const profile = await readProfile(uidOf(req));
+  const balance = await readBalance(uidOf(req));
+  const progression = getProgression(profile.xp ?? profile.accountXp ?? 0);
+  res.json({ ok: true, user: { ...profile, balance, xp: progression.currentXp, accountXp: progression.currentXp, accountLevel: progression.accountLevel, level: progression.accountLevel, accountLevelProgressPct: progression.accountLevelProgressPct, progression } });
+}));
+router.post('/create', requireAuth, asyncRoute(async (req, res) => {
+  const r = await createRoomFor(req, { bet: req.body?.bet || 0, mode: req.body?.mode || '' });
+  let charged = { ok: true, balance: await readBalance(uidOf(req)).catch(() => 0) };
+  if (r.players[0]?.uid === uidOf(req) && r.bet && !r.hostCharged) {
+    charged = await chargePlayer(req, r);
+    if (!charged.ok) { rooms.delete(r.id); return res.status(409).json(charged); }
+    r.hostCharged = true;
+  }
+  touchRoom(r);
+  emitLobby();
+  res.json({ ok: true, room: publicRoom(r, uidOf(req)), balance: charged.balance });
+}));
+router.post('/join', requireAuth, asyncRoute(async (req, res) => {
+  const viewerUid = uidOf(req);
+  let r = null;
+  if (req.body?.roomId) r = rooms.get(String(req.body.roomId));
+  else {
+    const betAmount = validateBetAmount(req.body?.bet || 0, req.body?.mode || 'free');
+    const mode = normalizeMode(req.body?.mode || '', betAmount);
+    r = findOpen({ uid: viewerUid, mode, bet: betAmount });
+    if (!r) {
+      r = await createRoomFor(req, { bet: betAmount, mode });
+      let charged = { ok: true, balance: await readBalance(viewerUid).catch(() => 0) };
+      if (r.bet && !r.hostCharged) { charged = await chargePlayer(req, r); if (!charged.ok) { rooms.delete(r.id); return res.status(409).json(charged); } r.hostCharged = true; }
+      emitLobby();
+      return res.json({ ok: true, room: publicRoom(r, viewerUid), balance: charged.balance, queued: true });
+    }
+  }
+  const { room, charged } = await joinRoomFor(req, r);
+  res.json({ ok: true, room: publicRoom(room, viewerUid), balance: charged.balance });
+}));
+router.get('/state/:roomId', requireAuth, asyncRoute(async (req, res) => {
+  const r = rooms.get(String(req.params.roomId));
+  if (!r) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' });
+  const viewerUid = uidOf(req);
+  if (!r.players.some((p) => p.uid === viewerUid)) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
+  if (syncClock(r) && r.status === 'finished') await settleRoom(r, 'timeout-state');
+  res.json({ ok: true, room: publicRoom(r, viewerUid) });
+}));
+router.post('/ping', requireAuth, asyncRoute(async (req, res) => {
+  const r = rooms.get(String(req.body.roomId));
+  if (!r) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' });
+  const player = r.players.find((p) => p.uid === uidOf(req));
+  if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
+  player.connected = true; player.lastSeenAt = now(); player.disconnectedAt = 0;
+  if (syncClock(r) && r.status === 'finished') await settleRoom(r, 'timeout-ping');
+  touchRoom(r);
+  res.json({ ok: true, room: publicRoom(r, uidOf(req)) });
+}));
+router.post('/move', requireAuth, asyncRoute(async (req, res) => {
+  const r = rooms.get(String(req.body.roomId));
+  if (!r) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' });
+  const viewerUid = uidOf(req);
+  if (syncClock(r) && r.status === 'finished') { await settleRoom(r, 'timeout-before-move'); return res.status(409).json({ ok: false, error: 'ROOM_FINISHED', room: publicRoom(r, viewerUid) }); }
+  if (r.status !== 'playing') return res.status(409).json({ ok: false, error: 'ROOM_NOT_PLAYING' });
+  const player = r.players.find((p) => p.uid === viewerUid);
+  if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
+  if (player.color !== r.turn) return res.status(409).json({ ok: false, error: 'NOT_YOUR_TURN', room: publicRoom(r, viewerUid) });
+  const clientMoveId = safeStr(req.body.clientMoveId || '', 140);
+  if (clientMoveId && r.moveIds[clientMoveId]) return res.json({ ok: true, duplicate: true, room: publicRoom(r, viewerUid) });
+  const expected = Number(req.body.expectedStateVersion || 0) || 0;
+  if (expected && expected !== r.stateVersion) return res.status(409).json({ ok: false, error: 'STATE_VERSION_MISMATCH', room: publicRoom(r, viewerUid) });
+  const from = String(req.body.from || '');
+  const to = String(req.body.to || '');
+  if (!/^[a-h][1-8]$/.test(from) || !/^[a-h][1-8]$/.test(to) || from === to) return res.status(400).json({ ok: false, error: 'INVALID_MOVE_FORMAT' });
+  const state = parseFen(r.fen);
+  const legal = findLegalMove(state, from, to, req.body.promotion || 'q');
+  if (!legal) return res.status(400).json({ ok: false, error: 'ILLEGAL_MOVE', room: publicRoom(r, viewerUid) });
+  const next = applyMove(state, legal);
+  r.fen = boardToFen(next);
+  r.turn = next.turn;
+  r.moves.push({ from, to, promotion: legal.promotion || '', by: viewerUid, color: player.color, fen: r.fen, at: now(), flags: legal.castle ? 'castle' : legal.enPassant ? 'ep' : legal.captured ? 'capture' : '' });
+  if (clientMoveId) r.moveIds[clientMoveId] = true;
+  r.drawOfferBy = '';
+  r.check = '';
+  r.stateVersion += 1;
+  r.clock = { lastTurnAt: now() };
+  maybeFinishByBoard(r, player.color);
+  if (r.status === 'finished') await settleRoom(r, 'board-result');
+  touchRoom(r);
+  emitRoom(r);
+  emitLobby();
+  if (r.status === 'playing') await makeBotMoveIfNeeded(r);
+  res.json({ ok: true, room: publicRoom(r, viewerUid) });
+}));
+router.post('/resign', requireAuth, asyncRoute(async (req, res) => {
+  const r = rooms.get(String(req.body.roomId));
+  if (!r) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' });
+  const player = r.players.find((p) => p.uid === uidOf(req));
+  if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
+  if (r.status === 'finished') return res.json({ ok: true, room: publicRoom(r, uidOf(req)) });
+  const winner = r.players.find((p) => p.uid !== player.uid);
+  await finishRoom(r, { result: 'resign', winnerUid: winner?.uid || '', winnerColor: winner?.color || '', reason: 'resign' });
+  res.json({ ok: true, room: publicRoom(r, uidOf(req)), balance: r.settlement?.[winner?.uid]?.balance });
+}));
+router.post('/draw', requireAuth, asyncRoute(async (req, res) => {
+  const r = rooms.get(String(req.body.roomId));
+  if (!r) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' });
+  const player = r.players.find((p) => p.uid === uidOf(req));
+  if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
+  if (r.status !== 'playing') return res.status(409).json({ ok: false, error: 'ROOM_NOT_PLAYING' });
+  if (r.drawOfferBy && r.drawOfferBy !== player.uid) {
+    await finishRoom(r, { result: 'draw', winnerColor: 'draw', reason: 'draw-accepted' });
+    return res.json({ ok: true, room: publicRoom(r, uidOf(req)) });
+  }
+  r.drawOfferBy = player.uid;
+  r.stateVersion += 1;
+  touchRoom(r);
+  emitRoom(r);
+  res.json({ ok: true, offered: true, room: publicRoom(r, uidOf(req)) });
+}));
+router.post('/leave', requireAuth, asyncRoute(async (req, res) => {
+  const r = rooms.get(String(req.body.roomId));
+  if (!r) return res.json({ ok: true });
+  const player = r.players.find((p) => p.uid === uidOf(req));
+  if (!player) return res.status(403).json({ ok: false, error: 'NOT_IN_ROOM' });
+  const reason = String(req.body.reason || '').toLowerCase();
+  if (r.status === 'waiting') {
+    if (r.bet && player.uid === r.players[0]?.uid) await creditBalance({ uid: player.uid, amount: r.bet, reason: 'chess-waiting-room-refund', idempotencyKey: `chess:waiting-refund:${r.id}:${player.uid}` }).catch(() => null);
+    rooms.delete(r.id); emitLobby(); return res.json({ ok: true, room: null });
+  }
+  if (r.status === 'playing' && reason === 'unload') {
+    player.connected = false; player.disconnectedAt = now(); touchRoom(r); emitRoom(r); return res.json({ ok: true, room: publicRoom(r, player.uid), reconnectGraceMs: RECONNECT_GRACE_MS });
+  }
+  if (r.status === 'playing') {
+    const winner = r.players.find((p) => p.uid !== player.uid);
+    await finishRoom(r, { result: 'leave', winnerUid: winner?.uid || '', winnerColor: winner?.color || '', reason: 'leave' });
+  }
+  res.json({ ok: true, room: publicRoom(r, player.uid) });
+}));
+function installSocket(io) {
+  ioRef = io;
+  io.on('connection', (socket) => {
+    socket.on('chess:lobby:subscribe', () => socket.join('chess:lobby'));
+    socket.on('chess:join', (roomId) => { if (roomId) socket.join(`chess:${String(roomId)}`); });
+    socket.on('chess:subscribe-user', (uid) => { if (uid) socket.join(`chess:user:${String(uid)}`); });
+  });
+}
+setInterval(async () => {
+  const cutoff = now() - ROOM_TTL_MS;
+  for (const [k, r] of rooms) {
+    if (r.status === 'playing') {
+      const timedOut = syncClock(r);
+      const disconnected = r.players.find((p) => !p.isBot && p.connected === false && p.disconnectedAt && now() - p.disconnectedAt > RECONNECT_GRACE_MS);
+      if (timedOut) await settleRoom(r, 'timer-sweep');
+      else if (disconnected) {
+        const winner = r.players.find((p) => p.uid !== disconnected.uid);
+        await finishRoom(r, { result: 'disconnect', winnerUid: winner?.uid || '', winnerColor: winner?.color || '', reason: 'disconnect' });
+      }
+    }
+    if (r.updatedAt < cutoff) {
+      if (r.status === 'waiting' && r.bet && r.players[0]?.uid) await creditBalance({ uid: r.players[0].uid, amount: r.bet, reason: 'chess-room-expire-refund', idempotencyKey: `chess:expire-refund:${r.id}:${r.players[0].uid}` }).catch(() => null);
+      rooms.delete(k);
+    }
+  }
+  const qcut = now() - QUEUE_TTL_MS;
+  for (const [uid, item] of queue) if (item.at < qcut) queue.delete(uid);
+}, 15000).unref();
+
+module.exports = { router, installSocket, _rooms: rooms, _engine: { parseFen, boardToFen, legalMoves, applyMove, isInCheck } };
