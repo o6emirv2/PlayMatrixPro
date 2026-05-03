@@ -2,7 +2,7 @@
 
 (() => {
   const FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
-  const FRAME_ASSET_COUNT = 18;
+  const FRAME_ASSET_COUNT = 100;
   const DEFAULT_FRAME_PROFILE = Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' });
   const FRAME_LEVEL_TO_ASSET = Object.freeze([
     { min: 1, max: 1, asset: 1 }, { min: 2, max: 2, asset: 2 }, { min: 3, max: 3, asset: 3 },
@@ -10,7 +10,7 @@
     { min: 7, max: 7, asset: 7 }, { min: 8, max: 8, asset: 8 }, { min: 9, max: 9, asset: 9 },
     { min: 10, max: 10, asset: 10 }, { min: 11, max: 11, asset: 11 }, { min: 12, max: 12, asset: 12 },
     { min: 13, max: 13, asset: 13 }, { min: 14, max: 14, asset: 14 }, { min: 15, max: 15, asset: 15 },
-    { min: 16, max: 16, asset: 16 }, { min: 17, max: 17, asset: 17 }, { min: 18, max: 100, asset: 18 }
+    { min: 16, max: 16, asset: 16 }, { min: 17, max: 17, asset: 17 }, { min: 18, max: 99, asset: 18 }, { min: 100, max: 100, asset: 100 }
   ]);
   const FRAME_VISUAL_PROFILES = Object.freeze({
     1: Object.freeze({ scale: 1.34, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
@@ -30,7 +30,8 @@
     15: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
     16: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
     17: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
-    18: Object.freeze({ scale: 1.46, avatar: 0.78, shiftX: '0px', shiftY: '4px' })
+    18: Object.freeze({ scale: 1.46, avatar: 0.78, shiftX: '0px', shiftY: '4px' }),
+    100: Object.freeze({ scale: 1.02, avatar: 0.72, shiftX: '0px', shiftY: '0px' })
   });
 
   function normalizeAssetPath(value = '') {

@@ -224,13 +224,17 @@ function renderTableRows(target, rows, emptyText, colspan) {
 
 function buildIssueCard(item = {}) {
   const card = el('div', 'issue');
+  const area = item.area || item.game || item.scope || 'Alan';
+  const errorText = item.error || item.title || item.message || 'Hata';
+  const reasonText = item.reason || item.body || item.path || '—';
+  const solutionText = item.solution || (String(item.game || '').match(/chess|crash/i) ? 'İlgili oyun dosyası / API akışı kontrol edilmeli.' : '—');
   const reason = document.createElement('div');
   reason.className = 'issue-reason';
-  reason.textContent = `Neden: ${item.reason || '—'}`;
+  reason.textContent = `Neden: ${reasonText}`;
   const solution = document.createElement('div');
   solution.className = 'issue-solution';
-  solution.textContent = `Çözüm: ${item.solution || '—'}`;
-  card.append(el('span', 'meta', item.area || 'Alan'), el('strong', '', item.error || 'Hata'), reason, solution);
+  solution.textContent = `Çözüm: ${solutionText}`;
+  card.append(el('span', 'meta', area), el('strong', '', errorText), reason, solution);
   return card;
 }
 

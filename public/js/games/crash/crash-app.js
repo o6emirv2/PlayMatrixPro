@@ -121,8 +121,8 @@ const INLINE_DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3
     }
 
     function getCrashFrameIndex(player) {
-        const explicit = resolveFrameIndex(player?.selectedFrame ?? player?.frame ?? 0);
-        return explicit > 0 ? explicit : 0;
+        const raw = Math.trunc(Number(player?.selectedFrame ?? player?.frame ?? 0) || 0);
+        return Math.max(0, Math.min(100, raw));
     }
 
     function renderCrashAvatar(player, avatarUrl) {
@@ -130,7 +130,8 @@ const INLINE_DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3
         const avatarHtml = window.PMAvatar && typeof window.PMAvatar.buildHTML === 'function'
           ? window.PMAvatar.buildHTML({
               avatarUrl: avatarUrl || DEFAULT_AVATAR,
-              level: player?.selectedFrame ?? player?.frame ?? 0,
+              level: 0,
+              exactFrameIndex: frameIndex,
               sizePx: 40,
               extraClass: 't-avatar-core',
               imageClass: 't-avatar',
@@ -579,24 +580,11 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     function renderCrashTopbarAvatar(profile = {}) {
         if (!elUiAccountAvatarHost) return;
         const avatarUrl = profile.avatar || profile.photoURL || profile.avatarUrl || DEFAULT_AVATAR;
-        const frameIndex = Number(profile.selectedFrame || profile.frame || 0) || 0;
-        const accountLevel = getPlayerAccountLevel(profile);
-        if (window.PMAvatar && typeof window.PMAvatar.buildHTML === 'function') {
-            elUiAccountAvatarHost.innerHTML = window.PMAvatar.buildHTML({
-                avatarUrl: avatarUrl || DEFAULT_AVATAR,
-                selectedFrame: frameIndex,
-                accountLevel,
-                size: 'game-topbar'
-            });
-            return;
-        }
-        const safeAvatar = String(avatarUrl || DEFAULT_AVATAR).replace(/"/g, '&quot;');
-        const frameSrc = frameIndex > 0 ? `/public/assets/frames/frame-${frameIndex}.png` : '';
-        elUiAccountAvatarHost.innerHTML = `
-            <div class="pm-avatar-frame pm-avatar-frame--game-topbar">
-                <img class="pm-avatar-frame__avatar" src="${safeAvatar}" alt="Avatar" loading="lazy" decoding="async">
-                ${frameSrc ? `<img class="pm-avatar-frame__frame" src="${frameSrc}" alt="" loading="lazy" decoding="async">` : ''}
-            </div>`;
+        const safeAvatar = escapeHTML(avatarUrl || DEFAULT_AVATAR);
+        const signature = JSON.stringify({ avatar: safeAvatar });
+        if (elUiAccountAvatarHost.dataset.pmAvatarSig === signature && elUiAccountAvatarHost.childElementCount) return;
+        elUiAccountAvatarHost.dataset.pmAvatarSig = signature;
+        elUiAccountAvatarHost.innerHTML = `<img class="pm-game-topbar-avatar-only" src="${safeAvatar}" alt="Avatar" loading="lazy" decoding="async" draggable="false">`;
     }
 
     function applyCrashProgression(profile = {}, { animate = false } = {}) {

@@ -819,7 +819,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         });
         chessSocket.on('chess:lobby', () => { if (!currentRoomId) fetchLobby(false).catch(() => null); });
         chessSocket.on('chess:room', (room) => { if (room?.id && room.id === currentRoomId) { syncBoardUI(room); showGameNotice(''); } });
-        chessSocket.on('chess:room_public', (room) => { if (room?.id && room.id === currentRoomId) { syncBoardUI(room); showGameNotice(''); } });
+        /* Satranç kişisel state artık chess:room üzerinden gelir; public oda yayını dinlenmez. */
         return chessSocket;
       } catch (_) { return null; }
     }
@@ -940,57 +940,47 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
 
     function applyFramedAvatar(avatarId, frameId, avatarUrl, selectedFrameLevel, explicitFrameUrl = '') {
       const host = document.getElementById(`${avatarId}Host`) || document.getElementById(avatarId)?.parentElement;
+      if (!host) return;
       const safeAvatar = avatarUrl || DEFAULT_AVATAR;
-      const frameValue = Number(selectedFrameLevel || 0) || 0;
-      const directFrame = explicitFrameUrl || (frameValue >= 100 ? `/public/assets/frames/frame-${Math.trunc(frameValue)}.png` : '');
-      const signature = JSON.stringify({ avatar: safeAvatar, frame: frameValue, directFrame });
-      if (avatarRenderCache.get(avatarId) === signature && host?.childElementCount) return;
+      const rawFrame = Math.max(0, Math.min(100, Math.trunc(Number(selectedFrameLevel || 0) || 0)));
+      const explicitIndexMatch = String(explicitFrameUrl || '').match(/frame-(\d+)\.png/i);
+      const exactFrameIndex = explicitIndexMatch ? Math.max(0, Math.min(100, Math.trunc(Number(explicitIndexMatch[1]) || 0))) : rawFrame;
+      const signature = JSON.stringify({ avatar: safeAvatar, frame: exactFrameIndex });
+      if (avatarRenderCache.get(avatarId) === signature && host.childElementCount) return;
       avatarRenderCache.set(avatarId, signature);
-      if (directFrame && host) {
-        const wrap = document.createElement('div');
-        wrap.className = 'pm-avatar pm-game-avatar-shell';
-        const img = document.createElement('img');
-        img.className = 'p-avatar';
-        img.alt = 'Oyuncu avatarı';
-        img.src = safeAvatar;
-        const frame = document.createElement('img');
-        frame.className = 'pm-game-frame';
-        frame.alt = '';
-        frame.setAttribute('aria-hidden', 'true');
-        frame.src = directFrame;
-        wrap.append(img, frame);
-        host.replaceChildren(wrap);
-        return;
-      }
-      if (window.PMAvatar && host) {
+      if (window.PMAvatar && typeof window.PMAvatar.createNode === 'function') {
         try {
           const node = window.PMAvatar.createNode({
             avatarUrl: safeAvatar,
-            level: frameValue,
-            sizePx: 40,
+            level: 0,
+            exactFrameIndex,
+            sizePx: 54,
             extraClass: 'pm-game-avatar-shell',
             imageClass: 'p-avatar',
             wrapperClass: 'pm-avatar',
-            sizeTag: 'main',
+            sizeTag: 'chess-player',
             alt: 'Oyuncu avatarı'
           });
           host.replaceChildren(node);
           return;
         } catch (_) {}
       }
-      const avatarEl = document.getElementById(avatarId);
-      const frameEl = document.getElementById(frameId);
-      if (!avatarEl || !frameEl) return;
-      if (avatarEl.src !== safeAvatar) avatarEl.src = safeAvatar;
-      const frameIndex = resolveFrameIndex(frameValue);
-      if (frameIndex > 0) {
-        const src = `/public/assets/frames/frame-${frameIndex}.png`;
-        if (frameEl.src !== src) frameEl.src = src;
-        frameEl.hidden = false;
-      } else {
-        frameEl.hidden = true;
-        frameEl.removeAttribute('src');
+      const wrap = document.createElement('div');
+      wrap.className = 'pm-avatar pm-game-avatar-shell';
+      const img = document.createElement('img');
+      img.className = 'p-avatar';
+      img.alt = 'Oyuncu avatarı';
+      img.src = safeAvatar;
+      wrap.appendChild(img);
+      if (exactFrameIndex > 0) {
+        const frame = document.createElement('img');
+        frame.className = `pm-frame-image pm-avatar-shell__frame pm-game-frame frame-${exactFrameIndex}`;
+        frame.alt = '';
+        frame.setAttribute('aria-hidden', 'true');
+        frame.src = explicitFrameUrl || `/public/assets/frames/frame-${exactFrameIndex}.png`;
+        wrap.appendChild(frame);
       }
+      host.replaceChildren(wrap);
     }
 
     function maybeShowExtensionPrompt(r) {

@@ -27,13 +27,44 @@ app.use(compression());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
+function resolveGameScopeFromPath(value = '') {
+  const pathValue = String(value || '').toLowerCase();
+  if (pathValue.includes('/chess') || pathValue.includes('/satranc') || pathValue.includes('/satranç')) return 'chess';
+  if (pathValue.includes('/crash')) return 'crash';
+  return 'system';
+}
+function shouldRecordApiIssue(req, statusCode) {
+  const game = resolveGameScopeFromPath(req.originalUrl || req.url);
+  if (game === 'chess' || game === 'crash') return true;
+  return Number(statusCode) >= 500;
+}
 app.use((req, res, next) => {
   const startedAt = Date.now();
   res.on('finish', () => {
-    if (res.statusCode >= 400) {
-      const row = { id:`api_${Date.now()}_${Math.random().toString(36).slice(2)}`, scope:'api.error', game: String(req.originalUrl || req.url).includes('/chess') ? 'chess' : String(req.originalUrl || req.url).includes('/crash') ? 'crash' : 'system', method: req.method, path: req.originalUrl || req.url, status: res.statusCode, ms: Date.now() - startedAt, requestId: req.headers['x-request-id'] || null, message:`${req.method} ${req.originalUrl || req.url} ${res.statusCode}`, createdAt:Date.now(), severity:res.statusCode >= 500 ? 'error' : 'warning' };
+    if (res.statusCode >= 400 && shouldRecordApiIssue(req, res.statusCode)) {
+      const game = resolveGameScopeFromPath(req.originalUrl || req.url);
+      const status = Number(res.statusCode || 0);
+      const row = {
+        id:`api_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        scope: status >= 500 ? 'api.error' : 'api.warning',
+        area: game === 'system' ? 'Sunucu' : `${game === 'chess' ? 'Satranç' : 'Crash'} Backend`,
+        game,
+        method: req.method,
+        path: req.originalUrl || req.url,
+        status,
+        ms: Date.now() - startedAt,
+        requestId: req.headers['x-request-id'] || null,
+        message:`${req.method} ${req.originalUrl || req.url} ${status}`,
+        error:`${req.method} ${req.originalUrl || req.url} ${status}`,
+        reason: status >= 500 ? 'Sunucu tarafında beklenmeyen hata oluştu.' : 'Oyun API isteği backend tarafından reddedildi.',
+        solution: status >= 500 ? 'Render logu ve ilgili oyun backend route kontrol edilmeli.' : 'İstek parametreleri, auth durumu ve oyun stateVersion uyumu kontrol edilmeli.',
+        createdAt:Date.now(),
+        severity:status >= 500 ? 'error' : 'warning'
+      };
       runtimeStore.errors.set(row.id, row, 24*3600000);
-      console.error('[api:error]', JSON.stringify({ method: row.method, path: row.path, status: row.status, ms: row.ms, requestId: row.requestId, game: row.game }));
+      const tag = status >= 500 ? '[api:error]' : '[api:warning]';
+      const log = status >= 500 ? console.error : console.warn;
+      log(tag, JSON.stringify({ method: row.method, path: row.path, status: row.status, ms: row.ms, requestId: row.requestId, game: row.game }));
     }
   });
   next();
@@ -70,10 +101,26 @@ app.use('/api/games/pattern-master', require('./server/games/pattern-master').ro
 
 async function captureClientError(req, res) {
   const payload = { ...(req.body || {}), path: req.body?.path || req.headers.referer || '', userAgent: req.headers['user-agent'] || '', at: Date.now() };
-  runtimeStore.errors.set(`${Date.now()}_${Math.random()}`, payload, 24*3600000);
-  console.error('[client:error]', JSON.stringify({ type: payload.type || 'client', message: String(payload.message || '').slice(0, 400), path: String(payload.path || '').slice(0, 240), source: String(payload.source || '').slice(0, 240), line: payload.line || null }));
-  await routeData({ classification:'IMPORTANT', collection:'clientErrors', payload });
-  res.status(202).json({ ok:true });
+  const game = String(payload.game || resolveGameScopeFromPath(`${payload.path || ''} ${payload.source || ''}`)).toLowerCase();
+  const sourceText = `${payload.path || ''} ${payload.source || ''} ${payload.scope || ''}`.toLowerCase();
+  const isSupportedGame = game === 'chess' || game === 'crash' || sourceText.includes('/games/chess') || sourceText.includes('/games/crash') || sourceText.includes('crash-app') || sourceText.includes('satranc');
+  if (!isSupportedGame) return res.status(202).json({ ok:true, discarded:true });
+  const normalizedGame = game === 'crash' || sourceText.includes('crash') ? 'crash' : 'chess';
+  const row = {
+    ...payload,
+    id:`client_${normalizedGame}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    game: normalizedGame,
+    scope: String(payload.scope || payload.type || 'client.error'),
+    area: normalizedGame === 'chess' ? 'Satranç Frontend' : 'Crash Frontend',
+    error: String(payload.message || payload.error || 'Frontend hata kaydı').slice(0, 400),
+    reason: String(payload.reason || 'Oyun istemcisinde yakalanan hata veya reddedilen işlem.').slice(0, 400),
+    solution: String(payload.solution || 'İlgili oyun script, socket veya API cevabı kontrol edilmeli.').slice(0, 400),
+    createdAt: Date.now(),
+    severity: payload.severity || 'error'
+  };
+  runtimeStore.errors.set(row.id, row, 24*3600000);
+  console.error('[client:game:error]', JSON.stringify({ game: row.game, scope: row.scope, message: row.error, path: String(row.path || '').slice(0, 180), source: String(row.source || '').slice(0, 180), line: row.line || null }));
+  res.status(202).json({ ok:true, stored:'runtime' });
 }
 app.post('/api/client/error', captureClientError);
 app.post('/api/client-errors', captureClientError);

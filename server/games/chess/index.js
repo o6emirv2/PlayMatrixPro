@@ -59,7 +59,7 @@ function safeStr(value, max = 80) {
   return String(value ?? '').replace(/[<>]/g, '').trim().slice(0, max);
 }
 function reportChessIssue(scope, details = {}) {
-  const row = { id: `chess_${Date.now()}_${Math.random().toString(36).slice(2)}`, game: 'chess', scope: String(scope || 'chess.unknown'), message: String(details.error || details.message || scope || 'Satranç olayı').slice(0, 500), details, createdAt: Date.now(), severity: details.severity || 'error' };
+  const row = { id: `chess_${Date.now()}_${Math.random().toString(36).slice(2)}`, game: 'chess', scope: String(scope || 'chess.unknown'), area: details.area || 'Satranç Backend', error: String(details.error || details.message || scope || 'Satranç olayı').slice(0, 500), message: String(details.error || details.message || scope || 'Satranç olayı').slice(0, 500), reason: details.reason || (details.status ? `HTTP ${details.status} / ${scope}` : 'Satranç backend işleminde hata yakalandı.'), solution: details.solution || 'Satranç backend route, socket veya oda state akışı kontrol edilmeli.', details, createdAt: Date.now(), severity: details.severity || 'error' };
   runtimeStore.errors.set(row.id, row, 24 * 3600000);
   const method = row.severity === 'info' ? 'info' : row.severity === 'warning' ? 'warn' : 'error';
   console[method]('[game:issue:chess]', JSON.stringify({ scope: row.scope, message: row.message, roomId: details.roomId || '', status: details.status || '', severity: row.severity }));
@@ -620,7 +620,6 @@ async function createRoomFor(req, opts = {}) {
 function emitRoom(r) {
   if (!ioRef || !r) return;
   for (const p of r.players) if (p.uid && !p.isBot) ioRef.to(`chess:user:${p.uid}`).emit('chess:room', publicRoom(r, p.uid));
-  ioRef.to(`chess:${r.id}`).emit('chess:room_public', publicRoom(r, ''));
 }
 function emitLobby() {
   if (!ioRef) return;

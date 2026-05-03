@@ -212,13 +212,41 @@ router.get('/admin/matrix/dashboard', async (req, res) => {
 });
 router.get('/admin/matrix/promos', async (_req, res) => { const { db } = fb(); const items = []; if (db) { try { const snap = await db.collection('promos').limit(100).get(); snap.forEach(d => { const x = d.data() || {}; items.push({ id:d.id, code:x.code || d.id, amount:x.amount || 0, limitLeft:Math.max(0, Number(x.maxClaims || x.usageLimit || 0) - Number(x.claimedCount || 0)), expiresAt:x.expiresAt || 0 }); }); } catch (_) {} } res.json({ ok:true, items }); });
 router.get('/admin/matrix/issues', (_req, res) => {
-  const runtimeErrors = runtimeStore.errors.values().sort((a,b)=>(b.createdAt || b.at || 0) - (a.createdAt || a.at || 0));
-  const adminErrors = listAdminLogs().map(x => ({ createdAt:x.at, game:'system', scope:x.event, message:JSON.stringify(x.payload || {}).slice(0,260), severity:'info' }));
-  const all = [...runtimeErrors, ...adminErrors].sort((a,b)=>(b.createdAt || b.at || 0) - (a.createdAt || a.at || 0)).slice(0,80);
-  const toIssue = (x) => ({ createdAt:x.createdAt || x.at || Date.now(), scope:x.scope || x.event || 'system', message:String(x.message || x.error || x.reason || JSON.stringify(x.details || x.payload || {})).slice(0,360), game:x.game || 'system', severity:x.severity || 'info', path:x.path || '', status:x.status || '' });
-  const games = all.filter(x => ['chess','crash'].includes(String(x.game || '').toLowerCase())).slice(0,30).map(x => ({ title:`${String(x.game).toUpperCase()} = ${x.scope || 'HATA'}`, body:`${x.message || x.error || 'Kayıt'}${x.path ? ` • ${x.path}` : ''}` }));
-  const systems = all.filter(x => !['chess','crash'].includes(String(x.game || '').toLowerCase())).slice(0,30).map(x => ({ title:`SİSTEM = ${x.scope || 'KAYIT'}`, body:String(x.message || x.error || JSON.stringify(x.details || x.payload || {})).slice(0,360) }));
-  res.json({ ok:true, games, systems, recentErrors: all.map(toIssue) });
+  const all = runtimeStore.errors.values()
+    .sort((a,b)=>(b.createdAt || b.at || 0) - (a.createdAt || a.at || 0))
+    .slice(0,120);
+  const gameTitle = (game) => String(game || '').toLowerCase() === 'chess' ? 'Satranç' : String(game || '').toLowerCase() === 'crash' ? 'Crash' : 'Sistem';
+  const normalizeIssue = (x = {}) => {
+    const game = String(x.game || '').toLowerCase();
+    const message = String(x.message || x.error || x.reason || JSON.stringify(x.details || x.payload || {})).slice(0, 360) || 'Kayıt';
+    const path = String(x.path || x.endpoint || '').slice(0, 180);
+    const scope = String(x.scope || x.event || 'runtime').slice(0, 100);
+    return {
+      createdAt: x.createdAt || x.at || Date.now(),
+      game: game || 'system',
+      scope,
+      area: x.area || (game === 'chess' ? 'Satranç' : game === 'crash' ? 'Crash' : 'Sistem'),
+      error: x.error || message,
+      reason: x.reason || (x.status ? `HTTP ${x.status} / ${scope}` : scope),
+      solution: x.solution || (game === 'chess' || game === 'crash' ? 'İlgili oyun frontend/backend dosyası ve son API cevabı kontrol edilmeli.' : 'Sistem kaydı ayrı incelenmeli.'),
+      message,
+      path,
+      status: x.status || '',
+      severity: x.severity || 'info',
+      title: `${gameTitle(game)} = ${scope}`,
+      body: `${message}${path ? ` • ${path}` : ''}`
+    };
+  };
+  const gameIssues = all
+    .filter(x => ['chess','crash'].includes(String(x.game || '').toLowerCase()))
+    .map(normalizeIssue)
+    .slice(0, 30);
+  const systemIssues = all
+    .filter(x => !['chess','crash'].includes(String(x.game || '').toLowerCase()))
+    .filter(x => Number(x.status || 0) >= 500 || String(x.severity || '') === 'error')
+    .map(normalizeIssue)
+    .slice(0, 20);
+  res.json({ ok:true, games:gameIssues, systems:systemIssues, recentErrors:[...gameIssues, ...systemIssues].slice(0, 50) });
 });
 router.post('/admin/matrix/reset-nuclear', strictLimiter, async (req, res) => { if (String(req.body?.confirmText || '').toUpperCase() !== 'ONAYLIYORUM') return res.status(400).json({ ok:false, error:'CONFIRM_REQUIRED' }); logAdmin(req, 'admin.matrix.reset.requested', { fields:Array.isArray(req.body?.fields) ? req.body.fields : [] }); res.json({ ok:true, dryRun:true, message:'Güvenli mod: toplu sıfırlama dry-run olarak kaydedildi.' }); });
 router.patch('/admin/matrix/maintenance', strictLimiter, (req, res) => { runtimeStore.temporary.set('admin:maintenance', { classic:!!req.body?.classic, at:now(), actor:adminActor(req) }, 30*86400000); logAdmin(req, 'admin.matrix.maintenance', req.body || {}); res.json({ ok:true, maintenance:{ classic:!!req.body?.classic } }); });

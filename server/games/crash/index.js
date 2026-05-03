@@ -25,7 +25,7 @@ const RISK_DOC_ID = 'crash';
 const now = () => Date.now();
 const round = (value, digits = 2) => Number((Number(value) || 0).toFixed(digits));
 const uidOf = (req) => String(req.user?.uid || '');
-const hashPlayerKey = (uid) => crypto.createHash('sha256').update(String(uid || '')).digest('hex').slice(0, 12);
+const hashPlayerKey = (uid, roundId = '') => crypto.createHash('sha256').update(`${roundId}:${uid || ''}`).digest('hex').slice(0, 12);
 
 const DEFAULT_RISK = Object.freeze([
   { min: 1.01, max: 1.50, weight: 34 },

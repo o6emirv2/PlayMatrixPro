@@ -602,3 +602,31 @@
 .pm-chess-status-playing .fa-robot{color:#fbbf24;}
 .btn-join.btn-disabled{cursor:not-allowed!important;opacity:.62!important;filter:grayscale(.25)!important;}
 @media (max-width:560px){.player-info{grid-template-columns:54px minmax(0,1fr) 24px!important;gap:10px!important;}.pm-game-avatar-shell{width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;}.pm-game-avatar-shell .pm-game-frame,.pm-game-avatar-shell .pm-frame,.pm-game-avatar-shell [class*="frame"]{width:52px!important;height:52px!important;}.pm-game-avatar-shell .p-avatar,.pm-game-avatar-shell .pm-avatar-img,.pm-game-avatar-shell > .pm-avatar img:first-child{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;}#chessboard{border-width:8px!important;}}
+
+
+/* Chess v4 final avatar/frame and issue-visibility polish */
+.player-plate,
+.player-plate.active{transform:none!important;will-change:auto!important;}
+.player-info{grid-template-columns:64px minmax(0,1fr) 26px!important;gap:12px!important;align-items:center!important;overflow:hidden!important;}
+.pm-game-avatar-shell.pm-avatar,
+.pm-game-avatar-shell{width:56px!important;height:56px!important;min-width:56px!important;min-height:56px!important;max-width:56px!important;max-height:56px!important;display:grid!important;place-items:center!important;position:relative!important;overflow:visible!important;contain:layout paint!important;isolation:isolate!important;}
+.pm-game-avatar-shell .p-avatar,
+.pm-game-avatar-shell .pm-avatar-img{position:absolute!important;left:50%!important;top:50%!important;width:calc(100% * var(--pm-avatar-fit, .78))!important;height:calc(100% * var(--pm-avatar-fit, .78))!important;min-width:0!important;min-height:0!important;transform:translate(-50%,-50%)!important;object-fit:cover!important;border-radius:50%!important;z-index:2!important;box-shadow:0 0 0 1px rgba(255,255,255,.16),0 8px 18px rgba(0,0,0,.32)!important;}
+.pm-game-avatar-shell .pm-game-frame,
+.pm-game-avatar-shell .pm-frame,
+.pm-game-avatar-shell .pm-frame-image,
+.pm-game-avatar-shell .pm-avatar-shell__frame{position:absolute!important;left:50%!important;top:50%!important;width:calc(100% * var(--pm-frame-scale, 1.08))!important;height:calc(100% * var(--pm-frame-scale, 1.08))!important;max-width:none!important;max-height:none!important;transform:translate(calc(-50% + var(--pm-frame-shift-x, 0px)),calc(-50% + var(--pm-frame-shift-y, 0px)))!important;object-fit:contain!important;pointer-events:none!important;z-index:3!important;display:block!important;filter:drop-shadow(0 6px 12px rgba(0,0,0,.34))!important;}
+.pm-game-avatar-shell[data-frame-index="100"],
+.pm-game-avatar-shell[data-frame-asset-index="100"]{--pm-avatar-fit:.70!important;--pm-frame-scale:1.03!important;--pm-frame-shift-y:0px!important;}
+.pm-game-topbar-avatar-host .pm-frame,
+.pm-game-topbar-avatar-host .pm-frame-image,
+.pm-game-topbar-avatar-host .pm-avatar-shell__frame,
+.pm-game-topbar-avatar-host .pm-avatar-frame,
+.pm-game-topbar-avatar-host [class*="frame"]{display:none!important;visibility:hidden!important;}
+.pm-game-topbar-avatar-host img.pm-game-topbar-avatar-fallback,
+.pm-game-topbar-avatar-host .pm-avatar-img{display:block!important;width:100%!important;height:100%!important;object-fit:cover!important;border-radius:50%!important;}
+@media (max-width:560px){
+  .player-info{grid-template-columns:62px minmax(0,1fr) 24px!important;}
+  .pm-game-avatar-shell.pm-avatar,
+  .pm-game-avatar-shell{width:54px!important;height:54px!important;min-width:54px!important;min-height:54px!important;max-width:54px!important;max-height:54px!important;}
+}
