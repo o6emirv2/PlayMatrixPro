@@ -1,8 +1,8 @@
 export const HOME_GAME_ROUTES = Object.freeze({
-  crash: "/games/crash",
-  chess: "/games/chess",
-  satranc: "/games/chess",
-  pisti: "/games/pisti",
+  crash: "/static-games/crash",
+  chess: "/static-games/chess",
+  satranc: "/static-games/chess",
+  pisti: "/static-games/pisti",
   pattern: "/games/pattern-master",
   patternmaster: "/games/pattern-master",
   space: "/games/space",
@@ -12,9 +12,9 @@ export const HOME_GAME_ROUTES = Object.freeze({
 });
 
 export const HOME_GAMES = Object.freeze([
-  { key: "crash", name: "Crash", category: "online", access: "auth", url: HOME_GAME_ROUTES.crash, icon: "fa-arrow-trend-up" },
-  { key: "satranc", name: "Satranç", category: "online", access: "auth", url: HOME_GAME_ROUTES.satranc, icon: "fa-chess" },
-  { key: "pisti", name: "Pişti", category: "online", access: "auth", url: HOME_GAME_ROUTES.pisti, icon: "fa-layer-group" },
+  { key: "crash", name: "Crash", category: "static", access: "public", url: HOME_GAME_ROUTES.crash, icon: "fa-arrow-trend-up" },
+  { key: "satranc", name: "Satranç", category: "static", access: "public", url: HOME_GAME_ROUTES.satranc, icon: "fa-chess" },
+  { key: "pisti", name: "Pişti", category: "static", access: "public", url: HOME_GAME_ROUTES.pisti, icon: "fa-layer-group" },
   { key: "patternmaster", name: "Pattern Master", category: "classic", access: "free", url: HOME_GAME_ROUTES.patternmaster, icon: "fa-shapes" },
   { key: "spacepro", name: "Space Pro", category: "classic", access: "free", url: HOME_GAME_ROUTES.spacepro, icon: "fa-user-astronaut" },
   { key: "snakepro", name: "Snake Pro", category: "classic", access: "free", url: HOME_GAME_ROUTES.snakepro, icon: "fa-wave-square" }
@@ -77,7 +77,7 @@ function installOnlineGameAuthGuard(root = document) {
     const href = trigger.getAttribute?.('href') || '';
     if (!href && trigger.dataset.requiresAuth !== 'true') return;
     const normalized = normalizeGameRoute(href || trigger.dataset.href || '');
-    const isOnline = /\/games\/(crash|chess|pisti)$/i.test(normalized);
+    const isOnline = /\/games\/(snake|space|pattern-master)$/i.test(normalized);
     if (!isOnline && trigger.dataset.requiresAuth !== 'true') return;
     if (getCurrentHomeUser()) return;
     event.preventDefault();

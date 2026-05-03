@@ -163,9 +163,9 @@
     return 'game-card--default';
   }
   const FALLBACK_GAMES = [
-    { name: 'Crash', category: 'online', access: 'auth', url: '/games/crash', icon: 'fa-arrow-trend-up', desc: 'Refleks ve zamanlama odaklı online multiplier oyunu.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'] },
-    { name: 'Satranç', category: 'online', access: 'auth', url: '/games/chess', icon: 'fa-chess', desc: 'Modern arayüzlü online satranç arenası.', tags: ['PvP', 'Strateji', 'Arena'] },
-    { name: 'Pişti', category: 'online', access: 'auth', url: '/games/pisti', icon: 'fa-layer-group', desc: 'Gerçek oyuncularla online pişti masaları.', tags: ['Kart', 'Online', 'Klasik'] },
+    { name: 'Crash', category: 'static', access: 'public', url: '/static-games/crash', icon: 'fa-arrow-trend-up', desc: 'Canlı backendden bağımsız statik Crash ön yüzü.', tags: ['Statik', 'Rekabet', 'Hızlı Tur'] },
+    { name: 'Satranç', category: 'static', access: 'public', url: '/static-games/chess', icon: 'fa-chess', desc: 'Canlı backendden bağımsız statik Satranç ön yüzü.', tags: ['PvP', 'Strateji', 'Arena'] },
+    { name: 'Pişti', category: 'static', access: 'public', url: '/static-games/pisti', icon: 'fa-layer-group', desc: 'Canlı backendden bağımsız statik Pişti ön yüzü.', tags: ['Kart', 'Statik', 'Klasik'] },
     { name: 'Pattern Master', category: 'classic', access: 'free', url: '/games/pattern-master', icon: 'fa-shapes', desc: 'Dikkat ve görsel hafıza oyunu.', tags: ['Ücretsiz', 'Zeka', 'Refleks'] },
     { name: 'Space Pro', category: 'classic', access: 'free', url: '/games/space', icon: 'fa-user-astronaut', desc: 'Hızlı klasik arcade uzay oyunu.', tags: ['Arcade', 'Retro', 'Ücretsiz'] },
     { name: 'Snake Pro', category: 'classic', access: 'free', url: '/games/snake', icon: 'fa-wave-square', desc: 'Retro hisli akıcı snake oyunu.', tags: ['Retro', 'Arcade', 'Ücretsiz'] }
@@ -189,7 +189,7 @@
       gameIcon.appendChild(createIcon(game.icon));
       const tagStack = document.createElement('div');
       tagStack.className = 'tag-stack';
-      const category = createText('span', 'mini-tag', game.category === 'online' ? 'Online' : 'Klasik');
+      const category = createText('span', 'mini-tag', game.category === 'online' ? 'Statik' : 'Klasik');
       if (game.category === 'online') category.prepend(createText('span', 'live-dot', ''));
       const access = createText('span', 'mini-tag', game.access === 'auth' ? 'Giriş Gerekir' : 'Ücretsiz');
       tagStack.append(category, access);
@@ -208,7 +208,7 @@
       link.href = game.url;
       link.dataset.gameName = game.name;
       if (game.access === 'auth') link.dataset.requiresAuth = 'true';
-      link.append(createText('span', '', game.access === 'auth' ? 'Giriş Yap' : 'Hemen Oyna'), createIcon('fa-arrow-right'));
+      link.append(createText('span', '', game.access === 'auth' ? 'Aç' : 'Hemen Oyna'), createIcon('fa-arrow-right'));
       foot.appendChild(link);
       card.append(top, body, foot);
       fragment.appendChild(card);
@@ -320,7 +320,7 @@
       if (fullName) fullName.classList.toggle('hidden', mode !== 'register');
       if (username) username.classList.toggle('hidden', mode !== 'register');
       const submit = $('authSubmitBtn');
-      if (submit) submit.textContent = mode === 'register' ? 'Kayıt Ol' : 'Giriş Yap';
+      if (submit) submit.textContent = mode === 'register' ? 'Kayıt Ol' : 'Aç';
     } catch (_) {}
   }
   function openSheetFallback(sheetName, title, subtitle) {
