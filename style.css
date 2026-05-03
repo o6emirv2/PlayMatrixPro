@@ -5530,8 +5530,4 @@ body{min-height:100svh;overflow-x:hidden}.pm-avatar-shell,.pm-game-avatar-shell{
   contain: paint layout !important;
 }
 
-/* V9 mobile scroll hardening */
-html, body { min-height: 100%; overflow-x: hidden; overscroll-behavior-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
-body { padding-bottom: max(96px, env(safe-area-inset-bottom)); }
-.modal-overlay, .profile-sheet, .ps-modal, .avatar-picker-modal, .frame-picker-modal, .sheet-content, .modal-content { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
-.avatar-picker-grid, .frame-picker-grid, .avatar-grid, .frame-grid, .ps-modal-body, .sheet-body { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
+html,body{min-height:100%;overscroll-behavior-y:none;-webkit-overflow-scrolling:touch;touch-action:pan-y}body{overflow-y:auto!important;scroll-behavior:smooth}.sheet-content,.modal-card,.modal-body,.player-stats-modal-body,.ps-modal-content,.ps-chat-main,.ps-panel,.profile-sheet,.pm-scrollable,[data-scrollable="true"]{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}.matrix-modal.active,.sheet.active,.ps-modal.active{touch-action:auto}button,a,[role="button"],input,select,textarea{touch-action:manipulation}.lb-user-meta{user-select:none;-webkit-user-select:none}.lb-item{cursor:pointer}

@@ -5,10 +5,6 @@ export const PLAYMATRIX_FIREBASE_CONFIG = null;
 const FIREBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 const FIREBASE_SDK_TIMEOUT_MS = 7000;
-const PM_SESSION_TOKEN_KEY = 'pm_session_token';
-function readServerSessionToken() {
-  try { return window.sessionStorage?.getItem(PM_SESSION_TOKEN_KEY) || window.localStorage?.getItem(PM_SESSION_TOKEN_KEY) || ''; } catch (_) { return ''; }
-}
 
 let firebaseSdkPromise = null;
 
@@ -18,6 +14,15 @@ function normalizeBase(value) {
 
 function isProductionHost() {
   return /(^|\.)playmatrix\.com\.tr$/i.test(String(window.location.hostname || '').trim());
+}
+
+
+function readServerSessionToken() {
+  try {
+    return window.sessionStorage?.getItem('pm_session_token') || window.localStorage?.getItem('pm_session_token') || '';
+  } catch (_) {
+    return '';
+  }
 }
 
 function buildError(message, code, extra = {}) {
@@ -61,9 +66,9 @@ async function requestWithSessionFallback(core, endpoint, { method = 'GET', body
     try {
       const requestHeaders = { ...headers };
       if (body != null && !requestHeaders['Content-Type']) requestHeaders['Content-Type'] = 'application/json';
-      if (token) requestHeaders.Authorization = `Bearer ${token}`;
       const sessionToken = readServerSessionToken();
-      if (sessionToken) requestHeaders['x-session-token'] = sessionToken;
+      if (sessionToken && !requestHeaders['x-session-token']) requestHeaders['x-session-token'] = sessionToken;
+      if (token) requestHeaders.Authorization = `Bearer ${token}`;
       const response = await fetch(`${base}${endpoint}`, {
         method,
         credentials,
@@ -287,13 +292,14 @@ export async function initPlayMatrixOnlineCore(firebaseConfig = PLAYMATRIX_FIREB
     async createAuthedSocket(existingSocket = null, { authPayload = {}, transports = ['websocket', 'polling'], reconnection = true, reconnectionAttempts = 6, timeout = 6000, extraOptions = {} } = {}) {
       const base = await core.ensureApiBaseReady();
       const ioFactory = await core.ensureSocketClientReady();
-      const token = await core.getIdToken(true).catch(() => core.getIdToken(false));
+      const token = await core.getIdToken(true).catch(() => core.getIdToken(false)).catch(() => '');
+      const sessionToken = readServerSessionToken();
       if (existingSocket) {
         try { existingSocket.removeAllListeners?.(); } catch (_) {}
         try { existingSocket.disconnect?.(); } catch (_) {}
       }
       return ioFactory(base, {
-        auth: { token, ...authPayload },
+        auth: { token, sessionToken, ...authPayload },
         transports,
         reconnection,
         reconnectionAttempts,

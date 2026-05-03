@@ -13,7 +13,7 @@ const safe = (value, max = 300) => String(value || '').trim().slice(0, max).repl
 const money = (value) => Math.max(-10_000_000, Math.min(10_000_000, Math.trunc(Number(value) || 0)));
 const limitNumber = (value, fallback = 50, max = 200) => Math.max(1, Math.min(max, Math.trunc(Number(value) || fallback)));
 
-router.use(requireAuth, requireAdmin);
+router.use('/admin', requireAuth, requireAdmin);
 
 function fb() { return initFirebaseAdmin(); }
 function adminActor(req) { return { uid: req.user?.uid || '', email: req.user?.email || '' }; }

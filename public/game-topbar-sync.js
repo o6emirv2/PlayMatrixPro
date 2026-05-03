@@ -22,14 +22,15 @@
     const balance = Number(p.balance ?? p.mc ?? 0) || 0;
     const percent = pct(p);
     const setText=(id,text)=>{ const el=document.getElementById(id); if(el) el.textContent=text; };
+    const setMany=(ids,text)=>ids.forEach(id=>setText(id,text));
     setText('uiAccountLevelBadge', String(level));
-    setText('uiAccountBalance', fmt(balance));
-    setText('uiAccountProgressText', `${percent.toFixed(1)}%`);
+    setMany(['uiAccountBalance','uiBalance','ui-balance'], fmt(balance));
+    setMany(['uiAccountProgressText','uiAccountLevelPct'], `${percent.toFixed(1)}%`);
     setText('headerBalance', Math.floor(balance).toLocaleString('tr-TR'));
     setText('headerRankText', `Hesap Seviyesi ${level}`);
     setText('ddLevel', String(level));
     setText('ddPct', `${percent.toFixed(1)}%`);
-    const fillIds=['uiAccountProgressFill','topProgressFill','profileProgressFill','ddBar'];
+    const fillIds=['uiAccountProgressFill','uiAccountLevelBar','topProgressFill','profileProgressFill','ddBar'];
     fillIds.forEach(id=>{ const el=document.getElementById(id); if(el){ el.style.width=`${percent}%`; el.style.setProperty('--pm-progress',`${percent}%`); }});
     mountAvatar(p);
     try{ window.__PM_LAST_ACCOUNT_STATE__ = Object.assign({}, window.__PM_LAST_ACCOUNT_STATE__ || {}, p); }catch(_){ }

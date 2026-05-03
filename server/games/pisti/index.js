@@ -18,10 +18,9 @@ function createRoom({ hostProfile = {}, guestProfile = null, mode = '2P', bet = 
   const deck = makeDeck();
   const tableCards = deck.splice(0, 4);
   const host = createPlayer(hostProfile, deck.splice(0, 4));
-  const useBot = guestProfile !== false;
-  const guest = useBot ? createPlayer(guestProfile || { uid: 'bot', username: 'PlayMatrix Bot' }, deck.splice(0, 4)) : { uid: '', username: 'Bekleniyor', avatar: '', selectedFrame: 0, hand: [], score: 0, collected: 0, connected: false, opponentCardCount: 0 };
+  const guest = createPlayer(guestProfile || { uid: 'bot', username: 'PlayMatrix Bot' }, deck.splice(0, 4));
   const id = `pisti_${now()}_${crypto.randomBytes(4).toString('hex')}`;
-  const room = { id, roomId: id, roomName: clean(roomName, 48) || `${host.username} Masası`, hostName: host.username, mode: clean(mode, 12) || '2P', bet: Math.max(0, Math.floor(safeNum(bet, 0))), isPrivate: !!isPrivate, password: clean(password, 48), maxPlayers: 2, currentPlayers: guest.uid && guest.uid !== 'bot' ? 2 : 1, players: [host, guest], turn: 0, tableCards, deck, deckCount: deck.length, status: guest.uid === 'bot' ? 'playing' : 'waiting', winner: [], createdAt: now(), updatedAt: now(), stateVersion: 1, lastEvent: null };
+  const room = { id, roomId: id, roomName: clean(roomName, 48) || `${host.username} Masası`, hostName: host.username, mode: clean(mode, 12) || '2P', bet: Math.max(0, Math.floor(safeNum(bet, 0))), isPrivate: !!isPrivate, password: clean(password, 48), maxPlayers: 2, currentPlayers: guest.uid === 'bot' ? 1 : 2, players: [host, guest], turn: 0, tableCards, deck, deckCount: deck.length, status: guest.uid === 'bot' ? 'playing' : 'waiting', winner: [], createdAt: now(), updatedAt: now(), stateVersion: 1, lastEvent: null };
   refreshOpponentCounts(room);
   runtimeStore.rooms.set(`pisti:${id}`, room, MAX_ROOM_MS);
   return room;
@@ -37,7 +36,7 @@ function publicRoom(room, viewerUid = '') {
   return clone;
 }
 function lobbyRoom(room) { return { id: room.id, roomId: room.id, roomName: room.roomName, hostName: room.hostName, mode: room.mode, bet: room.bet, currentPlayers: room.currentPlayers, maxPlayers: room.maxPlayers, isPrivate: room.isPrivate, status: room.status, createdAt: room.createdAt, updatedAt: room.updatedAt }; }
-function joinRoom(room, profile = {}) { if (!room) throw new Error('ROOM_NOT_FOUND'); if (room.status !== 'waiting') throw new Error('ROOM_FULL'); const p = room.players[1]; Object.assign(p, createPlayer(profile, p.hand && p.hand.length ? p.hand : room.deck.splice(0, 4))); room.currentPlayers = 2; room.status = 'playing'; room.stateVersion += 1; return saveRoom(room); }
+function joinRoom(room, profile = {}) { if (!room) throw new Error('ROOM_NOT_FOUND'); if (room.status !== 'waiting') throw new Error('ROOM_FULL'); const p = room.players[1]; Object.assign(p, createPlayer(profile, p.hand || [])); room.currentPlayers = 2; room.status = 'playing'; room.stateVersion += 1; return saveRoom(room); }
 function maybeDeal(room) { if (!room.players.every(p => p.hand.length === 0)) return; if (room.deck.length <= 0) { finishRoom(room); return; } for (const p of room.players) p.hand = room.deck.splice(0, 4); room.stateVersion += 1; }
 function finishRoom(room) { room.status = 'finished'; const scores = room.players.map(p => p.score); const best = Math.max(...scores); room.winner = room.players.filter(p => p.score === best).map(p => p.uid); room.finishReason = 'normal'; room.resultSummary = { gameType: 'pisti', settledAt: now(), outcome: room.winner.length > 1 ? 'draw' : 'finished', title: room.winner.length > 1 ? 'BERABERE' : 'OYUN BİTTİ', message: 'Pişti sonucu backend tarafından doğrulandı.' }; }
 function botMoveIfNeeded(room) { const botIndex = room.players.findIndex(p => p.uid === 'bot'); if (botIndex < 0 || room.status !== 'playing' || room.turn !== botIndex) return; const bot = room.players[botIndex]; const card = bot.hand[0]; if (card) play(room, 'bot', card, { skipBot: true }); }

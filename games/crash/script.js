@@ -486,6 +486,17 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         return core.waitForAuthReady(timeoutMs);
     }
 
+    async function resolveBootUser(timeoutMs = 15000) {
+        try {
+            return await waitForAuthReady(timeoutMs);
+        } catch (error) {
+            const profile = await core.requestWithAuth('/api/me', { method: 'GET', timeoutMs: 6500, retries: 0, allowSessionFallback: true }).catch(() => null);
+            const fallbackUid = String(profile?.user?.uid || profile?.uid || profile?.profile?.uid || '').trim();
+            if (fallbackUid) return { uid: fallbackUid, sessionFallback: true };
+            throw error;
+        }
+    }
+
     async function fetchBootProfile() {
         const d = await api('/api/me');
         if (!d?.ok) throw new Error(d?.error || 'PROFILE_LOAD_FAILED');
@@ -521,7 +532,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
             setBootProgress(8);
             setBootStatus('Oturum doğrulanıyor...');
             setBootActions({ showEnter: false, showRetry: false });
-            const user = await waitForAuthReady(15000);
+            const user = await resolveBootUser(15000);
             uid = user.uid;
             setBootProgress(26);
             setBootStatus('Profil ve bakiye hazırlanıyor...');
@@ -1122,8 +1133,11 @@ async function connectStream() {
 let crashUiStarted = false;
 
 async function startApp(skipConnect = false) {
-    if (!auth.currentUser) throw new Error('NO_USER');
-    uid = auth.currentUser.uid;
+    if (auth.currentUser?.uid) uid = auth.currentUser.uid;
+    if (!uid) {
+        const user = await resolveBootUser(6500);
+        uid = user.uid;
+    }
     updateBal();
     if (!crashUiStarted) {
         bindQuickButtons();

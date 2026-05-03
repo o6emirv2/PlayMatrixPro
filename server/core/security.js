@@ -1,7 +1,7 @@
 const rateLimit = require('express-rate-limit');
 const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 const env = require('../config/env');
-const { runtimeStore } = require('../core/runtimeStore');
+const { runtimeStore } = require('./runtimeStore');
 const apiLimiter = rateLimit({ windowMs: 60_000, max: 240, standardHeaders: true, legacyHeaders: false });
 const strictLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 async function requireAuth(req, res, next) {
@@ -9,10 +9,13 @@ async function requireAuth(req, res, next) {
     const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
     const { auth } = initFirebaseAdmin();
     if (auth && token) { req.user = await auth.verifyIdToken(token); return next(); }
-    const sessionToken = String(req.headers['x-session-token'] || req.headers['X-Session-Token'] || '').trim();
+    const sessionToken = String(req.headers['x-session-token'] || req.cookies?.pm_session || req.body?.sessionToken || req.query?.sessionToken || '').trim();
     if (sessionToken) {
-      const session = runtimeStore.temporary.get(`session:${sessionToken}`);
-      if (session?.uid) { req.user = { uid: String(session.uid), email: String(session.email || ''), sessionSource: 'runtime-session' }; return next(); }
+      const session = runtimeStore.temporary.get(`session:${sessionToken}`) || runtimeStore.temporary.get(`adminSession:${sessionToken}`);
+      if (session?.uid) {
+        req.user = { uid: String(session.uid), email: String(session.email || ''), email_verified: !!session.emailVerified, sessionId: String(session.sessionId || ''), sessionSource: String(session.source || 'server_session') };
+        return next();
+      }
     }
     const devUid = req.headers['x-playmatrix-user'] || req.body?.uid || req.query?.uid;
     if (process.env.NODE_ENV !== 'production' && devUid) { req.user = { uid: String(devUid), email: 'local@playmatrix.test' }; return next(); }

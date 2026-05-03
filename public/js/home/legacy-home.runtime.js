@@ -1289,7 +1289,9 @@ function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) r
         name.textContent = String(user.username || "Anonim");
         const metaLine = document.createElement("div");
         metaLine.className = "lb-user-meta";
-        metaLine.textContent = `MC ${formatNumber(Number(user.balance || user.statistics?.balance || 0) || 0)} · ${formatNumber(Number(user.stats?.totalWins || user.statistics?.totalWins || 0) || 0)} G`;
+        const lbBalance = Number(user.balance ?? user.mc ?? user.coins ?? user.wallet ?? user.statistics?.balance ?? user.stats?.balance ?? user.profile?.balance ?? 0) || 0;
+        const lbWins = Number(user.totalWins ?? user.wins ?? user.matchWins ?? user.stats?.totalWins ?? user.statistics?.totalWins ?? user.gameStats?.total?.wins ?? user.gameStats?.chess?.wins ?? user.gameStats?.pisti?.wins ?? user.gameStats?.crash?.wins ?? 0) || 0;
+        metaLine.textContent = `MC ${formatNumber(lbBalance)} · ${formatNumber(lbWins)} G`;
         name.appendChild(metaLine);
         let scoreVal = "";
         if (tabType === "level") scoreVal = `Lv. ${Math.max(1, Number(user.accountLevel) || 1)}`;

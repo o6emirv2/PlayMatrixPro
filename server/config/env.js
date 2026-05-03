@@ -24,6 +24,11 @@ const env = Object.freeze({
   },
   adminEmails: split(process.env.ADMIN_EMAILS),
   adminUids: split(process.env.ADMIN_UIDS),
+  admin: {
+    secondFactorHashHex: process.env.ADMIN_PANEL_SECOND_FACTOR_HASH_HEX || '',
+    secondFactorSaltHex: process.env.ADMIN_PANEL_SECOND_FACTOR_SALT_HEX || '',
+    thirdFactorName: process.env.ADMIN_PANEL_THIRD_FACTOR_NAME || ''
+  },
   security: {
     adminHealthSurfaceEnabled: process.env.ADMIN_HEALTH_SURFACE_ENABLED === '1',
     cspReportOnly: process.env.SECURITY_CSP_REPORT_ONLY !== '0',

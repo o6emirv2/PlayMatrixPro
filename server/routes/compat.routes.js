@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const env = require('../config/env');
-const { requireAuth, requireAdmin, strictLimiter } = require('../core/security');
+const { requireAuth, strictLimiter } = require('../core/security');
 const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 const { runtimeStore } = require('../core/runtimeStore');
 const { getProgression } = require('../core/progressionService');
@@ -74,64 +74,42 @@ async function addBalance(uid, amount, reason, key) {
     return { ok: true, amount: safeAmount, reason };
   }});
 }
+
+async function grantChessWinReward(req, room, winnerUid) {
+  const uid = s(winnerUid, 160);
+  if (!uid || !room || room.rewardSettled) return { ok: true, granted: false, reason: 'NO_REWARD' };
+  const day = new Date().toISOString().slice(0, 10);
+  const counterKey = `chessWinCount:${uid}:${day}`;
+  const currentCount = Number(runtimeStore.temporary.get(counterKey) || 0) || 0;
+  if (currentCount >= 10) return { ok: true, granted: false, reason: 'DAILY_LIMIT_REACHED', dailyLimit: 10, dailyCount: currentCount };
+  const rewardKey = `chesswin:${room.id}:${uid}`;
+  const result = await addBalance(uid, 5000, 'chess-daily-win', rewardKey);
+  if (!result.duplicate) runtimeStore.temporary.set(counterKey, currentCount + 1, 36 * 3600000);
+  room.rewardSettled = true;
+  room.reward = { uid, amount: 5000, dailyCount: Math.min(10, currentCount + 1), dailyLimit: 10, at: now() };
+  try { chessGame.saveRoom(room); } catch (_) {}
+  return { ok: true, granted: !result.duplicate, ...room.reward };
+}
+function chessWinnerUid(room) {
+  if (!room || room.status !== 'finished') return '';
+  if (room.winner === 'white') return room.host?.uid || '';
+  if (room.winner === 'black') return room.guest?.uid || '';
+  return '';
+}
+
 function runtimePayload() { return { ok: true, runtime: { version: 8, environment: env.nodeEnv, publicBaseUrl: env.publicBaseUrl, canonicalOrigin: env.canonicalOrigin, apiBase: env.publicApiBase || env.publicBackendOrigin, expectedFirebaseProjectId: env.firebase.publicConfig.projectId, firebase: env.firebase.publicConfig, firebaseReady: true, source: 'render-env-contract' }, apiBase: env.publicApiBase || env.publicBackendOrigin, canonicalOrigin: env.canonicalOrigin, firebase: env.firebase.publicConfig }; }
 async function leaderboardProfiles() { const { db } = fb(); if (!db) return []; try { const snap = await db.collection('users').orderBy('accountXp', 'desc').limit(25).get(); return snap.docs.map(d => ({ uid: d.id, ...d.data() })); } catch (_) { try { const snap = await db.collection('users').limit(25).get(); return snap.docs.map(d => ({ uid: d.id, ...d.data() })); } catch { return []; } } }
-function lbItems(list, metric) { return list.map((raw, i) => { const p = addProgression(raw); const wins = Number(p?.stats?.totalWins ?? p?.statistics?.totalWins ?? p?.gameStats?.total?.wins ?? p?.totalWins ?? 0) || 0; const balance = Number(p.balance ?? p.mc ?? p?.statistics?.balance ?? 0) || 0; return { uid: p.uid || `guest_${i}`, username: p.username || p.displayName || 'Oyuncu', avatar: p.avatar || DEFAULT_AVATAR, selectedFrame: Number(p.selectedFrame || 0) || 0, balance, mc: balance, stats: { ...(p.stats || {}), totalWins: wins }, statistics: { ...(p.statistics || {}), totalWins: wins, balance }, accountXp: Number(p.accountXp || 0), accountLevel: Number(p.accountLevel || 1), monthlyActiveScore: Number(p.monthlyActiveScore || 0), leaderboard: { rank: i + 1, metricKey: metric === 'activity' ? 'monthlyActiveScore' : 'accountXp', metricLabel: metric === 'activity' ? 'Aylık Aktiflik' : 'Hesap XP', metricValue: metric === 'activity' ? Number(p.monthlyActiveScore || 0) : Number(p.accountXp || 0) } }; }); }
+function lbItems(list, metric) { return list.map((raw, i) => { const p = addProgression(raw); const wins = Number(p.totalWins ?? p.wins ?? p.matchWins ?? p.stats?.totalWins ?? p.statistics?.totalWins ?? p.gameStats?.total?.wins ?? p.gameStats?.chess?.wins ?? p.gameStats?.pisti?.wins ?? p.gameStats?.crash?.wins ?? 0) || 0; const balance = Number(p.balance ?? p.mc ?? p.coins ?? p.wallet ?? p.statistics?.balance ?? p.stats?.balance ?? p.profile?.balance ?? 0) || 0; return { uid: p.uid || `guest_${i}`, username: p.username || p.displayName || p.fullName || 'Oyuncu', avatar: p.avatar || DEFAULT_AVATAR, selectedFrame: Number(p.selectedFrame || 0) || 0, balance, mc: balance, accountXp: Number(p.accountXp || p.xp || 0), accountLevel: Number(p.accountLevel || 1), monthlyActiveScore: Number(p.monthlyActiveScore || p.activityScore || 0), stats: { totalWins: wins, balance }, statistics: { totalWins: wins, balance }, leaderboard: { rank: i + 1, metricKey: metric === 'activity' ? 'monthlyActiveScore' : 'accountXp', metricLabel: metric === 'activity' ? 'Aylık Aktiflik' : 'Hesap XP', metricValue: metric === 'activity' ? Number(p.monthlyActiveScore || p.activityScore || 0) : Number(p.accountXp || p.xp || 0) } }; }); }
 function gameProfileFromReq(req, fallbackName = 'Oyuncu') { const u = req.__pmProfile || {}; return { uid: uidOf(req), username: u.username || u.displayName || fallbackName, avatar: u.avatar || DEFAULT_AVATAR, selectedFrame: Number(u.selectedFrame || 0) || 0 }; }
 async function attachProfile(req, _res, next) { try { req.__pmProfile = await readProfile(req, uidOf(req)); } catch (_) { req.__pmProfile = defaultProfile(req, uidOf(req) || 'guest'); } next(); }
-
-function matrixSecret() {
-  return [process.env.ADMIN_PANEL_SECOND_FACTOR_HASH_HEX || '', process.env.ADMIN_PANEL_SECOND_FACTOR_SALT_HEX || '', process.env.ADMIN_PANEL_THIRD_FACTOR_NAME || '', process.env.ADMIN_UIDS || '', process.env.ADMIN_EMAILS || '', process.env.FIREBASE_PROJECT_ID || '', 'playmatrix_admin_matrix_v2'].join('|');
-}
-function b64(v=''){ return Buffer.from(String(v),'utf8').toString('base64url'); }
-function unb64(v=''){ try { return Buffer.from(String(v),'base64url').toString('utf8'); } catch { return ''; } }
-function signMatrix(payload={}){ const body=b64(JSON.stringify(payload)); const sig=crypto.createHmac('sha256', matrixSecret()).update(body).digest('base64url'); return `${body}.${sig}`; }
-function verifyMatrixToken(token='') { const raw=String(token||'').trim(); const i=raw.lastIndexOf('.'); if(i<=0)return null; const body=raw.slice(0,i), sig=raw.slice(i+1); const expected=crypto.createHmac('sha256', matrixSecret()).update(body).digest('base64url'); const a=Buffer.from(sig), b=Buffer.from(expected); if(a.length!==b.length || !crypto.timingSafeEqual(a,b))return null; try{return JSON.parse(unb64(body));}catch{return null;} }
-function issueStep(req, stage=1, prev='') { return signMatrix({ typ:'pm_admin_step', stage, uid: uidOf(req), email: String(req.user?.email || '').toLowerCase(), prev:s(prev,200), at:now(), exp:now()+7*60*1000, nonce:crypto.randomBytes(8).toString('hex') }); }
-function verifyStep(token, stage) { const payload=verifyMatrixToken(token); if(!payload||payload.typ!=='pm_admin_step') return {ok:false,error:'INVALID_STEP_TOKEN'}; if(Number(payload.stage)!==Number(stage)) return {ok:false,error:'STEP_MISMATCH'}; if(Number(payload.exp||0)<now()) return {ok:false,error:'STEP_EXPIRED'}; return {ok:true,payload}; }
-function candidateSecondFactorHashes(password='', saltHex='') { const pwd=Buffer.from(String(password||''),'utf8'); const salt=/^[0-9a-f]+$/i.test(String(saltHex||'')) && String(saltHex||'').length%2===0 ? Buffer.from(String(saltHex||''),'hex') : Buffer.from(String(saltHex||''),'utf8'); const saltText=String(saltHex||''); return Array.from(new Set([crypto.createHash('sha256').update(Buffer.concat([salt,pwd])).digest('hex'), crypto.createHash('sha256').update(Buffer.concat([pwd,salt])).digest('hex'), crypto.createHash('sha256').update(`${saltText}${String(password||'')}`).digest('hex'), crypto.createHash('sha256').update(`${String(password||'')}${saltText}`).digest('hex'), crypto.createHmac('sha256',salt).update(pwd).digest('hex')])); }
-function safeEqual(a='',b='') { const x=String(a||'').toLowerCase(), y=String(b||'').toLowerCase(); if(!x||!y||x.length!==y.length)return false; return crypto.timingSafeEqual(Buffer.from(x),Buffer.from(y)); }
-function verifySecondFactor(password='') { const raw=String(process.env.ADMIN_PANEL_SECOND_FACTOR||''); if(raw && password===raw)return true; const hash=String(process.env.ADMIN_PANEL_SECOND_FACTOR_HASH_HEX||'').toLowerCase(); const salt=String(process.env.ADMIN_PANEL_SECOND_FACTOR_SALT_HEX||''); if(!hash)return false; return candidateSecondFactorHashes(password,salt).some(h=>safeEqual(h,hash)); }
-function verifyThirdFactor(name='') { const expected=String(process.env.ADMIN_PANEL_THIRD_FACTOR_NAME||''); const input=String(name||''); if(!expected||!input)return false; const a=Buffer.from(input.normalize('NFKC')), b=Buffer.from(expected.normalize('NFKC')); return a.length===b.length && crypto.timingSafeEqual(a,b); }
-function issueClientKey(req) { return signMatrix({ typ:'pm_admin_client_key', uid:uidOf(req), email:String(req.user?.email||'').toLowerCase(), at:now(), exp:now()+12*3600000, nonce:crypto.randomBytes(8).toString('hex') }); }
-function verifyClientKey(key='') { const p=verifyMatrixToken(key); return !!(p&&p.typ==='pm_admin_client_key'&&Number(p.exp||0)>now()); }
-function requireMatrixAdmin(req,res,next){ const key=String(req.headers['x-admin-client-key']||''); if(verifyClientKey(key)) return next(); return requireAuth(req,res,()=>requireAdmin(req,res,next)); }
-
-
-
-router.get('/auth/admin/matrix/identity', requireAuth, (req, res) => {
-  const isAdmin = env.adminUids.includes(String(req.user?.uid || '')) || env.adminEmails.includes(String(req.user?.email || '').toLowerCase());
-  res.json({ ok:true, admin:isAdmin, user:{ uid:req.user?.uid || '', email:req.user?.email || '' }, adminContext:{ role:isAdmin?'owner':'', source:req.user?.sessionSource || 'firebase', resolutionChain:['session','env-admin'] } });
-});
-router.post('/auth/admin/matrix/step-email', requireAuth, requireAdmin, (req, res) => res.json({ ok:true, email:req.user?.email || '', ticket:issueStep(req,2), nextStep:2 }));
-router.post('/auth/admin/matrix/step-password', requireAuth, requireAdmin, strictLimiter, (req, res) => {
-  const verified = verifyStep(req.body?.ticket, 2);
-  if(!verified.ok) return res.status(400).json({ ok:false, error:verified.error });
-  if(!verifySecondFactor(String(req.body?.password || ''))) return res.status(403).json({ ok:false, error:'SECOND_FACTOR_INVALID' });
-  res.json({ ok:true, ticket:issueStep(req,3,req.body?.ticket), nextStep:3 });
-});
-router.post('/auth/admin/matrix/step-name', requireAuth, requireAdmin, strictLimiter, (req, res) => {
-  const verified = verifyStep(req.body?.ticket, 3);
-  if(!verified.ok) return res.status(400).json({ ok:false, error:verified.error });
-  if(!verifyThirdFactor(String(req.body?.adminName || req.body?.name || ''))) return res.status(403).json({ ok:false, error:'THIRD_FACTOR_INVALID' });
-  const clientKey = issueClientKey(req);
-  runtimeStore.temporary.set(`admin:matrix:${uidOf(req)}`, { uid:uidOf(req), email:req.user?.email || '', at:now() }, 12*3600000);
-  res.json({ ok:true, authenticated:true, clientKey, nextStep:4 });
-});
-router.get('/auth/admin/matrix/status', requireAuth, requireAdmin, (req, res) => {
-  const clientKey = String(req.headers['x-admin-client-key'] || '');
-  const authenticated = verifyClientKey(clientKey);
-  res.json({ ok:true, authenticated, clientKey: authenticated ? clientKey : '', user:{ uid:req.user?.uid || '', email:req.user?.email || '' } });
-});
-router.post('/auth/admin/matrix/logout', requireAuth, (_req, res) => res.json({ ok:true, loggedOut:true }));
 
 router.get('/public/runtime-config', (_req, res) => res.json(runtimePayload()));
 router.get('/healthz', (_req, res) => res.json({ ok: true, service: 'playmatrix-api', at: now() }));
 router.post('/auth/resolve-login', strictLimiter, async (req, res) => { const id = s(req.body?.identifier || req.body?.email || req.body?.username, 160); if (!id) return res.status(400).json({ ok: false, error: 'IDENTIFIER_REQUIRED' }); if (id.includes('@')) return res.json({ ok: true, email: id.toLowerCase() }); const { db } = fb(); if (!db) return res.status(404).json({ ok: false, error: 'USER_NOT_FOUND' }); const q = await db.collection('users').where('usernameLower', '==', id.toLowerCase()).limit(1).get(); if (q.empty || !q.docs[0].data().email) return res.status(404).json({ ok: false, error: 'USER_NOT_FOUND' }); res.json({ ok: true, email: q.docs[0].data().email }); });
-router.post('/auth/session/create', requireAuth, async (req, res) => { const token = crypto.randomBytes(32).toString('hex'); const uid = uidOf(req); runtimeStore.temporary.set(`session:${token}`, { uid, email: req.user?.email || '', at: now() }, 30 * 86400000); const user = await readProfile(req, uid, { email: req.user?.email || '' }); res.json({ ok: true, sessionToken: token, session: { token, expiresAt: now() + 30 * 86400000 }, user }); });
+router.post('/auth/session/create', requireAuth, async (req, res) => { const token = crypto.randomBytes(32).toString('hex'); const uid = uidOf(req); runtimeStore.temporary.set(`session:${token}`, { uid, at: now() }, 30 * 86400000); const user = await readProfile(req, uid, { email: req.user?.email || '' }); res.json({ ok: true, sessionToken: token, session: { token, expiresAt: now() + 30 * 86400000 }, user }); });
 router.post('/auth/session/logout', (req, res) => { const token = s(req.headers['x-session-token'] || req.body?.sessionToken, 100); if (token) runtimeStore.temporary.delete(`session:${token}`); res.json({ ok: true }); });
 router.get('/auth/session/status', (req, res) => { const token = s(req.headers['x-session-token'] || req.query?.sessionToken, 100); res.json({ ok: true, active: !!(token && runtimeStore.temporary.get(`session:${token}`)) }); });
-router.get('/me', requireAuth, async (req, res) => res.json({ ok: true, user: await readProfile(req) }));
+router.get('/me', requireAuth, async (req, res) => { const user = await readProfile(req); res.json({ ok: true, user, profile: user, balance: Number(user.balance || 0), accountLevel: user.accountLevel, accountLevelProgressPct: user.accountLevelProgressPct }); });
 router.post('/me/activity/heartbeat', requireAuth, async (req, res) => { const uid = uidOf(req); runtimeStore.presence.set(uid, { uid, status: 'online', activity: s(req.body?.activity, 40), at: now() }, 180000); res.json({ ok: true, at: now() }); });
 router.post('/me/showcase', requireAuth, async (req, res) => { const uid = uidOf(req); const showcase = { title: s(req.body?.title, 60), bio: sanitizeText(req.body?.bio || '', 180), updatedAt: now() }; await writeProfile(uid, { showcase }); res.json({ ok: true, showcase }); });
 router.get('/user-stats/:uid', requireAuth, async (req, res) => res.json({ ok: true, data: await readProfile(req, s(req.params.uid, 128)) }));
@@ -166,8 +144,8 @@ router.get('/chat/direct/unread-summary', requireAuth, (_req, res) => res.json({
 
 router.get('/pisti-online/lobby', requireAuth, attachProfile, (req, res) => { const rooms = runtimeStore.rooms.values().filter(r => r && r.id && String(r.id).startsWith('pisti_')).map(pistiGame.lobbyRoom); res.json({ ok: true, rooms }); });
 router.get('/pisti-online/resume', requireAuth, attachProfile, (req, res) => { const uid = uidOf(req); const room = runtimeStore.rooms.values().find(r => r && r.id && String(r.id).startsWith('pisti_') && r.players?.some(p => p.uid === uid)); res.json({ ok: true, room: pistiGame.publicRoom(room, uid) }); });
-router.post('/pisti-online/play-open', requireAuth, attachProfile, (req, res) => { const room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), guestProfile: { uid:'bot', username:'PlayMatrix Bot' }, mode: req.body?.mode, bet: req.body?.bet, roomName: req.body?.roomName || `${req.__pmProfile.username} Masası` }); res.json({ ok: true, roomId: room.id, room: pistiGame.publicRoom(room, uidOf(req)) }); });
-router.post('/pisti-online/create-private', requireAuth, attachProfile, (req, res) => { const room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), guestProfile: false, mode: req.body?.mode, bet: req.body?.bet, isPrivate: true, roomName: req.body?.roomName || `${req.__pmProfile.username} Özel Masa`, password: req.body?.password }); room.status = 'waiting'; room.currentPlayers = 1; pistiGame.saveRoom(room); res.json({ ok: true, roomId: room.id, code: room.id.slice(-6).toUpperCase(), room: pistiGame.publicRoom(room, uidOf(req)) }); });
+router.post('/pisti-online/play-open', requireAuth, attachProfile, (req, res) => { const room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), mode: req.body?.mode, bet: req.body?.bet, roomName: req.body?.roomName || `${req.__pmProfile.username} Masası` }); res.json({ ok: true, roomId: room.id, room: pistiGame.publicRoom(room, uidOf(req)) }); });
+router.post('/pisti-online/create-private', requireAuth, attachProfile, (req, res) => { const room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), mode: req.body?.mode, bet: req.body?.bet, isPrivate: true, roomName: req.body?.roomName || `${req.__pmProfile.username} Özel Masa`, password: req.body?.password }); room.status = 'waiting'; room.currentPlayers = 1; pistiGame.saveRoom(room); res.json({ ok: true, roomId: room.id, code: room.id.slice(-6).toUpperCase(), room: pistiGame.publicRoom(room, uidOf(req)) }); });
 router.post('/pisti-online/join', requireAuth, attachProfile, (req, res) => { try { const roomId = s(req.body?.roomId || req.body?.code, 100); let room = pistiGame.getRoom(roomId); if (!room) room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), mode: req.body?.mode, bet: req.body?.bet }); else if (!room.players.some(p => p.uid === uidOf(req))) room = pistiGame.joinRoom(room, gameProfileFromReq(req)); res.json({ ok: true, roomId: room.id, room: pistiGame.publicRoom(room, uidOf(req)) }); } catch(e){ res.status(400).json({ ok:false, error:e.message }); } });
 router.post('/pisti-online/ping', requireAuth, (req, res) => res.json({ ok: true, room: pistiGame.publicRoom(pistiGame.getRoom(s(req.body?.roomId, 100)), uidOf(req)) }));
 router.get('/pisti-online/state/:id', requireAuth, (req, res) => res.json({ ok: true, room: pistiGame.publicRoom(pistiGame.getRoom(s(req.params.id, 100)), uidOf(req)) }));
@@ -180,8 +158,8 @@ router.post('/chess/create', requireAuth, attachProfile, (req, res) => { const r
 router.post('/chess/join', requireAuth, attachProfile, (req, res) => { try { let room = chessGame.getRoom(s(req.body?.roomId, 100)); if (!room) room = chessGame.createRoom({ hostProfile: gameProfileFromReq(req), guestProfile: { uid:'bot', username:'PlayMatrix Bot' } }); else if (!room.guest && room.host.uid !== uidOf(req)) room = chessGame.joinRoom(room, gameProfileFromReq(req)); res.json({ ok: true, roomId: room.id, room }); } catch(e){ res.status(400).json({ ok:false, error:e.message }); } });
 router.get('/chess/state/:id', requireAuth, (req, res) => res.json({ ok: true, room: chessGame.publicRoom(chessGame.getRoom(req.params.id)) }));
 router.post('/chess/ping', requireAuth, (req, res) => res.json({ ok: true, room: chessGame.publicRoom(chessGame.getRoom(s(req.body?.roomId, 100))) }));
-router.post('/chess/move', requireAuth, (req, res) => { try { const room = chessGame.applyMove(chessGame.getRoom(s(req.body?.roomId, 100)), { uid: uidOf(req), from:req.body.from, to:req.body.to, promotion:req.body.promotion || 'q', move:req.body.move }); res.json({ ok:true, move: req.body.move || {from:req.body.from,to:req.body.to}, room }); } catch(e){ res.status(400).json({ ok:false, error:e.message }); } });
-router.post('/chess/resign', requireAuth, (req, res) => { const room = chessGame.getRoom(s(req.body?.roomId, 100)); if (room) { room.status = 'finished'; room.winner = room.host.uid === uidOf(req) ? 'black' : 'white'; chessGame.saveRoom(room); } res.json({ ok: true, room }); });
+router.post('/chess/move', requireAuth, async (req, res) => { try { const room = chessGame.applyMove(chessGame.getRoom(s(req.body?.roomId, 100)), { uid: uidOf(req), from:req.body.from, to:req.body.to, promotion:req.body.promotion || 'q', move:req.body.move }); const reward = await grantChessWinReward(req, room, chessWinnerUid(room)); const user = await readProfile(req, uidOf(req)); res.json({ ok:true, move: req.body.move || {from:req.body.from,to:req.body.to}, room, reward, user, balance: Number(user.balance || 0) }); } catch(e){ res.status(400).json({ ok:false, error:e.message }); } });
+router.post('/chess/resign', requireAuth, async (req, res) => { const room = chessGame.getRoom(s(req.body?.roomId, 100)); let reward = { ok:true, granted:false }; if (room) { room.status = 'finished'; room.winner = room.host.uid === uidOf(req) ? 'black' : 'white'; chessGame.saveRoom(room); reward = await grantChessWinReward(req, room, chessWinnerUid(room)); } const user = await readProfile(req, uidOf(req)); res.json({ ok: true, room, reward, user, balance: Number(user.balance || 0) }); });
 router.post('/chess/leave', requireAuth, (_req, res) => res.json({ ok: true }));
 
 router.get('/crash/resume', requireAuth, attachProfile, (req, res) => { const snap = crashGame.publicSnapshot(); const uid = uidOf(req); snap.bets = snap.activePlayers.filter(p => p.uid === uid); res.json(snap); });

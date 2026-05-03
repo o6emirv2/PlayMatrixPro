@@ -2,39 +2,85 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=.90,maximum-scale=.90,minimum-scale=.90,user-scalable=no,viewport-fit=cover">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="playmatrix-api-url" content="https://emirhan-siye.onrender.com">
   <title>PlayMatrix Admin Kontrol Merkezi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="matrix-auth-body">
   <canvas id="matrixCanvas" aria-hidden="true"></canvas>
-  <main id="adminGate" class="gate-stage" aria-live="polite">
+
+  <main id="gateStage" class="gate-stage" aria-live="polite">
     <section class="gate-shell">
-      <header class="gate-brandbar"><div class="gate-brand"><img src="/public/assets/images/logo.png" alt="PlayMatrix"><div><span class="gate-kicker">PLAYMATRIX</span><h1>ADMIN KONTROL MERKEZİ</h1></div></div><div class="gate-chip">MATRIX EDITION</div></header>
-      <div class="gate-progress" id="stepProgress" data-step="1"><span></span><span></span><span></span><span></span></div>
+      <header class="gate-brandbar">
+        <div class="gate-brand">
+          <img src="/public/assets/images/logo.png" alt="PlayMatrix" onerror="this.src='/apple-touch-icon.png'">
+          <div>
+            <span class="gate-kicker">PLAYMATRIX</span>
+            <h1>ADMIN KONTROL MERKEZİ</h1>
+          </div>
+        </div>
+        <div class="gate-chip">MATRIX EDITION</div>
+      </header>
+      <div class="gate-progress" id="stepProgress" data-step="1" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
       <div class="gate-viewport">
-        <section class="gate-step is-active" data-step="1"><div class="step-badge">ADIM 1</div><div class="step-icon">✦</div><h2>YÖNETİCİ HESABI<br>DOĞRULANIYOR</h2><p>Aktif oturumdaki yönetici hesabı otomatik algılanır ve güvenlik adımlarına kontrollü geçilir.</p><label class="gate-field"><span>Algılanan yönetici e-postası</span><div class="field-shell success-shell"><input id="adminEmail" type="email" autocomplete="off" readonly placeholder="Oturumdan otomatik algılanıyor"><b class="field-check">✓</b></div></label><div class="status" id="emailStatus"></div><button type="button" class="ghost-btn" id="retryEmail">YENİDEN ALGILA</button><div class="legal-warning">Yalnızca yetkili ekip hesapları bu adımları tamamlayabilir.</div></section>
-        <section class="gate-step" data-step="2"><div class="step-badge">ADIM 2</div><div class="step-icon shield">⬡</div><h2>ŞİFRE DOĞRULAMA</h2><p>İkinci faktör doğru girildiğinde operatör doğrulamasına geçilir.</p><label class="gate-field"><span>Admin Panel Şifresi</span><div class="field-shell"><input id="adminPassword" type="password" autocomplete="off" placeholder="Şifre"><b class="field-check">✓</b></div></label><div class="status" id="passwordStatus"></div><button type="button" class="ghost-btn" id="retryPassword">SIFIRLA</button><div class="legal-warning">Yalnızca yetkili ekip hesapları bu adımları tamamlayabilir.</div></section>
-        <section class="gate-step" data-step="3"><div class="step-badge">ADIM 3</div><div class="step-icon fingerprint">◉</div><h2>SON DOĞRULAMA</h2><p>Son doğrulama tamamlandığında güvenli yönetici oturumu başlatılır.</p><label class="gate-field"><span>Yönetici doğrulama adı</span><div class="field-shell"><input id="adminName" type="text" autocomplete="off" placeholder="Yönetici doğrulama adı"><b class="field-check">✓</b></div></label><div class="status" id="nameStatus"></div><button type="button" class="ghost-btn" id="retryName">SIFIRLA</button><div class="legal-warning">Yalnızca yetkili ekip hesapları bu adımları tamamlayabilir.</div></section>
-        <section class="gate-step" data-step="4"><div class="step-badge">ADIM 4</div><div class="final-shell"><div class="final-key">⌁</div><h2>YÖNETİCİ OTURUMU HAZIR</h2><p>Güvenli erişim anahtarı oluşturuldu.</p><strong>PANEL HAZIRLANIYOR</strong><small>Kontrol merkezi hazırlanıyor.</small><div class="final-spinner"></div></div></section>
+        <section class="gate-step is-active" data-step="1">
+          <div class="step-badge">ADIM 1</div><div class="step-icon">✦</div>
+          <h2>YÖNETİCİ HESABI<br>DOĞRULANIYOR</h2>
+          <p>Aktif oturumdaki veya ENV whitelist içindeki yönetici hesabı doğrulanır.</p>
+          <label class="gate-field"><span>Yönetici e-postası</span><div class="field-shell success-shell"><input id="adminEmail" type="email" autocomplete="off" spellcheck="false" placeholder="Yetkili admin e-postası"><b class="field-check">✓</b></div></label>
+          <div class="status" id="emailStatus"></div>
+          <button type="button" class="ghost-btn" id="retryEmail">YENİDEN ALGILA</button>
+          <div class="legal-warning">Yalnızca yetkili ekip hesapları bu adımları tamamlayabilir.</div>
+        </section>
+        <section class="gate-step" data-step="2">
+          <div class="step-badge">ADIM 2</div><div class="step-icon shield">⬡</div>
+          <h2>ŞİFRE DOĞRULAMA</h2>
+          <p>İkinci güvenlik katmanı doğrulandığında son operatör doğrulamasına geçilir.</p>
+          <label class="gate-field"><span>Admin Panel Şifresi</span><div class="field-shell"><input id="adminPassword" type="password" autocomplete="off" spellcheck="false" placeholder="Şifre"><b class="field-check">✓</b></div></label>
+          <div class="status" id="passwordStatus"></div>
+          <button type="button" class="ghost-btn" id="retryPassword">SIFIRLA</button>
+          <div class="legal-warning">Hatalı denemeler Render loglarında görünür.</div>
+        </section>
+        <section class="gate-step" data-step="3">
+          <div class="step-badge">ADIM 3</div><div class="step-icon fingerprint">◉</div>
+          <h2>SON DOĞRULAMA</h2>
+          <p>Yönetici doğrulama adı doğruysa güvenli admin oturumu başlatılır.</p>
+          <label class="gate-field"><span>Yönetici doğrulama adı</span><div class="field-shell"><input id="adminName" type="text" autocomplete="off" spellcheck="false" placeholder="Yönetici doğrulama adı"><b class="field-check">✓</b></div></label>
+          <div class="status" id="nameStatus"></div>
+          <button type="button" class="ghost-btn" id="retryName">SIFIRLA</button>
+          <div class="legal-warning">Admin canlı logları Firebase’e yazılmaz; Render in-memory tutulur.</div>
+        </section>
+        <section class="gate-step" data-step="4">
+          <div class="step-badge">ADIM 4</div>
+          <div class="final-shell"><div class="final-key">⌁</div><h2>YÖNETİCİ OTURUMU HAZIR</h2><p>Güvenli erişim anahtarı oluşturuldu.</p><strong>PANEL HAZIRLANIYOR</strong><small>Kontrol merkezi hazırlanıyor.</small><div class="final-spinner"></div></div>
+        </section>
       </div>
     </section>
   </main>
-  <main id="adminDashboard" class="admin-app" hidden>
-    <section class="topbar"><div class="brand"><img src="/public/assets/images/logo.png" alt="PlayMatrix"><div><h1>PLAYMATRIX ADMIN KONTROL MERKEZİ</h1><p>Operasyon, ekonomi, güvenlik, promo, log ve oyun izleme paneli.</p></div></div><div class="top-actions"><button id="dashboardRefreshBtn" class="ghost" type="button">VERİLERİ YENİLE</button><button id="dashboardLogoutBtn" class="danger" type="button">GÜVENLİ ÇIKIŞ</button></div></section>
-    <section class="panel stack"><h2>DASHBOARD İSTATİSTİKLERİ</h2><p class="lead">Canlı sistem metrikleri Render memory ve Firestore özetleriyle gösterilir.</p><div class="summary-strip" id="metricGrid"></div></section>
-    <div class="layout-grid-3">
-      <section class="panel stack"><h2>KULLANICI YÖNETİMİ</h2><input id="userSearch" placeholder="UID / e-posta / kullanıcı adı"><button id="userSearchBtn">ARA</button><div class="table-wrap"><table><thead><tr><th>UID</th><th>Kullanıcı</th><th>MC</th><th>Seviye</th></tr></thead><tbody id="userRows"></tbody></table></div></section>
-      <section class="panel stack"><h2>BAKİYE / BAN / E-POSTA</h2><input id="targetUid" placeholder="Kullanıcı UID"><input id="balanceAmount" type="number" placeholder="MC miktarı"><button id="balanceBtn">MC GÜNCELLE</button><input id="banReason" placeholder="Ban nedeni"><button id="banBtn" class="danger">BAN / KISITLA</button><input id="newEmail" type="email" placeholder="Yeni e-posta"><button id="emailBtn">E-POSTA SENKRONLA</button><div class="status" id="userOpStatus"></div></section>
-      <section class="panel stack"><h2>PROMO YÖNETİMİ</h2><input id="promoCode" placeholder="PROMO KOD"><input id="promoAmount" type="number" placeholder="MC"><input id="promoLimit" type="number" placeholder="Kişi sayısı"><button id="promoBtn">PROMO OLUŞTUR</button><div class="table-wrap"><table><tbody id="promoRows"></tbody></table></div></section>
-    </div>
-    <div class="layout-grid-2">
-      <section class="panel stack"><h2>OYUN İZLEME</h2><div id="gameCards" class="maintenance-grid"></div></section>
-      <section class="panel stack"><h2>CANLI LOG MERKEZİ</h2><button id="cleanupDryBtn">FIRESTORE CLEANUP DRY-RUN</button><div class="table-wrap"><table><thead><tr><th>Zaman</th><th>Olay</th><th>Detay</th></tr></thead><tbody id="logRows"></tbody></table></div></section>
-    </div>
+
+  <main id="adminApp" class="admin-shell" hidden>
+    <aside class="admin-sidebar">
+      <div class="brand-card"><img src="/public/assets/images/logo.png" alt="PlayMatrix" onerror="this.src='/apple-touch-icon.png'"><div><strong>PLAYMATRIX</strong><span>ADMIN MATRIX</span></div></div>
+      <nav class="admin-nav" aria-label="Admin menü">
+        <button class="is-active" data-tab="dashboard">Genel Bakış</button><button data-tab="users">Kullanıcı Yönetimi</button><button data-tab="economy">Bakiye Yönetimi</button><button data-tab="ban">Ban Yönetimi</button><button data-tab="payments">Ödeme Yönetimi</button><button data-tab="promo">Promo Yönetimi</button><button data-tab="logs">Canlı Log</button><button data-tab="email">E-posta Güncelle</button><button data-tab="notifications">Bildirim Yönetimi</button><button data-tab="games">Oyun İzleme</button><button data-tab="cleanup">Firestore Temizlik</button>
+      </nav>
+      <div class="secure-box"><b>Güvenlik</b><span>ENV whitelist + 3 adımlı admin gate</span><span>Canlı log: Render in-memory</span><button id="adminLogout" type="button">Güvenli Çıkış</button></div>
+    </aside>
+    <section class="admin-main">
+      <header class="admin-topbar"><div><p class="eyebrow">Production Control</p><h1>PlayMatrix Admin Panel</h1><span id="adminActor">Admin doğrulaması aktif</span></div><div class="top-actions"><button id="refreshBtn" class="ghost">Yenile</button><a class="ghost" href="/" target="_blank" rel="noopener">Siteyi Aç</a></div></header>
+      <section id="statusStrip" class="status-strip"><article><b id="metricUsers">0</b><span>Kullanıcı</span></article><article><b id="metricBalance">0 MC</b><span>Toplam Bakiye</span></article><article><b id="metricBanned">0</b><span>Banlı</span></article><article><b id="metricLogs">0</b><span>Runtime Log</span></article></section>
+      <section id="view" class="panel" aria-live="polite"></section>
+    </section>
   </main>
+
   <script src="/public/playmatrix-static-runtime.js"></script>
   <script src="/public/playmatrix-api.js"></script>
-  <script type="module" src="script.js"></script>
+  <script src="/public/avatar-registry.js"></script>
+  <script src="/public/avatar-frame.js"></script>
+  <script src="script.js" defer></script>
 </body>
 </html>
