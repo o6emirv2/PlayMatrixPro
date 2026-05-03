@@ -5535,3 +5535,11 @@ html, body { min-height: 100%; overflow-x: hidden; overscroll-behavior-y: auto; 
 body { padding-bottom: max(96px, env(safe-area-inset-bottom)); }
 .modal-overlay, .profile-sheet, .ps-modal, .avatar-picker-modal, .frame-picker-modal, .sheet-content, .modal-content { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 .avatar-picker-grid, .frame-picker-grid, .avatar-grid, .frame-grid, .ps-modal-body, .sheet-body { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
+
+
+/* Android/iOS smooth scroll hardening */
+html, body { min-height:100%; overflow-x:hidden; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; touch-action:pan-y manipulation; }
+body, main, .app, .page, .content, .section, .modal, .modal-body, .sheet, .drawer, .profile-sheet, .pm-modal, .pm-scrollable { -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+button, a, input, textarea, select, [role="button"], .game-card, .nav-item { touch-action:manipulation; }
+.modal, .modal-body, .sheet, .drawer, .profile-sheet, .pm-modal, .pm-scrollable { touch-action:pan-y; max-height:min(86vh, calc(100dvh - 32px)); overflow-y:auto; }
+.progress-fill, .pm-level-progress-fill, [id$="ProgressFill"], [id*="ProgressFill"] { transition:width .65s cubic-bezier(.2,.9,.22,1), transform .65s cubic-bezier(.2,.9,.22,1); will-change:width; }

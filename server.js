@@ -11,7 +11,6 @@ const { initFirebaseAdmin } = require('./server/config/firebaseAdmin');
 const { apiLimiter } = require('./server/core/security');
 const { routeData } = require('./server/core/smartDataRouter');
 const { runtimeStore } = require('./server/core/runtimeStore');
-const crashEngine = require('./server/games/crash');
 process.on('unhandledRejection', (reason) => console.error('[process:unhandledRejection]', reason && reason.stack || reason));
 process.on('uncaughtException', (error) => console.error('[process:uncaughtException]', error && error.stack || error));
 initFirebaseAdmin();
@@ -36,6 +35,8 @@ app.use((req, res, next) => {
 app.use(apiLimiter);
 app.use(express.static(__dirname, { extensions: ['html'], maxAge: env.nodeEnv === 'production' ? '1h' : 0, redirect: false }));
 app.get('/healthz', (req,res)=>res.json({ ok:true, service:'playmatrix', env:env.nodeEnv, time:Date.now() }));
+
+app.use(['/api/games/crash','/api/games/chess','/api/games/pisti','/api/crash','/api/chess','/api/pisti-online'], (_req, res) => res.status(410).json({ ok:false, error:'GAME_REMOVED_MAINTENANCE_PAGE_ONLY' }));
 app.use('/api', require('./server/routes/compat.routes'));
 app.use('/api', require('./server/routes/auth.routes'));
 app.use('/api', require('./server/routes/user.routes'));
@@ -44,9 +45,6 @@ app.use('/api', require('./server/routes/economy.routes'));
 app.use('/api', require('./server/routes/notification.routes'));
 app.use('/api', require('./server/routes/social.routes'));
 app.use('/api', require('./server/routes/email.routes'));
-app.use('/api/games/pisti', require('./server/games/pisti').router);
-app.use('/api/games/chess', require('./server/games/chess').router);
-app.use('/api/games/crash', crashEngine.router);
 app.use('/api/games/snake', require('./server/games/snake').router);
 app.use('/api/games/space', require('./server/games/space').router);
 app.use('/api/games/pattern-master', require('./server/games/pattern-master').router);
@@ -82,22 +80,8 @@ const legacyGameAliases = Object.freeze({
   '/Klasik Oyunlar/PatternMaster.html': '/games/pattern-master', '/Klasik Oyunlar/PatternMaster': '/games/pattern-master', '/Klasik%20Oyunlar/PatternMaster.html': '/games/pattern-master'
 });
 for (const [from, to] of Object.entries(legacyGameAliases)) app.get(from, (_req, res) => res.redirect(302, to));
-io.on('connection', socket => { runtimeStore.presence.set(socket.id, { socketId: socket.id, at: Date.now() }); socket.on('presence:update', data => runtimeStore.presence.set(socket.id, { socketId: socket.id, ...data, at: Date.now() })); socket.on('client:error', data => { console.error('[socket:client:error]', JSON.stringify({ socketId: socket.id, data })); runtimeStore.errors.set(`socket_${Date.now()}_${socket.id}`, data || {}, 24*3600000); }); socket.on('matchmaking:join', data => socket.emit('matchmaking:status', { ok:true, queued:true, game:data?.game || 'unknown' })); socket.on('matchmaking:leave', data => socket.emit('matchmaking:left', { ok:true })); socket.on('disconnect', () => runtimeStore.presence.delete(socket.id)); });
+io.on('connection', socket => { runtimeStore.presence.set(socket.id, { socketId: socket.id, at: Date.now() }); socket.on('presence:update', data => runtimeStore.presence.set(socket.id, { socketId: socket.id, ...data, at: Date.now() })); socket.on('client:error', data => { console.error('[socket:client:error]', JSON.stringify({ socketId: socket.id, data })); runtimeStore.errors.set(`socket_${Date.now()}_${socket.id}`, data || {}, 24*3600000); }); socket.on('matchmaking:join', data => socket.emit('matchmaking:status', { ok:false, error:'ONLINE_GAME_REMOVED', game:data?.game || 'unknown' })); socket.on('matchmaking:leave', data => socket.emit('matchmaking:left', { ok:true })); socket.on('disconnect', () => runtimeStore.presence.delete(socket.id)); });
 
-function startCrashBroadcastLoop() {
-  let lastRoundId = '';
-  setInterval(() => {
-    try {
-      const snapshot = crashEngine.publicSnapshot();
-      const type = snapshot.roundId === lastRoundId ? 'TICK' : 'STATE';
-      lastRoundId = snapshot.roundId;
-      io.emit('crash:update', { ...snapshot, type });
-    } catch (error) {
-      console.error('[crash:broadcast:error]', JSON.stringify({ message: error.message, stack: error.stack }));
-    }
-  }, 700).unref();
-}
-startCrashBroadcastLoop();
 
 setInterval(()=>{ Object.values(runtimeStore).forEach(store => store.prune && store.prune()); }, 60_000).unref();
 app.use((req,res)=>res.status(404).json({ ok:false, error:'NOT_FOUND' }));

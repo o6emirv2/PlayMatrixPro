@@ -6,9 +6,6 @@ const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 const { runtimeStore } = require('../core/runtimeStore');
 const { getProgression } = require('../core/progressionService');
 const { runOnce } = require('../core/idempotencyService');
-const pistiGame = require('../games/pisti');
-const chessGame = require('../games/chess');
-const crashGame = require('../games/crash');
 const router = express.Router();
 
 const DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20128%20128%27%3E%3Crect%20width%3D%27128%27%20height%3D%27128%27%20rx%3D%2728%27%20fill%3D%27%23111827%27%2F%3E%3Ccircle%20cx%3D%2764%27%20cy%3D%2750%27%20r%3D%2724%27%20fill%3D%27%23f59e0b%27%2F%3E%3Cpath%20d%3D%27M26%20108c8-18%2024-28%2038-28s30%2010%2038%2028%27%20fill%3D%27%23fbbf24%27%2F%3E%3Ctext%20x%3D%2764%27%20y%3D%27118%27%20text-anchor%3D%27middle%27%20font-family%3D%27Arial%27%20font-size%3D%2716%27%20font-weight%3D%27700%27%20fill%3D%27%23fff%27%3EPM%3C%2Ftext%3E%3C%2Fsvg%3E';
@@ -64,14 +61,24 @@ async function addBalance(uid, amount, reason, key) {
   const safeAmount = Math.floor(Number(amount) || 0);
   if (!uid || !safeAmount) return { ok: true, amount: safeAmount, reason, firestore: false };
   if (!db || !admin) {
-    const current = Number(runtimeStore.temporary.get(`balance:${uid}`) ?? 50000) || 0;
-    runtimeStore.temporary.set(`balance:${uid}`, current + safeAmount, 30 * 86400000);
-    return { ok: true, amount: safeAmount, reason, firestore: false, balance: current + safeAmount };
+    const current = Math.max(0, Number(runtimeStore.temporary.get(`balance:${uid}`) ?? 50000) || 0);
+    if (safeAmount < 0 && current + safeAmount < 0) return { ok:false, error:'INSUFFICIENT_BALANCE', balance: current };
+    const next = Math.max(0, current + safeAmount);
+    runtimeStore.temporary.set(`balance:${uid}`, next, 30 * 86400000);
+    return { ok: true, amount: safeAmount, reason, firestore: false, balance: next };
   }
   return runOnce({ key, db, execute: async () => {
-    await db.collection('users').doc(uid).set({ balance: admin.firestore.FieldValue.increment(safeAmount), updatedAt: now() }, { merge: true });
-    await db.collection('audit').doc(`economy_${crypto.randomUUID()}`).set({ uid, amount: safeAmount, reason, at: now() }, { merge: true });
-    return { ok: true, amount: safeAmount, reason };
+    const userRef = db.collection('users').doc(uid);
+    let nextBalance = 0;
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(userRef);
+      const current = Math.max(0, Number((snap.exists ? snap.data().balance : 0) || 0));
+      if (safeAmount < 0 && current + safeAmount < 0) throw Object.assign(new Error('INSUFFICIENT_BALANCE'), { statusCode: 409, current });
+      nextBalance = Math.max(0, current + safeAmount);
+      tx.set(userRef, { balance: nextBalance, updatedAt: now() }, { merge: true });
+      tx.set(db.collection('audit').doc(`economy_${crypto.randomUUID()}`), { uid, amount: safeAmount, reason, balanceAfter: nextBalance, at: now() }, { merge: true });
+    });
+    return { ok: true, amount: safeAmount, reason, balance: nextBalance };
   }});
 }
 function runtimePayload() { return { ok: true, runtime: { version: 8, environment: env.nodeEnv, publicBaseUrl: env.publicBaseUrl, canonicalOrigin: env.canonicalOrigin, apiBase: env.publicApiBase || env.publicBackendOrigin, expectedFirebaseProjectId: env.firebase.publicConfig.projectId, firebase: env.firebase.publicConfig, firebaseReady: true, source: 'render-env-contract' }, apiBase: env.publicApiBase || env.publicBackendOrigin, canonicalOrigin: env.canonicalOrigin, firebase: env.firebase.publicConfig }; }
@@ -99,33 +106,23 @@ function requireMatrixAdmin(req,res,next){ const key=String(req.headers['x-admin
 
 
 
-router.get('/auth/admin/matrix/identity', requireAuth, (req, res) => {
-  const isAdmin = env.adminUids.includes(String(req.user?.uid || '')) || env.adminEmails.includes(String(req.user?.email || '').toLowerCase());
-  res.json({ ok:true, admin:isAdmin, user:{ uid:req.user?.uid || '', email:req.user?.email || '' }, adminContext:{ role:isAdmin?'owner':'', source:req.user?.sessionSource || 'firebase', resolutionChain:['session','env-admin'] } });
-});
-router.post('/auth/admin/matrix/step-email', requireAuth, requireAdmin, (req, res) => res.json({ ok:true, email:req.user?.email || '', ticket:issueStep(req,2), nextStep:2 }));
-router.post('/auth/admin/matrix/step-password', requireAuth, requireAdmin, strictLimiter, (req, res) => {
-  const verified = verifyStep(req.body?.ticket, 2);
-  if(!verified.ok) return res.status(400).json({ ok:false, error:verified.error });
-  if(!verifySecondFactor(String(req.body?.password || ''))) return res.status(403).json({ ok:false, error:'SECOND_FACTOR_INVALID' });
-  res.json({ ok:true, ticket:issueStep(req,3,req.body?.ticket), nextStep:3 });
-});
-router.post('/auth/admin/matrix/step-name', requireAuth, requireAdmin, strictLimiter, (req, res) => {
-  const verified = verifyStep(req.body?.ticket, 3);
-  if(!verified.ok) return res.status(400).json({ ok:false, error:verified.error });
-  if(!verifyThirdFactor(String(req.body?.adminName || req.body?.name || ''))) return res.status(403).json({ ok:false, error:'THIRD_FACTOR_INVALID' });
-  const clientKey = issueClientKey(req);
-  runtimeStore.temporary.set(`admin:matrix:${uidOf(req)}`, { uid:uidOf(req), email:req.user?.email || '', at:now() }, 12*3600000);
-  res.json({ ok:true, authenticated:true, clientKey, nextStep:4 });
-});
-router.get('/auth/admin/matrix/status', requireAuth, requireAdmin, (req, res) => {
-  const clientKey = String(req.headers['x-admin-client-key'] || '');
-  const authenticated = verifyClientKey(clientKey);
-  res.json({ ok:true, authenticated, clientKey: authenticated ? clientKey : '', user:{ uid:req.user?.uid || '', email:req.user?.email || '' } });
-});
-router.post('/auth/admin/matrix/logout', requireAuth, (_req, res) => res.json({ ok:true, loggedOut:true }));
 
-router.get('/public/runtime-config', (_req, res) => res.json(runtimePayload()));
+function primaryAdmin(){ return { uid: env.adminUids[0] || '', email: env.adminEmails[0] || '' }; }
+function isConfiguredAdmin(email='', uid=''){ const e=String(email||'').trim().toLowerCase(); const u=String(uid||'').trim(); return (!!e && env.adminEmails.includes(e)) || (!!u && env.adminUids.includes(u)); }
+function compareHex(a='',b=''){ const x=String(a||'').toLowerCase(), y=String(b||'').toLowerCase(); if(!x||!y||x.length!==y.length)return false; return crypto.timingSafeEqual(Buffer.from(x),Buffer.from(y)); }
+function verifySecondFactor(password=''){ const raw=String(process.env.ADMIN_PANEL_SECOND_FACTOR||''); if(raw && String(password||'')===raw)return true; const stored=String(process.env.ADMIN_PANEL_SECOND_FACTOR_HASH_HEX||'').toLowerCase(); const saltHex=String(process.env.ADMIN_PANEL_SECOND_FACTOR_SALT_HEX||''); if(!stored)return false; const pwd=Buffer.from(String(password||''),'utf8'); const salt=/^[0-9a-f]+$/i.test(saltHex)&&saltHex.length%2===0?Buffer.from(saltHex,'hex'):Buffer.from(saltHex,'utf8'); const candidates=Array.from(new Set([crypto.createHash('sha256').update(Buffer.concat([salt,pwd])).digest('hex'),crypto.createHash('sha256').update(Buffer.concat([pwd,salt])).digest('hex'),crypto.createHash('sha256').update(`${saltHex}${String(password||'')}`).digest('hex'),crypto.createHash('sha256').update(`${String(password||'')}${saltHex}`).digest('hex'),crypto.createHmac('sha256',salt).update(pwd).digest('hex')])); return candidates.some(x=>compareHex(x,stored)); }
+function verifyThirdFactor(name=''){ const expected=String(process.env.ADMIN_PANEL_THIRD_FACTOR_NAME||'').trim(); const value=String(name||'').trim(); if(!expected||!value)return false; const a=Buffer.from(value.normalize('NFKC')); const b=Buffer.from(expected.normalize('NFKC')); return a.length===b.length && crypto.timingSafeEqual(a,b); }
+function issueClientKey(payload={}){ return signMatrix({ typ:'pm_admin_client_key', ...payload, issuedAt:now(), expiresAt:now()+12*3600000, nonce:crypto.randomBytes(10).toString('hex') }); }
+function verifyClientKey(key=''){ const payload=verifyMatrixToken(key); if(!payload||payload.typ!=='pm_admin_client_key')return {ok:false,code:'INVALID_CLIENT_KEY'}; if(Number(payload.expiresAt||0)<now())return {ok:false,code:'CLIENT_KEY_EXPIRED'}; return {ok:true,payload}; }
+function adminContext(uid='',email=''){ return { isAdmin:true, uid, email, role:'owner', roles:['owner'], permissions:['admin.read','users.read','users.write','rewards.write','rewards.read','system.read','moderation.write'], source:'env', resolutionChain:['env:ADMIN_EMAILS','env:ADMIN_UIDS'] }; }
+function sessionFromReq(req){ const token=String(req.headers['x-session-token']||'').trim(); if(!token)return null; const session=runtimeStore.temporary.get(`session:${token}`); return session?.uid?{token,...session}:null; }
+router.get('/auth/admin/matrix/identity',(req,res)=>{ const session=sessionFromReq(req); if(session&&isConfiguredAdmin(session.email,session.uid))return res.json({ok:true,authenticated:true,admin:true,user:{uid:session.uid,email:session.email},adminContext:adminContext(session.uid,session.email)}); const primary=primaryAdmin(); if(!primary.email)return res.status(401).json({ok:false,authenticated:false,admin:false,user:null,error:'ADMIN_ENV_MISSING'}); return res.json({ok:true,authenticated:false,admin:true,user:primary,adminContext:adminContext(primary.uid,primary.email),manualFallback:true}); });
+router.post('/auth/admin/matrix/step-email',strictLimiter,(req,res)=>{ const primary=primaryAdmin(); const email=String(req.body?.email||primary.email||'').trim().toLowerCase(); const uid=env.adminEmails.includes(email)?(env.adminUids[0]||email):''; if(!email||!isConfiguredAdmin(email,uid))return res.status(401).json({ok:false,error:'Yönetici e-postası yetkili listede değil.'}); res.json({ok:true,boundToSession:false,manualFallback:true,email,ticket:signMatrix({typ:'pm_admin_step',uid,email,stage:2,issuedAt:now(),expiresAt:now()+7*60000,nonce:crypto.randomBytes(12).toString('hex')}),admin:adminContext(uid,email)}); });
+router.post('/auth/admin/matrix/step-password',strictLimiter,(req,res)=>{ const payload=verifyMatrixToken(req.body?.ticket||''); if(!payload||payload.typ!=='pm_admin_step'||Number(payload.stage)!==2||Number(payload.expiresAt||0)<now())return res.status(401).json({ok:false,error:'Güvenlik oturumu geçersiz.'}); if(!verifySecondFactor(req.body?.password||''))return res.status(403).json({ok:false,error:'Güvenlik şifresi doğrulanamadı.'}); res.json({ok:true,ticket:signMatrix({...payload,stage:3,prev:'identity+password',issuedAt:now(),expiresAt:now()+7*60000})}); });
+router.post('/auth/admin/matrix/step-name',strictLimiter,(req,res)=>{ const payload=verifyMatrixToken(req.body?.ticket||''); if(!payload||payload.typ!=='pm_admin_step'||Number(payload.stage)!==3||Number(payload.expiresAt||0)<now())return res.status(401).json({ok:false,error:'Güvenlik oturumu geçersiz.'}); if(!verifyThirdFactor(req.body?.adminName||req.body?.name||''))return res.status(403).json({ok:false,error:'Son güvenlik doğrulaması başarısız oldu.'}); if(!isConfiguredAdmin(payload.email,payload.uid))return res.status(403).json({ok:false,error:'Yönetici yetkisi doğrulanamadı.'}); const sessionToken=crypto.randomBytes(32).toString('hex'); const sessionId=crypto.randomBytes(12).toString('hex'); runtimeStore.temporary.set(`session:${sessionToken}`,{uid:payload.uid,email:payload.email,sessionSource:'admin_matrix',sessionId,at:now()},12*3600000); const clientKey=issueClientKey({uid:payload.uid,email:payload.email,sessionId}); res.setHeader('Set-Cookie',`pm_session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=43200`); res.json({ok:true,redirectTo:'/admin/admin.html',sessionToken,clientKey,admin:adminContext(payload.uid,payload.email)}); });
+router.get('/auth/admin/matrix/status',(req,res)=>{ const session=sessionFromReq(req); if(!session||!isConfiguredAdmin(session.email,session.uid))return res.status(401).json({ok:false,authenticated:false,redirectTo:'/admin/index.html',error:'Yönetici oturumu bulunamadı.'}); const keyState=verifyClientKey(req.headers['x-admin-client-key']||''); if(!keyState.ok)return res.status(403).json({ok:false,authenticated:true,redirectTo:'/admin/index.html',code:keyState.code,error:'Yönetici güvenlik anahtarı doğrulanamadı.'}); res.json({ok:true,authenticated:true,user:{uid:session.uid,email:session.email},admin:adminContext(session.uid,session.email),clientKey:issueClientKey({uid:session.uid,email:session.email,sessionId:session.sessionId||''})}); });
+router.post('/auth/admin/matrix/logout',(req,res)=>{ const token=String(req.headers['x-session-token']||'').trim(); if(token)runtimeStore.temporary.delete(`session:${token}`); res.setHeader('Set-Cookie','pm_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0'); res.json({ok:true}); });
+
 router.get('/healthz', (_req, res) => res.json({ ok: true, service: 'playmatrix-api', at: now() }));
 router.post('/auth/resolve-login', strictLimiter, async (req, res) => { const id = s(req.body?.identifier || req.body?.email || req.body?.username, 160); if (!id) return res.status(400).json({ ok: false, error: 'IDENTIFIER_REQUIRED' }); if (id.includes('@')) return res.json({ ok: true, email: id.toLowerCase() }); const { db } = fb(); if (!db) return res.status(404).json({ ok: false, error: 'USER_NOT_FOUND' }); const q = await db.collection('users').where('usernameLower', '==', id.toLowerCase()).limit(1).get(); if (q.empty || !q.docs[0].data().email) return res.status(404).json({ ok: false, error: 'USER_NOT_FOUND' }); res.json({ ok: true, email: q.docs[0].data().email }); });
 router.post('/auth/session/create', requireAuth, async (req, res) => { const token = crypto.randomBytes(32).toString('hex'); const uid = uidOf(req); runtimeStore.temporary.set(`session:${token}`, { uid, email: req.user?.email || '', at: now() }, 30 * 86400000); const user = await readProfile(req, uid, { email: req.user?.email || '' }); res.json({ ok: true, sessionToken: token, session: { token, expiresAt: now() + 30 * 86400000 }, user }); });
@@ -164,31 +161,6 @@ router.get('/chat/direct/unread-summary', requireAuth, (_req, res) => res.json({
 ['edit','delete','archive','unarchive'].forEach(a => router.post(`/chat/direct/${a}`, requireAuth, (_req, res) => res.json({ ok: true })));
 ['block','unblock','mute','unmute','report'].forEach(a => router.post(`/chat/${a}`, requireAuth, (_req, res) => res.json({ ok: true })));
 
-router.get('/pisti-online/lobby', requireAuth, attachProfile, (req, res) => { const rooms = runtimeStore.rooms.values().filter(r => r && r.id && String(r.id).startsWith('pisti_')).map(pistiGame.lobbyRoom); res.json({ ok: true, rooms }); });
-router.get('/pisti-online/resume', requireAuth, attachProfile, (req, res) => { const uid = uidOf(req); const room = runtimeStore.rooms.values().find(r => r && r.id && String(r.id).startsWith('pisti_') && r.players?.some(p => p.uid === uid)); res.json({ ok: true, room: pistiGame.publicRoom(room, uid) }); });
-router.post('/pisti-online/play-open', requireAuth, attachProfile, (req, res) => { const room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), guestProfile: { uid:'bot', username:'PlayMatrix Bot' }, mode: req.body?.mode, bet: req.body?.bet, roomName: req.body?.roomName || `${req.__pmProfile.username} Masası` }); res.json({ ok: true, roomId: room.id, room: pistiGame.publicRoom(room, uidOf(req)) }); });
-router.post('/pisti-online/create-private', requireAuth, attachProfile, (req, res) => { const room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), guestProfile: false, mode: req.body?.mode, bet: req.body?.bet, isPrivate: true, roomName: req.body?.roomName || `${req.__pmProfile.username} Özel Masa`, password: req.body?.password }); room.status = 'waiting'; room.currentPlayers = 1; pistiGame.saveRoom(room); res.json({ ok: true, roomId: room.id, code: room.id.slice(-6).toUpperCase(), room: pistiGame.publicRoom(room, uidOf(req)) }); });
-router.post('/pisti-online/join', requireAuth, attachProfile, (req, res) => { try { const roomId = s(req.body?.roomId || req.body?.code, 100); let room = pistiGame.getRoom(roomId); if (!room) room = pistiGame.createRoom({ hostProfile: gameProfileFromReq(req), mode: req.body?.mode, bet: req.body?.bet }); else if (!room.players.some(p => p.uid === uidOf(req))) room = pistiGame.joinRoom(room, gameProfileFromReq(req)); res.json({ ok: true, roomId: room.id, room: pistiGame.publicRoom(room, uidOf(req)) }); } catch(e){ res.status(400).json({ ok:false, error:e.message }); } });
-router.post('/pisti-online/ping', requireAuth, (req, res) => res.json({ ok: true, room: pistiGame.publicRoom(pistiGame.getRoom(s(req.body?.roomId, 100)), uidOf(req)) }));
-router.get('/pisti-online/state/:id', requireAuth, (req, res) => res.json({ ok: true, room: pistiGame.publicRoom(pistiGame.getRoom(s(req.params.id, 100)), uidOf(req)) }));
-router.post('/pisti-online/play', requireAuth, (req, res) => { try { const room = pistiGame.getRoom(s(req.body?.roomId, 100)); if (!room) return res.status(404).json({ ok: false, error: 'ROOM_NOT_FOUND' }); const out = pistiGame.play(room, uidOf(req), s(req.body?.cardToken || req.body?.cardId || req.body?.card, 40)); res.json({ ok: true, captured: out.captured, pisti: out.pisti, room: pistiGame.publicRoom(out.room, uidOf(req)) }); } catch (e) { res.status(400).json({ ok: false, error: e.message }); } });
-router.post('/pisti-online/leave', requireAuth, (req, res) => { const room = pistiGame.getRoom(s(req.body?.roomId, 100)); if (room) { room.status = 'abandoned'; pistiGame.saveRoom(room); } res.json({ ok: true }); });
-
-router.get('/chess/lobby', requireAuth, (_req, res) => { const rooms = runtimeStore.rooms.values().filter(r => r && r.id && String(r.id).startsWith('chess_')).map(chessGame.lobbyRoom); res.json({ ok: true, rooms }); });
-router.get('/chess/resume', requireAuth, (req, res) => { const uid = uidOf(req); const room = runtimeStore.rooms.values().find(r => r && r.id && String(r.id).startsWith('chess_') && (r.host?.uid === uid || r.guest?.uid === uid)); res.json({ ok: true, room: chessGame.publicRoom(room) }); });
-router.post('/chess/create', requireAuth, attachProfile, (req, res) => { const room = chessGame.createRoom({ hostProfile: gameProfileFromReq(req) }); res.json({ ok: true, roomId: room.id, room }); });
-router.post('/chess/join', requireAuth, attachProfile, (req, res) => { try { let room = chessGame.getRoom(s(req.body?.roomId, 100)); if (!room) room = chessGame.createRoom({ hostProfile: gameProfileFromReq(req), guestProfile: { uid:'bot', username:'PlayMatrix Bot' } }); else if (!room.guest && room.host.uid !== uidOf(req)) room = chessGame.joinRoom(room, gameProfileFromReq(req)); res.json({ ok: true, roomId: room.id, room }); } catch(e){ res.status(400).json({ ok:false, error:e.message }); } });
-router.get('/chess/state/:id', requireAuth, (req, res) => res.json({ ok: true, room: chessGame.publicRoom(chessGame.getRoom(req.params.id)) }));
-router.post('/chess/ping', requireAuth, (req, res) => res.json({ ok: true, room: chessGame.publicRoom(chessGame.getRoom(s(req.body?.roomId, 100))) }));
-router.post('/chess/move', requireAuth, (req, res) => { try { const room = chessGame.applyMove(chessGame.getRoom(s(req.body?.roomId, 100)), { uid: uidOf(req), from:req.body.from, to:req.body.to, promotion:req.body.promotion || 'q', move:req.body.move }); res.json({ ok:true, move: req.body.move || {from:req.body.from,to:req.body.to}, room }); } catch(e){ res.status(400).json({ ok:false, error:e.message }); } });
-router.post('/chess/resign', requireAuth, (req, res) => { const room = chessGame.getRoom(s(req.body?.roomId, 100)); if (room) { room.status = 'finished'; room.winner = room.host.uid === uidOf(req) ? 'black' : 'white'; chessGame.saveRoom(room); } res.json({ ok: true, room }); });
-router.post('/chess/leave', requireAuth, (_req, res) => res.json({ ok: true }));
-
-router.get('/crash/resume', requireAuth, attachProfile, (req, res) => { const snap = crashGame.publicSnapshot(); const uid = uidOf(req); snap.bets = snap.activePlayers.filter(p => p.uid === uid); res.json(snap); });
-router.get('/crash/active-bets', requireAuth, (req, res) => { const snap = crashGame.publicSnapshot(); const uid = uidOf(req); res.json({ ok: true, bets: snap.activePlayers.filter(p => p.uid === uid), round: snap, ...snap }); });
-router.get('/crash/history', (_req, res) => res.json({ ok: true, items: crashGame.revealHistory() }));
-router.post('/crash/bet', requireAuth, attachProfile, async (req, res) => { try { const result = crashGame.placeBet({ uid: uidOf(req), profile: gameProfileFromReq(req), box: req.body?.box, amount: req.body?.amount || req.body?.bet, autoCashout: req.body?.autoCashout }); const balanceResult = await addBalance(uidOf(req), -Math.abs(result.bet.amount), 'crash-bet', `crashbet:${result.roundId}:${uidOf(req)}:${result.bet.box}`); const user = await readProfile(req, uidOf(req)); res.json({ ok: true, ...result, balance: user.balance ?? balanceResult.balance, user }); } catch(e){ res.status(e.statusCode || 400).json({ ok:false, error:e.message }); } });
-router.post('/crash/cashout', requireAuth, async (req, res) => { try { const result = crashGame.cashout({ uid: uidOf(req), box: req.body?.box }); const balanceResult = await addBalance(uidOf(req), result.winAmount, 'crash-cashout', `crashcash:${result.roundId}:${uidOf(req)}:${req.body?.box || 1}`); const user = await readProfile(req, uidOf(req)); res.json({ ok: true, ...result, balance: user.balance ?? balanceResult.balance, user }); } catch(e){ res.status(e.statusCode || 400).json({ ok:false, error:e.message }); } });
 
 router.get('/chat/policy', requireAuth, (_req, res) => res.json({ ok: true, policy: { storage: 'memory', lobbyRetentionDays: 7, directRetentionDays: 14, presence: 'memory-only' } }));
 router.get('/support/meta', requireAuth, (_req, res) => res.json({ ok: true, categories: ['Hesap', 'Oyun', 'Ödeme', 'Teknik'], channels: ['ticket', 'callback'], memoryOnlyLogs: true }));

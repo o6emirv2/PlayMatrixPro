@@ -1,5 +1,5 @@
 const { getProgression } = require('./progressionService');
-const LEGACY_FIELDS = ['vip','vipTier','rp','seasonRp','seasonScore','chessElo','pistiElo','selectedFrameLegacy'];
+const LEGACY_FIELDS = ['vip','vipTier','rp','seasonRp','seasonScore','selectedFrameLegacy'];
 async function migrateUserProfile(uid, profile = {}, db = null) {
   const xp = Number(profile.xp ?? profile.accountXp ?? 0) || 0;
   const progression = getProgression(xp);

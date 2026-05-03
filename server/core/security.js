@@ -9,10 +9,11 @@ async function requireAuth(req, res, next) {
     const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
     const { auth } = initFirebaseAdmin();
     if (auth && token) { req.user = await auth.verifyIdToken(token); return next(); }
-    const sessionToken = String(req.headers['x-session-token'] || req.headers['X-Session-Token'] || '').trim();
+    const cookieToken = String(req.headers.cookie || '').split(';').map(x=>x.trim()).find(x=>x.startsWith('pm_session='));
+    const sessionToken = String(req.headers['x-session-token'] || req.headers['X-Session-Token'] || (cookieToken ? decodeURIComponent(cookieToken.slice('pm_session='.length)) : '') || '').trim();
     if (sessionToken) {
       const session = runtimeStore.temporary.get(`session:${sessionToken}`);
-      if (session?.uid) { req.user = { uid: String(session.uid), email: String(session.email || ''), sessionSource: 'runtime-session' }; return next(); }
+      if (session?.uid) { req.user = { uid: String(session.uid), email: String(session.email || ''), sessionSource: String(session.sessionSource || 'runtime-session'), sessionId: String(session.sessionId || '') }; return next(); }
     }
     const devUid = req.headers['x-playmatrix-user'] || req.body?.uid || req.query?.uid;
     if (process.env.NODE_ENV !== 'production' && devUid) { req.user = { uid: String(devUid), email: 'local@playmatrix.test' }; return next(); }
