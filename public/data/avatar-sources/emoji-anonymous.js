@@ -1,5 +1,5 @@
 // Generated from EMOJİ-ANONYMOUS.JS.
-// Avatar URLs are normalized centrally in public/data/avatar-catalog.js.
+// Avatar URLs are normalized centrally in /public/data/avatar-catalog.js.
 export const EMOJI_ANONYMOUS_AVATARS = Object.freeze([
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRKLBdAAxI0eLkwSo408HEo38rFAu632wNxoZByHpOVdQ&s=10",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTbvZW1rEjuLmnYriVBZNE0vGNs4268YnQg0BMbXZk8pg&s=10",

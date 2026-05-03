@@ -2,12 +2,12 @@
   'use strict';
 
   const GAMES = [
-    { name: 'Crash', category: 'online', access: 'free', url: '/static-games/crash', color: '69,162,255', icon: 'fa-arrow-trend-up', desc: 'Gerçek para içermeyen, refleks ve zamanlama odaklı hızlı tempo multiplier oyunu.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'] },
-    { name: 'Satranç', category: 'online', access: 'free', url: '/static-games/chess', color: '104,178,255', icon: 'fa-chess', desc: 'Klasik satranç deneyimini modern arayüz ve giriş tabanlı rekabet akışıyla oyna.', tags: ['PvP', 'Strateji', 'Arena'] },
-    { name: 'Pişti', category: 'online', access: 'free', url: '/static-games/pisti', color: '93,95,254', icon: 'fa-layer-group', desc: 'Kart takibi ve tempo yönetimi isteyen online pişti deneyimi.', tags: ['Kart', 'Online', 'Klasik'] },
+    { name: 'Crash', category: 'online', access: 'auth', url: '/games/crash', color: '69,162,255', icon: 'fa-arrow-trend-up', desc: 'Gerçek para içermeyen, refleks ve zamanlama odaklı hızlı tempo multiplier oyunu.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'] },
+    { name: 'Satranç', category: 'online', access: 'auth', url: '/games/chess', color: '104,178,255', icon: 'fa-chess', desc: 'Klasik satranç deneyimini modern arayüz ve giriş tabanlı rekabet akışıyla oyna.', tags: ['PvP', 'Strateji', 'Arena'] },
+    { name: 'Pişti', category: 'online', access: 'auth', url: '/games/pisti', color: '93,95,254', icon: 'fa-layer-group', desc: 'Kart takibi ve tempo yönetimi isteyen online pişti deneyimi.', tags: ['Kart', 'Online', 'Klasik'] },
     { name: 'Pattern Master', category: 'classic', access: 'free', url: '/games/pattern-master', color: '97,220,176', icon: 'fa-shapes', desc: 'Dikkat ve görsel hafıza odaklı ücretsiz pattern oyunu.', tags: ['Ücretsiz', 'Zeka', 'Refleks'] },
-    { name: 'Space Pro', category: 'classic', access: 'free', url: '/games/space', color: '103,170,255', icon: 'fa-user-astronaut', desc: 'Tarayıcıda anında açılan hafif ve hızlı klasik arcade uzay oyunu.', tags: ['Arcade', 'Retro', 'Ücretsiz'] },
-    { name: 'Snake Pro', category: 'classic', access: 'free', url: '/games/snake', color: '85,214,140', icon: 'fa-wave-square', desc: 'Retro hisli, akıcı ve ücretsiz snake deneyimi.', tags: ['Retro', 'Arcade', 'Ücretsiz'] }
+    { name: 'Space Pro', category: 'classic', access: 'free', url: '/games/space-pro', color: '103,170,255', icon: 'fa-user-astronaut', desc: 'Tarayıcıda anında açılan hafif ve hızlı klasik arcade uzay oyunu.', tags: ['Arcade', 'Retro', 'Ücretsiz'] },
+    { name: 'Snake Pro', category: 'classic', access: 'free', url: '/games/snake-pro', color: '85,214,140', icon: 'fa-wave-square', desc: 'Retro hisli, akıcı ve ücretsiz snake deneyimi.', tags: ['Retro', 'Arcade', 'Ücretsiz'] }
   ];
 
   const qs = (selector, root) => (root || document).querySelector(selector);

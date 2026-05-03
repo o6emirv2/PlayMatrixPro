@@ -1,9 +1,9 @@
 {
   "name": "playmatrix-clean-production",
-  "version": "10.0.0",
+  "version": "7.0.0",
   "private": true,
   "type": "commonjs",
-  "description": "PlayMatrix clean modular production build - V10 maintenance online games removed, legacy admin matrix restored",
+  "description": "PlayMatrix v7 production build - six games rebuilt, market, balanced XP, in-memory runtime",
   "main": "server.js",
   "engines": {
     "node": ">=20 <23"

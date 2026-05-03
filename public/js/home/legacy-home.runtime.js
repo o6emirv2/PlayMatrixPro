@@ -10,8 +10,8 @@ let firebaseGetIdToken = null; let firebaseReload = null;      const $ = (id) =>
       } catch (_) {}     }      function safeExecute(label, task) {       try {
         return task();       } catch (error) {         console.error(`[PlayMatrix] ${label}`, error);         reportClientError(`safeExecute:${label}`, error, { source: 'script.js' });         return null;
       }     }      function safeRenderGameShowcaseSkeleton(count = 3){       try {         if (typeof window.renderGameShowcaseSkeleton === 'function' && window.renderGameShowcaseSkeleton !== safeRenderGameShowcaseSkeleton) return window.renderGameShowcaseSkeleton(count);       } catch (error) {         console.warn('[PlayMatrix] skeleton renderer fallback', error);       }       try {         const grid = $('gamesGrid');         if (!grid) return null;         const existingStatic = grid.dataset.staticPainted === '1' && grid.children.length > 0;         if (existingStatic) return null;         const fragment = document.createDocumentFragment();         const total = Math.max(1, Math.min(6, Number(count) || 3));         for (let i = 0; i < total; i += 1) {           const card = document.createElement('article');           card.className = 'game-card skeleton is-skeleton';           const top = document.createElement('div'); top.className = 'game-top';           const icon = document.createElement('div'); icon.className = 'game-icon skeleton';           const tags = document.createElement('div'); tags.className = 'tag-stack';           tags.appendChild(createTextElement('span', 'mini-tag skeleton', ''));           tags.appendChild(createTextElement('span', 'mini-tag skeleton', ''));           top.append(icon, tags);           const body = document.createElement('div'); body.className = 'game-body';           body.appendChild(createTextElement('h3', 'game-title skeleton', ''));           body.appendChild(createTextElement('div', 'game-desc skeleton', ''));           const footer = document.createElement('div'); footer.className = 'game-footer';           footer.appendChild(createTextElement('span', 'game-status skeleton', ''));           footer.appendChild(createTextElement('span', 'game-cta skeleton', ''));           card.append(top, body, footer);           fragment.appendChild(card);         }         grid.classList.add('is-loading');         grid.replaceChildren(fragment);         const empty = $('gamesEmpty');         if (empty) empty.hidden = true;       } catch (error) {         console.warn('[PlayMatrix] skeleton hard fallback failed', error);       }       return null;     }      window.renderGameShowcaseSkeleton = window.renderGameShowcaseSkeleton || safeRenderGameShowcaseSkeleton;
-     const AUTH_UNAVAILABLE_MESSAGE = "Kimlik altyapısı geçici olarak hazır değil. Lütfen biraz sonra tekrar dene.";     const FIREBASE_RUNTIME_TIMEOUT_MS = 8000;
-    const FIREBASE_IMPORT_TIMEOUT_MS = 10000;      let firebaseConfig = null;     let app = null;     let auth = { currentUser: null };
+     const AUTH_UNAVAILABLE_MESSAGE = "Kimlik altyapısı geçici olarak hazır değil. Lütfen biraz sonra tekrar dene.";     const FIREBASE_RUNTIME_TIMEOUT_MS = 3500;
+    const FIREBASE_IMPORT_TIMEOUT_MS = 6000;      let firebaseConfig = null;     let app = null;     let auth = { currentUser: null };
     let firebaseReady = false;     let firebaseBootError = null;     let firebaseBootPromise = null;      function timeoutAfter(ms, label) {
       return new Promise((_, reject) => {         window.setTimeout(() => reject(new Error(label)), Math.max(1000, Number(ms) || 1000));       });     } 
     function withTimeout(promise, ms, label) {       return Promise.race([promise, timeoutAfter(ms, label)]);     }      function syncRuntimeAuth() {
@@ -71,28 +71,28 @@ let firebaseGetIdToken = null; let firebaseReload = null;      const $ = (id) =>
         .map((value) => String(value || "").trim().replace(/\/+$/, "").replace(/\/api$/i, ""))         .filter((value, index, arr) => value && arr.indexOf(value) === index && value !== current);     }      async function resolveApiBase() {
       if (typeof PLAYMATRIX_API?.ensureApiBase === 'function') {         return setResolvedApiBase(await PLAYMATRIX_API.ensureApiBase());       }       for (const base of API_CANDIDATES) {         if (await probeApiBase(base)) return setResolvedApiBase(base);
       }       return setResolvedApiBase(API_CANDIDATES[0] || "");     }      const apiBaseReady = resolveApiBase();
-     function fetchWithTimeout(resource, options = {}, timeoutMs = 10000) {       if (typeof PLAYMATRIX_API?.fetchWithTimeout === 'function') {         return PLAYMATRIX_API.fetchWithTimeout(resource, options, timeoutMs);       }
+     function fetchWithTimeout(resource, options = {}, timeoutMs = 5000) {       if (typeof PLAYMATRIX_API?.fetchWithTimeout === 'function') {         return PLAYMATRIX_API.fetchWithTimeout(resource, options, timeoutMs);       }
       const controller = new AbortController();       const timer = window.setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000));       return fetch(resource, { ...options, signal: controller.signal }).finally(() => window.clearTimeout(timer));     } 
     async function requestWithApiFallback(endpoint, fetchOptions = {}, retryableStatuses = [404, 405, 502, 503, 504]) {       await apiBaseReady;       const orderedBases = [API_URL, ...getFallbackApiBases(API_URL)];       let lastNetworkError = null; 
-      for (let index = 0; index < orderedBases.length; index += 1) {         const base = orderedBases[index];         try {           const response = await fetchWithTimeout(`${base}${endpoint}`, { ...fetchOptions, cache: "no-store" }, fetchOptions.timeoutMs || 10000);           const canRetry = retryableStatuses.includes(response.status) && index < orderedBases.length - 1;
+      for (let index = 0; index < orderedBases.length; index += 1) {         const base = orderedBases[index];         try {           const response = await fetchWithTimeout(`${base}${endpoint}`, { ...fetchOptions, cache: "no-store" }, fetchOptions.timeoutMs || 5000);           const canRetry = retryableStatuses.includes(response.status) && index < orderedBases.length - 1;
           if (response.ok || !canRetry) {             if (base !== API_URL) setResolvedApiBase(base);             return response;           }         } catch (error) {
           lastNetworkError = error;           if (index >= orderedBases.length - 1) throw error;         }       } 
       if (lastNetworkError) throw lastNetworkError;       throw new Error("Sunucuyla bağlantı kurulamadı.");     }      const REF_STORAGE_KEY = "pm_pending_referral_code";
      const REWARDS = [       { label:"2.500 MC", val:2500, color:"rgba(255,255,255,0.14)" },       { label:"5.000 MC", val:5000, color:"rgba(255,255,255,0.09)" },       { label:"7.500 MC", val:7500, color:"rgba(255,255,255,0.14)" },
       { label:"12.500 MC", val:12500, color:"rgba(255,255,255,0.09)" },       { label:"20.000 MC", val:20000, color:"rgba(255,255,255,0.14)" },       { label:"25.000 MC", val:25000, color:"rgba(255,255,255,0.09)" },       { label:"30.000 MC", val:30000, color:"rgba(255,255,255,0.14)" },       { label:"50.000 MC", val:50000, color:"rgba(255,255,255,0.09)" }
     ];        const GAMES = [
-      {         name: "Crash",         category: "online",         access: "free",         url: "/static-games/crash",
+      {         name: "Crash",         category: "online",         access: "auth",         url: "/games/crash",
         color: "69,162,255",         icon: "fa-arrow-trend-up",         desc: "Gerçek para içermeyen, refleks ve zamanlama odaklı hızlı tempo multiplier oyunu.",         tags: ["Canlı Oyun", "Rekabet", "Hızlı Tur"],         keywords: "crash multiplier online rocket roket çarpan"
-      },       {         name: "Satranç",         category: "online",         access: "free",
-        url: "/static-games/chess",         color: "104,178,255",         icon: "fa-chess",         desc: "Klasik satranç deneyimini modern arayüz ve giriş tabanlı rekabet akışıyla oyna.",         tags: ["PvP", "Strateji", "Arena"],
+      },       {         name: "Satranç",         category: "online",         access: "auth",
+        url: "/games/chess",         color: "104,178,255",         icon: "fa-chess",         desc: "Klasik satranç deneyimini modern arayüz ve giriş tabanlı rekabet akışıyla oyna.",         tags: ["PvP", "Strateji", "Arena"],
         keywords: "chess online pvp satranç"       },       {         name: "Pişti",         category: "online",
-        access: "free",         url: "/static-games/pisti",         color: "93,95,254",         icon: "fa-layer-group",         desc: "Kart takibi ve tempo yönetimi isteyen online pişti deneyimi.",
+        access: "auth",         url: "/games/pisti",         color: "93,95,254",         icon: "fa-layer-group",         desc: "Kart takibi ve tempo yönetimi isteyen online pişti deneyimi.",
         tags: ["Kart", "Online", "Klasik"],         keywords: "card kart multiplayer online pisti pişti"       },       {         name: "Pattern Master",
         category: "classic",         access: "free",         url: "/games/pattern-master",         color: "97,220,176",         icon: "fa-shapes",
         desc: "Dikkat ve görsel hafıza odaklı ücretsiz pattern oyunu.",         tags: ["Ücretsiz", "Zeka", "Refleks"],         keywords: "arcade pattern master ücretsiz zeka"       },       {
-        name: "Space Pro",         category: "classic",         access: "free",         url: "/games/space",         color: "103,170,255",
+        name: "Space Pro",         category: "classic",         access: "free",         url: "/games/space-pro",         color: "103,170,255",
         icon: "fa-user-astronaut",         desc: "Tarayıcıda anında açılan hafif ve hızlı klasik arcade uzay oyunu.",         tags: ["Arcade", "Retro", "Ücretsiz"],         keywords: "arcade pro space uzay"       },
-      {         name: "Snake Pro",         category: "classic",         access: "free",         url: "/games/snake",
+      {         name: "Snake Pro",         category: "classic",         access: "free",         url: "/games/snake-pro",
         color: "85,214,140",         icon: "fa-wave-square",         desc: "Retro hisli, akıcı ve ücretsiz snake deneyimi.",         tags: ["Retro", "Arcade", "Ücretsiz"],         keywords: "arcade pro retro snake yılan"
       },     ];       const createSocialState = () => ({
       activeTab: "global",       selectedKey: "global:lobby",       directMessages: {},       unreadDirect: {},       mobilePanelOpen: false,
@@ -398,7 +398,7 @@ function getSocialRankMeta(){ return { name: "SEVİYE", className: "rank-level" 
               else if (state.currentSheet === "social") renderSocialHub({ main: false });             });           }         }, 2500);         return;
       }        loadDirectHistoryByHttp(peerUid).catch((error) => {         state.social.directHistoryErrors[peerUid] = error.message || "Konuşma geçmişi yüklenemedi.";         delete state.social.directHistoryPending[peerUid];
         delete state.social.directHistoryRequestedAt[peerUid];         if (!renderActiveDirectStream(peerUid) && state.currentSheet === "social") renderSocialHub();         else if (state.currentSheet === "social") renderSocialHub({ main: false });       });     }
-     function resolveInviteTargetHref(payload = {}) {       const roomId = encodeURIComponent(payload.roomId || "");       const gameKey = payload.gameKey || payload.gameCode || "";       const gamePath = payload.gamePath || ((payload.gameKey || payload.gameCode) === "pisti" ? "/static-games/pisti" : "/static-games/chess");
+     function resolveInviteTargetHref(payload = {}) {       const roomId = encodeURIComponent(payload.roomId || "");       const gameKey = payload.gameKey || payload.gameCode || "";       const gamePath = payload.gamePath || ((payload.gameKey || payload.gameCode) === "pisti" ? "/games/pisti" : "/games/chess");
       return `${gamePath}?joinRoom=${roomId}`;     }      let inviteNavigationLock = false;     let inviteNavigationResetTimer = 0;
      function navigateToInviteRoom(payload = {}) {       const roomId = String(payload?.roomId || "").trim();       const gameKey = String(payload?.gameKey || payload?.gameCode || "").trim().toLowerCase();       if (!roomId) return false;
       if (inviteNavigationLock) {         const queuedRoomId = String(sessionStorage.getItem("pm_auto_join_room") || "").trim();         return queuedRoomId === roomId;       } 
@@ -429,16 +429,22 @@ function getSocialRankMeta(){ return { name: "SEVİYE", className: "rank-level" 
       };     }      function updateMatchmakingToastMessage(message = "Uygun bir rakip aranıyor...") {       const toast = state.social.matchmakingToastEl;
       const el = toast?.querySelector?.("[data-matchmake-message]");       if (el) el.textContent = message;     }      function dismissMatchmakingToast() {
       if (state.social?.matchmakingToastEl?.remove) state.social.matchmakingToastEl.remove();       if (state.social) state.social.matchmakingToastEl = null;     }      function getMatchmakingPagePath(gameType = "") {
-      return gameType === "pisti" ? "/static-games/pisti" : "/static-games/chess";     }      function showMatchmakingToast(gameType = "") {       dismissMatchmakingToast();
+      return gameType === "pisti" ? "/games/pisti" : "/games/chess";     }      function showMatchmakingToast(gameType = "") {       dismissMatchmakingToast();
       const title = gameType === "pisti" ? "Pişti Eşleşmesi" : "Satranç Eşleşmesi";       const { toast, body, closeBtn } = createToastBase({         tone: "info",         iconClass: "fa-bolt",         title: `${title} aranıyor`
       });        closeBtn.addEventListener("click", () => cancelMatchmaking(gameType));        const message = document.createElement("div");
       message.className = "toast-message";       message.dataset.matchmakeMessage = "true";       message.textContent = "Uygun bir rakip aranıyor...";        const actions = document.createElement("div");
       actions.className = "invite-toast-actions";        const cancelBtn = document.createElement("button");       cancelBtn.className = "ghost-btn";       cancelBtn.type = "button";
       cancelBtn.textContent = "İptal Et";       cancelBtn.addEventListener("click", () => cancelMatchmaking(gameType));        actions.appendChild(cancelBtn);       body.append(message, actions);
       state.social.matchmakingToastEl = toast;       appendToast(toast, 0);       return toast;     } 
-    async function startMatchmaking(gameType, options = {}) {
-      showToast('Hızlı eşleşme kapalı', 'Crash, Satranç ve Pişti canlı oyun sistemleri bu sürümde kaldırıldı.', 'info');
-      return null;
+    async function startMatchmaking(gameType, options = {}) {       try {         if (!ensureAuthThen("Hızlı Eşleşme")) return;         const safeGameType = gameType === "chess" ? "chess" : gameType === "pisti" ? "pisti" : "";         if (!safeGameType) throw new Error("Geçersiz oyun türü.");
+         const socket = await ensureRealtimeConnection();         if (!socket) throw new Error("Canlı bağlantı kurulamadı.");          const payload = { gameType: safeGameType };
+         if (safeGameType === "pisti") {           payload.mode = ["2-52", "2-104", "4-104"].includes(String(options.mode || "").trim()) ? String(options.mode).trim() : "2-52";           const rawBet = Number(options.bet || 1000);           payload.bet = Number.isFinite(rawBet) ? Math.min(10000000, Math.max(1, Math.floor(rawBet))) : 1000;
+        }          state.social.pendingMatchmaking = {           gameType: safeGameType,           mode: payload.mode || "",
+          bet: payload.bet || 0,           startedAt: Date.now()         };          showMatchmakingToast(safeGameType);
+        socket.emit("game:matchmake_join", payload);       } catch (error) {         dismissMatchmakingToast();         state.social.pendingMatchmaking = null;         showToast("Eşleşme hatası", error.message || "Hızlı eşleşme başlatılamadı.", "error");
+      }     }      function cancelMatchmaking(gameType = "") {       const activeGameType = gameType || state.social.pendingMatchmaking?.gameType || "";
+      dismissMatchmakingToast();        if (state.socket?.connected && activeGameType) {         state.socket.emit("game:matchmake_leave", { gameType: activeGameType });       }
+       if (state.social.pendingMatchmaking) {         state.social.pendingMatchmaking = null;         showToast("Eşleşme iptal edildi", "Hızlı eşleşme araması durduruldu.", "info");       }
     }      window.startMatchmaking = startMatchmaking;     window.cancelMatchmaking = cancelMatchmaking; 
     function createSocialListItem(item, isActive) {       const button = document.createElement("button");       button.type = "button";       button.className = `ps-list-item${isActive ? " is-active" : ""}`;       button.dataset.socialKey = item.key;
       button.addEventListener("click", () => selectSocialItem(item.key));        let visual = null;       if (["friend", "request", "invite"].includes(item.type)) {         visual = document.createElement("div");
@@ -742,9 +748,17 @@ function renderMessageStack(stream, messages, emptyTitle, emptyMessage, getIsSel
         const confirmed = await showActionDialog({           title: "Bu bağlantı kaldırılsın mı?",           message: entry.status === "accepted"             ? `${entry.username} artık arkadaş listende görünmeyecek.`             : `${entry.username} için bekleyen istek kaldırılacak.`,
           confirmText: entry.status === "accepted" ? "Arkadaşı Kaldır" : "İsteği Kaldır",           cancelText: "Vazgeç"         });         if (!confirmed) return;         await fetchPrivate("/api/friends/remove", "POST", { friendshipId: entry.friendshipId, targetUid: entry.uid });
         showToast("Sosyal Merkez", entry.status === "accepted" ? "Arkadaş listesi güncellendi." : "Bekleyen istek kaldırıldı.", "info");         if (entry.uid && state.social.unreadDirect[entry.uid]) delete state.social.unreadDirect[entry.uid];         await loadFriends();       } catch (error) {         showToast("Sosyal Merkez", error.message || "Kaldırılamadı.", "error");
-      }     }      async function createInviteForFriend(entry) {
-      showToast('Oyun daveti kapalı', 'Crash, Satranç ve Pişti canlı oyun sistemleri bakım standardıyla kaldırıldı. Sosyal merkez sohbet ve arkadaşlık için aktif kalır.', 'info');
-    }      function handleSocialComposerInput() {       const input = $("psChatInput");       const helpEl = $("psChatHelp");       if (!input || !helpEl || helpEl.classList.contains("is-error")) return;
+      }     }      async function createInviteForFriend(entry) {       try {
+        if (!ensureAuthThen("Sosyal Merkez")) return;         const socket = await ensureRealtimeConnection();         if (!socket) throw new Error("Canlı bağlantı kurulamadı.");          if (!entry?.online) throw new Error("Bu oyuncu şu anda çevrimdışı.");
+         const config = getSelectedInviteConfig();         let roomId = "";          if (config.gameKey === "chess") {
+          const payload = await fetchPrivate("/api/games/chess/create", "POST", {});           roomId = payload?.room?.id || "";         } else {           const payload = await fetchPrivate("/api/games/pisti/create", "POST", {             mode: config.mode,
+            bet: config.bet,             roomName: `${state.userData?.username || "PlayMatrix"} Özel Oda`,             password: ""           });           roomId = payload?.room?.id || "";
+        }          if (!roomId) throw new Error("Davet odası hazırlanamadı.");          state.social.pendingInviteNavigation = {
+          roomId,           gameKey: config.gameKey,           gameCode: config.gameKey,           gamePath: config.gameKey === "pisti" ? "/games/pisti" : "/games/chess",           targetUid: entry.uid
+        };          socket.emit("game:invite_send", {           targetUid: entry.uid,           roomId,
+          gameKey: config.gameKey,           gameName: config.gameName         });          showToast("Davet hazırlanıyor", "Sunucu onayı bekleniyor. Başarılı olduğunda odaya otomatik geçeceksiniz.", "info");
+      } catch (error) {         state.social.pendingInviteNavigation = null;         showToast("Davet hatası", error.message || "Davet gönderilemedi.", "error");       }     }
+     function handleSocialComposerInput() {       const input = $("psChatInput");       const helpEl = $("psChatHelp");       if (!input || !helpEl || helpEl.classList.contains("is-error")) return;
       const size = (input.value || "").trim().length;       const base = state.social.activeTab === "friends" ? "" : "";       const text = size > 0 ? (base ? `${size}/280 · ${base}` : `${size}/280`) : base;       helpEl.textContent = text;       helpEl.className = "ps-chat-help";
       helpEl.style.display = text ? "block" : "none";     }      async function sendSocialMessage() {       try {
         if (!ensureAuthThen("Sosyal Merkez")) return;         const socket = await ensureRealtimeConnection();         if (!socket) throw new Error("Canlı bağlantı kurulamadı.");          const input = $("psChatInput");
@@ -765,17 +779,21 @@ function renderMessageStack(stream, messages, emptyTitle, emptyMessage, getIsSel
         const cleanup = (result) => {           backdrop.remove();           resolve(result);         }; 
         cancelBtn.addEventListener("click", () => cleanup(false));         confirmBtn.addEventListener("click", () => cleanup(true));         backdrop.addEventListener("click", (event) => {           if (event.target === backdrop) cleanup(false);         });
          actions.append(cancelBtn, confirmBtn);         dialog.append(titleEl, messageEl, actions);         backdrop.appendChild(dialog);         document.body.appendChild(backdrop);
-      });     }      async function confirmPotentialCrashExit() { return true; }      function removeInviteToast(inviteId) {       const toast = state.inviteToasts.get(inviteId);       if (toast) toast.remove();
-      state.inviteToasts.delete(inviteId);     }      async function handleIncomingInviteResponse(data, response) {
-      try {
-        if (state.socket && data?.inviteId) {
-          state.socket.emit('game:invite_response', { inviteId: data.inviteId, hostUid: data.hostUid, roomId: data.roomId, gameKey: data.gameKey, response: 'declined' });
-        }
-        removeInviteToast(data?.inviteId);
-        showToast('Oyun daveti kapalı', 'Kaldırılan canlı oyun sistemlerine davet kabul edilmiyor.', 'info');
-      } catch (error) {
-        showToast('Davet işlemi', error.message || 'Davet işlenemedi.', 'error');
-      }
+      });     }      async function confirmPotentialCrashExit() {       try {
+        if (!auth.currentUser) return true;         const payload = await fetchPrivate("/api/games/crash/state");         if (!payload?.hasActiveBet) return true;         const warning = payload.hasRiskyBet           ? "Şu an otomatik çıkış tanımı olmayan aktif bir Crash turun var. Sayfadan çıkarsan tur devam eder ve sonuç riski sana ait olur. Yine de davete gitmek istiyor musun?"
+          : "Şu an aktif Crash bahsin bulunuyor. Sayfadan ayrıldığında tur arka planda devam eder. Davete geçmek istediğinden emin misin?";         return await showActionDialog({           title: "Aktif Crash Bahsi Tespit Edildi",           message: warning,           confirmText: "Yine de Devam Et",
+          cancelText: "Kal"         });       } catch (_) {         return true;       }
+    }      function removeInviteToast(inviteId) {       const toast = state.inviteToasts.get(inviteId);       if (toast) toast.remove();
+      state.inviteToasts.delete(inviteId);     }      async function handleIncomingInviteResponse(data, response) {       try {
+        if (!data?.inviteId) return;         if (response === "accepted") {           const canContinue = await confirmPotentialCrashExit();           if (!canContinue) return; 
+          if (data.gameKey === "chess") {             await fetchPrivate("/api/games/chess/join", "POST", { roomId: data.roomId });           } else if (data.gameKey === "pisti") {             await fetchPrivate("/api/games/pisti/join", "POST", { roomId: data.roomId });           } else {
+            throw new Error("Bilinmeyen davet türü.");           }         }          if (state.socket) {
+          state.socket.emit("game:invite_response", {             inviteId: data.inviteId,             hostUid: data.hostUid,             roomId: data.roomId,             gameKey: data.gameKey,
+            response           });         }          removeInviteToast(data.inviteId);
+         if (response === "accepted") {           showToast("Oyuna Bağlanılıyor", "Oyun odasına aktarılıyorsunuz...", "success");                      setTimeout(() => {
+            sessionStorage.setItem("pm_auto_join_room", data.roomId);             sessionStorage.setItem("pm_auto_join_game", data.gameKey);                          const targetHref = data.gameKey === "pisti"               ? `/games/pisti?joinRoom=${encodeURIComponent(data.roomId)}`
+              : `/games/chess?joinRoom=${encodeURIComponent(data.roomId)}`;             window.location.href = targetHref;           }, 1000);          } else {
+          showToast("Oyun daveti", `${data.hostName || "Arkadaşın"} tarafından gönderilen davet kapatıldı.`, "info");         }       } catch (error) {         showToast("Davet katılımı başarısız", error.message || "Odaya katılım sağlanamadı.", "error");       }
     }      function showInviteToast(data) {       if (!data?.inviteId) return;       removeInviteToast(data.inviteId);
        const { toast, body, closeBtn } = createToastBase({         tone: "info",         iconClass: "fa-gamepad",         title: "Oyun Daveti"
       });        closeBtn.addEventListener("click", () => {         handleIncomingInviteResponse(data, "declined");       });
@@ -1129,7 +1147,7 @@ function buildHeroPromoSlides(overview = {}) {
         card.append(gameTop, gameBody, gameFooter);         const openGame = () => {           if (game.access === "auth" && !auth.currentUser) {             setAuthMode("login");             openSheet("auth", "Hesabına giriş yap", `${game.name} için önce hesabına giriş yapmalısın.`);
             return;           }           location.href = game.url;         }; 
         const primaryBtn = card.querySelector(".game-cta.is-primary, .game-cta");         if (primaryBtn) {           primaryBtn.addEventListener("click", (event) => {             event.stopPropagation();             openGame();
-          });         }          if (false && auth.currentUser && game.category === "online" && game.name === "Satranç") {           const footer = card.querySelector(".game-footer");
+          });         }          if (auth.currentUser && game.category === "online" && game.name === "Satranç") {           const footer = card.querySelector(".game-footer");
           const statusEl = card.querySelector(".game-status");           const actionGroup = document.createElement("div");           actionGroup.className = 'game-action-group';            const quickBtn = document.createElement("button");
           quickBtn.className = "game-cta";           quickBtn.type = "button";           quickBtn.textContent = "Hızlı Eşleş";           quickBtn.addEventListener("click", async (event) => {             event.stopPropagation();
             await startMatchmaking(game.name === "Satranç" ? "chess" : "pisti", game.name === "Pişti" ? { mode: "2-52", bet: 1000 } : {});           });            if (primaryBtn) {             primaryBtn.replaceWith(actionGroup);

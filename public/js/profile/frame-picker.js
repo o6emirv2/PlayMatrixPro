@@ -28,8 +28,8 @@ function resolveFrameAssetIndex(level = 0) {
   if (window.PMAvatar?.getFrameAssetIndex) return window.PMAvatar.getFrameAssetIndex(level);
   const normalized = normalizeFrameLevel(level);
   if (normalized <= 0) return 0;
-  if (normalized <= 100) return normalized;
-  return 100;
+  if (normalized <= 18) return normalized;
+  return 18;
 }
 
 function mountFramePreview(host, { avatar = DEFAULT_FALLBACK_AVATAR, frameLevel = 0, exactFrameIndex = null, size = 64, extraClass = 'pm-avatar--picker' } = {}) {
@@ -165,7 +165,7 @@ export function createFramePicker({
     summary.append(summaryPreview, summaryCopy);
 
     const grid = createElement('div', 'frame-picker-grid');
-    for (let level = 0; level <= 100; level += 1) {
+    for (let level = 0; level <= 18; level += 1) {
       grid.appendChild(buildFrameCard(level, selectedFrame, currentLevel, avatar));
     }
 

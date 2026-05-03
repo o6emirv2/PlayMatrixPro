@@ -1,5 +1,5 @@
 // Generated from KIZ-PROFİL.JS.
-// Avatar URLs are normalized centrally in public/data/avatar-catalog.js.
+// Avatar URLs are normalized centrally in /public/data/avatar-catalog.js.
 export const FEMALE_PROFILE_AVATARS = Object.freeze([
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTeEfmqn4x4i13G-hLWNJ32sXYP_JWp6BYiWzYCcKGCkA&s=10",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRgQeuu0DFnj-aZz_t9kHGW-tUQtMEHX2ajGBvpKDZUkg&s=10",

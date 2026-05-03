@@ -1,5 +1,5 @@
 // Generated from MARVEL-OYUNCULARI.JS.
-// Avatar URLs are normalized centrally in public/data/avatar-catalog.js.
+// Avatar URLs are normalized centrally in /public/data/avatar-catalog.js.
 export const MARVEL_PLAYER_AVATARS = Object.freeze([
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTEUvyk_3eStp1CjovPdR0SZXHN3LPaR0vsV2b4Sz0c2w&s=10",
   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjMnegdIlZyzrUtiCsteIkUSyZP6x5M1w7wvLiRosJiw&s=10",

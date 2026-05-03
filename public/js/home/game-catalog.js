@@ -1,20 +1,20 @@
 export const HOME_GAME_ROUTES = Object.freeze({
-  crash: "/static-games/crash",
-  chess: "/static-games/chess",
-  satranc: "/static-games/chess",
-  pisti: "/static-games/pisti",
+  crash: "/games/crash",
+  chess: "/games/chess",
+  satranc: "/games/chess",
+  pisti: "/games/pisti",
   pattern: "/games/pattern-master",
   patternmaster: "/games/pattern-master",
-  space: "/games/space",
-  spacepro: "/games/space",
-  snake: "/games/snake",
-  snakepro: "/games/snake"
+  space: "/games/space-pro",
+  spacepro: "/games/space-pro",
+  snake: "/games/snake-pro",
+  snakepro: "/games/snake-pro"
 });
 
 export const HOME_GAMES = Object.freeze([
-  { key: "crash", name: "Crash", category: "online", access: "free", url: HOME_GAME_ROUTES.crash, icon: "fa-arrow-trend-up" },
-  { key: "satranc", name: "Satranç", category: "online", access: "free", url: HOME_GAME_ROUTES.satranc, icon: "fa-chess" },
-  { key: "pisti", name: "Pişti", category: "online", access: "free", url: HOME_GAME_ROUTES.pisti, icon: "fa-layer-group" },
+  { key: "crash", name: "Crash", category: "online", access: "auth", url: HOME_GAME_ROUTES.crash, icon: "fa-arrow-trend-up" },
+  { key: "satranc", name: "Satranç", category: "online", access: "auth", url: HOME_GAME_ROUTES.satranc, icon: "fa-chess" },
+  { key: "pisti", name: "Pişti", category: "online", access: "auth", url: HOME_GAME_ROUTES.pisti, icon: "fa-layer-group" },
   { key: "patternmaster", name: "Pattern Master", category: "classic", access: "free", url: HOME_GAME_ROUTES.patternmaster, icon: "fa-shapes" },
   { key: "spacepro", name: "Space Pro", category: "classic", access: "free", url: HOME_GAME_ROUTES.spacepro, icon: "fa-user-astronaut" },
   { key: "snakepro", name: "Snake Pro", category: "classic", access: "free", url: HOME_GAME_ROUTES.snakepro, icon: "fa-wave-square" }

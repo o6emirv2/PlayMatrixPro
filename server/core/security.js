@@ -2,9 +2,8 @@ const rateLimit = require('express-rate-limit');
 const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 const env = require('../config/env');
 const { runtimeStore } = require('../core/runtimeStore');
-const rateLimitOptions = { windowMs: 60_000, standardHeaders: true, legacyHeaders: false, validate: { xForwardedForHeader: false } };
-const apiLimiter = rateLimit({ ...rateLimitOptions, max: 240 });
-const strictLimiter = rateLimit({ ...rateLimitOptions, max: 30 });
+const apiLimiter = rateLimit({ windowMs: 60_000, max: 240, standardHeaders: true, legacyHeaders: false });
+const strictLimiter = rateLimit({ windowMs: 60_000, max: 30, standardHeaders: true, legacyHeaders: false });
 async function requireAuth(req, res, next) {
   try {
     const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();

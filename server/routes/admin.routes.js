@@ -225,4 +225,9 @@ router.post('/admin/cleanup/firestore', strictLimiter, async (req,res) => {
   res.json(report);
 });
 
+
+router.get('/admin/market/products', (_req,res)=>{ try{ const { products } = require('../core/marketService'); res.json({ok:true,items:products()}); }catch(error){ res.status(500).json({ok:false,error:error.message}); } });
+router.get('/admin/crash/risk-table', (_req,res)=>{ res.json({ok:true,message:'Use /api/games/crash/risk-table'}); });
+router.get('/admin/support/runtime', (_req,res)=>{ const { runtimeStore } = require('../core/runtimeStore'); res.json({ok:true,messages:runtimeStore.support.values().slice(-200)}); });
+
 module.exports = router;
