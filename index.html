@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=0.90, maximum-scale=0.90, minimum-scale=0.90, user-scalable=no, viewport-fit=cover" />
 
   <title>PlayMatrix | Ücretsiz Online Zeka Oyunları</title>
   <meta name="description" content="PlayMatrix; online beceri, strateji ve zeka oyunlarını tek merkezde buluşturan modern oyun platformu." />
@@ -47,7 +47,8 @@
   
 
 
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=pm24-final" />
+  <link rel="stylesheet" href="/public/avatar-frame.css?v=pm24-final" />
 </head>
 <body data-pm-page="home">
   <div class="ambient-grid" aria-hidden="true"></div>
@@ -555,6 +556,27 @@
           </div>
         </section>
 
+        <section class="sheet-section" data-sheet="email-update">
+  <div class="sheet-hero-card email-update-card">
+    <div class="sheet-hero-icon" aria-hidden="true"><i class="fa-solid fa-envelope-circle-check"></i></div>
+    <div class="sheet-hero-copy">
+      <h4>E-posta Adresini Güncelle</h4>
+      <p>Yeni e-posta adresine güvenli doğrulama bağlantısı gönderilecek. Bağlantı onaylanmadan hesap e-postası değişmez.</p>
+    </div>
+  </div>
+  <div class="field-grid email-update-grid">
+    <div class="field-group">
+      <label class="field-label" for="emailUpdateInput">Yeni e-posta adresi</label>
+      <input class="field-input" id="emailUpdateInput" type="email" placeholder="ornek@mail.com" autocomplete="email" />
+      <div class="field-help" id="emailUpdateHelp"></div>
+    </div>
+  </div>
+  <div class="sheet-actions email-update-actions">
+    <button class="ghost-btn" id="emailUpdateCancelBtn" type="button">Vazgeç</button>
+    <button class="btn btn-primary" id="emailUpdateSubmitBtn" type="button">Doğrulama Gönder</button>
+  </div>
+</section>
+
         <section class="sheet-section" data-sheet="wheel">
           <div class="wheel-shell">
             <div class="wheel-wrap">
@@ -673,72 +695,59 @@
         </section>
 
         
-<section class="sheet-section pubg-theme pm-csp-inline-058ae746f5" data-sheet="social">
-  <div class="pm-social-layout">
-    
-    <div class="ps-sidebar">
-      
-      <button class="ps-back-button" id="socialHomeBackBtn" type="button" aria-label="AnaSayfaya Dön" data-pm-action="closeSocialSheet" data-pm-args="[]">
-        <i class="fa-solid fa-angle-left"></i> <span>AnaSayfa</span>
-      </button>
-      <button class="ps-tab is-active" type="button" data-social-tab="global">
-        <span>Yerel Sohbet (TR)</span>
-      </button>
-      <button class="ps-tab" type="button" data-social-tab="friends">
-        <span>DM Kutusu</span>
-      </button>
-      <button class="ps-tab" type="button" data-social-tab="search">
-        <span>Mesaj Ara</span>
-      </button>
-      <button class="ps-tab" type="button" data-social-tab="requests">
-        <span>İstek Listesi</span>
-      </button>
-      <button class="ps-tab" type="button" data-social-tab="add">
-        <span>Arkadaş Ekleme</span>
-      </button>
-      <button class="ps-tab" type="button" data-social-tab="invites">
-        <span>Oyun Daveti</span>
-      </button>
-    </div>
-
+<section class="sheet-section social-center-v3" data-sheet="social">
+  <div class="pm-social-layout" id="pmSocialLayout">
     <div class="ps-mid-panel">
       <div class="ps-mid-header">
-        <span id="psMidTitle">Katıldın: #Yerel Sohbet.</span>
-        <span class="online-pill is-offline pm-csp-inline-6b99de8b69" id="psConnectionBadge"></span>
+        <button class="ps-back-button" id="socialHomeBackBtn" type="button" aria-label="AnaSayfaya Dön" data-pm-action="closeSocialSheet" data-pm-args="[]">
+          <i class="fa-solid fa-angle-left"></i>
+        </button>
+        <div class="ps-mid-heading">
+          <strong>Sosyal Merkez</strong>
+          <span id="psMidTitle">Yerel Sohbet</span>
+        </div>
+        <span class="online-pill is-offline" id="psConnectionBadge">Bağlanıyor</span>
       </div>
+
+      <label class="pm-social-search" for="socialQuickSearch">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="socialQuickSearch" type="search" placeholder="Mesaj, oyuncu veya davet ara" autocomplete="off" />
+      </label>
+
+      <div class="pm-social-tabs" role="tablist" aria-label="Sosyal Merkez bölümleri">
+        <button class="ps-tab is-active" type="button" data-social-tab="global"><i class="fa-solid fa-globe"></i><span>Yerel</span></button>
+        <button class="ps-tab" type="button" data-social-tab="friends"><i class="fa-solid fa-comment"></i><span>DM</span></button>
+        <button class="ps-tab" type="button" data-social-tab="search"><i class="fa-solid fa-magnifying-glass"></i><span>Ara</span></button>
+        <button class="ps-tab" type="button" data-social-tab="requests"><i class="fa-solid fa-user-check"></i><span>İstek</span></button>
+        <button class="ps-tab" type="button" data-social-tab="add"><i class="fa-solid fa-user-plus"></i><span>Ekle</span></button>
+        <button class="ps-tab" type="button" data-social-tab="invites"><i class="fa-solid fa-chess-knight"></i><span>Davet</span></button>
+      </div>
+
       <div class="ps-list-container" id="psListContainer"></div>
     </div>
 
     <div class="ps-main-panel" id="psMainPanel">
-            <div class="ps-chat-header">
+      <div class="ps-chat-header">
         <button class="icon-btn" id="psMobileBackBtn" type="button" aria-label="Geri Dön">
           <i class="fa-solid fa-chevron-left"></i>
         </button>
-        <div class="friend-avatar pm-avatar-host pm-csp-inline-6b99de8b69" id="psChatAvatar"></div>
+        <div class="friend-avatar pm-avatar-host" id="psChatAvatar"></div>
         <div class="ps-chat-title-wrap">
-          <span id="psChatTitle" class="pm-csp-inline-6b99de8b69">Katıldın: #Yerel Sohbet.</span>
-          <span id="psChatSubtitle" class="pm-csp-inline-6b99de8b69"></span>
+          <span id="psChatTitle">Yerel Sohbet</span>
+          <span id="psChatSubtitle"></span>
         </div>
         <div class="ps-chat-actions" id="psChatActions"></div>
       </div>
-
       <div class="ps-chat-stream" id="psChatStream"></div>
       <div class="ps-typing-indicator" id="typingIndicator" aria-live="polite">
         <span id="typingIndicatorLabel"></span>
         <span class="ps-typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
       </div>
-
       <div class="ps-chat-input-area" id="psInputArea">
-        <div class="pubg-icons">
-          <button type="button"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-          <button type="button"><i class="fa-solid fa-gift"></i></button>
-          <button type="button"><i class="fa-solid fa-user-group"></i></button>
-          <button type="button"><i class="fa-solid fa-address-card"></i></button>
-          <button type="button"><i class="fa-solid fa-face-smile"></i></button>
-          <button type="button"><i class="fa-solid fa-microphone"></i></button>
-        </div>
-        <input type="text" id="psChatInput" placeholder="Lobiye kısa ve saygılı bir mesaj yaz..." maxlength="280" autocomplete="off" enterkeyhint="send" />
-        <button class="ps-send-btn pubg-send" id="psSendBtn" type="button"><i class="fa-solid fa-paper-plane"></i></button>
+        <button class="ps-tool-btn" type="button" aria-label="Ek"><i class="fa-solid fa-plus"></i></button>
+        <input type="text" id="psChatInput" placeholder="Mesaj yaz..." maxlength="280" autocomplete="off" enterkeyhint="send" />
+        <button class="ps-tool-btn" type="button" aria-label="Emoji"><i class="fa-regular fa-face-smile"></i></button>
+        <button class="ps-send-btn" id="psSendBtn" type="button" aria-label="Gönder"><i class="fa-solid fa-paper-plane"></i></button>
       </div>
       <div class="ps-chat-help" id="psChatHelp"></div>
     </div>
@@ -796,9 +805,9 @@
 
   <script src="/public/playmatrix-static-runtime.js"></script>
   <script src="/public/playmatrix-api.js"></script>
-  <script src="/public/avatar-registry.js"></script>
-  <script src="/public/avatar-frame.js"></script>
+  <script src="/public/avatar-registry.js?v=pm24-final"></script>
+  <script src="/public/avatar-frame.js?v=pm24-final"></script>
   <script src="/public/game-topbar-sync.js"></script>
-  <script type="module" src="/script.js" defer></script>
+  <script type="module" src="/script.js?v=pm24-final" defer></script>
 </body>
 </html>

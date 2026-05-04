@@ -1350,3 +1350,13 @@
 .t-avatar-wrap > [data-pm-avatar="true"],.t-avatar-wrap > .pm-avatar{inline-size:42px!important;block-size:42px!important;position:relative!important;overflow:visible!important;}
 .t-avatar-wrap .pm-avatar-img,.t-avatar-wrap .t-avatar{inline-size:100%!important;block-size:100%!important;transform:translate(-50%,-50%) scale(var(--pm-avatar-scale,.84))!important;}
 .t-avatar-wrap .pm-frame-image,.t-avatar-wrap .pm-avatar-shell__frame,.t-avatar-wrap .t-frame{inline-size:calc(100% * var(--pm-frame-scale,1.24))!important;block-size:calc(100% * var(--pm-frame-scale,1.24))!important;}
+
+/* PLAYMATRIX FINAL PM24 — Crash viewport/avatar compact pass */
+html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;}
+.pm-game-topbar-avatar-host{width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;border-radius:50%!important;overflow:hidden!important;}
+.pm-game-topbar-avatar-only,.pm-game-topbar-avatar-host img{width:100%!important;height:100%!important;border-radius:50%!important;object-fit:cover!important;}
+.t-avatar-wrap{width:40px!important;height:40px!important;min-width:40px!important;min-height:40px!important;}
+.t-avatar-wrap [data-pm-avatar="true"],.t-avatar-wrap .pm-avatar{width:40px!important;height:40px!important;}
+.t-avatar-wrap .pm-avatar-img,.t-avatar-wrap .t-avatar{width:calc(100% * var(--pm-avatar-fit,var(--pm-avatar-scale,.74)))!important;height:calc(100% * var(--pm-avatar-fit,var(--pm-avatar-scale,.74)))!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;}
+.t-avatar-wrap .pm-frame-image,.t-avatar-wrap .pm-avatar-shell__frame,.t-avatar-wrap .t-frame{width:calc(100% * var(--pm-frame-scale,1.22))!important;height:calc(100% * var(--pm-frame-scale,1.22))!important;}
+@media(max-width:720px){.game-shell,.crash-shell,.crash-app{max-width:100%!important;overflow-x:hidden!important;}.pm-game-topbar{max-width:100%!important;}.crash-card,.panel,.bet-panel{max-width:100%!important;}}

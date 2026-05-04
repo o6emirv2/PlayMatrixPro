@@ -706,7 +706,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
     function startLobbyPolling() {
       clearInterval(pollingInterval);
       fetchLobby(true).catch(() => null);
-      pollingInterval = setInterval(() => { if (!document.hidden) fetchLobby(false).catch(() => null); }, 3500);
+      pollingInterval = setInterval(() => { if (!document.hidden && !(chessSocket && chessSocket.connected)) fetchLobby(false).catch(() => null); }, 9000);
     }
 
     function roomMatchesSearch(r){
@@ -907,7 +907,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
             showMatrixModal("OYUN İPTAL", res.room.message, "error", true);
           }
         } catch(e) {}
-      }, 5000);
+      }, 12000);
     }
 
     function enterGame(roomData) {
@@ -1184,9 +1184,10 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         const status = document.getElementById("gameStatusTxt");
         if (status) status.innerText = "HAMLE İLETİLİYOR...";
         const payload = { roomId: currentRoomId, from: moveObj.from, to: moveObj.to, promotion: 'q', expectedStateVersion: currentRoomState?.stateVersion || 0, clientMoveId: `${currentRoomId}:${currentRoomState?.stateVersion || 0}:${moveObj.from}-${moveObj.to}` };
+        const previousSelectedSq = selectedSq;
+        const previousValidMoves = validMovesForSelected;
         selectedSq = null;
         validMovesForSelected = [];
-        drawBoard();
         try {
           const res = await sendChessMove(payload);
           try { window.__PM_GAME_ACCOUNT_SYNC__?.notifyMutation?.(res); } catch (_) {}
@@ -1200,6 +1201,8 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
             playSfx('error');
           }
           if (lastFen) gameLogic.load(lastFen);
+          selectedSq = previousSelectedSq;
+          validMovesForSelected = previousValidMoves;
           drawBoard();
         } finally {
           isProcessingMove = false;
