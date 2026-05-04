@@ -12,6 +12,8 @@ let firebaseGetIdToken = null; let firebaseReload = null;      const $ = (id) =>
       }     }      function safeRenderGameShowcaseSkeleton(count = 3){       try {         if (typeof window.renderGameShowcaseSkeleton === 'function' && window.renderGameShowcaseSkeleton !== safeRenderGameShowcaseSkeleton) return window.renderGameShowcaseSkeleton(count);       } catch (error) {         console.warn('[PlayMatrix] skeleton renderer fallback', error);       }       try {         const grid = $('gamesGrid');         if (!grid) return null;         const existingStatic = grid.dataset.staticPainted === '1' && grid.children.length > 0;         if (existingStatic) return null;         const fragment = document.createDocumentFragment();         const total = Math.max(1, Math.min(6, Number(count) || 3));         for (let i = 0; i < total; i += 1) {           const card = document.createElement('article');           card.className = 'game-card skeleton is-skeleton';           const top = document.createElement('div'); top.className = 'game-top';           const icon = document.createElement('div'); icon.className = 'game-icon skeleton';           const tags = document.createElement('div'); tags.className = 'tag-stack';           tags.appendChild(createTextElement('span', 'mini-tag skeleton', ''));           tags.appendChild(createTextElement('span', 'mini-tag skeleton', ''));           top.append(icon, tags);           const body = document.createElement('div'); body.className = 'game-body';           body.appendChild(createTextElement('h3', 'game-title skeleton', ''));           body.appendChild(createTextElement('div', 'game-desc skeleton', ''));           const footer = document.createElement('div'); footer.className = 'game-footer';           footer.appendChild(createTextElement('span', 'game-status skeleton', ''));           footer.appendChild(createTextElement('span', 'game-cta skeleton', ''));           card.append(top, body, footer);           fragment.appendChild(card);         }         grid.classList.add('is-loading');         grid.replaceChildren(fragment);         const empty = $('gamesEmpty');         if (empty) empty.hidden = true;       } catch (error) {         console.warn('[PlayMatrix] skeleton hard fallback failed', error);       }       return null;     }      window.renderGameShowcaseSkeleton = window.renderGameShowcaseSkeleton || safeRenderGameShowcaseSkeleton;
      const AUTH_UNAVAILABLE_MESSAGE = "Kimlik altyapısı geçici olarak hazır değil. Lütfen biraz sonra tekrar dene.";     const FIREBASE_RUNTIME_TIMEOUT_MS = 3500;
     const FIREBASE_IMPORT_TIMEOUT_MS = 6000;      let firebaseConfig = null;     let app = null;     let auth = { currentUser: null };
+    const HOME_AVATAR_REFERENCE_SIZE = 64;
+    function getHomeAvatarReferenceSize(){ return HOME_AVATAR_REFERENCE_SIZE; }
     let firebaseReady = false;     let firebaseBootError = null;     let firebaseBootPromise = null;      function timeoutAfter(ms, label) {
       return new Promise((_, reject) => {         window.setTimeout(() => reject(new Error(label)), Math.max(1000, Number(ms) || 1000));       });     } 
     function withTimeout(promise, ms, label) {       return Promise.race([promise, timeoutAfter(ms, label)]);     }      function syncRuntimeAuth() {
@@ -208,21 +210,21 @@ let firebaseGetIdToken = null; let firebaseReload = null;      const $ = (id) =>
       return nextFrame;     }      function getDisplayFrameLevel(){       return getSelectedFrameLevel();
     }      function getTopbarAvatarShellId(){       if ($("topbarAvatarShell")) return "topbarAvatarShell";       if ($("headerAvatarShell")) return "headerAvatarShell";
       return null;     }      function mountTopbarAvatar(avatarUrl, frameLevel){       const targetId = getTopbarAvatarShellId();
-      if (!targetId) return null;       const host = $(targetId);       if (!host) return null;       const safeAvatar = safeUrl(avatarUrl || DEFAULT_AVATAR);       const cacheKey = `topbar:${safeAvatar}`;       if (host.dataset.pmAvatarKey === cacheKey && host.firstElementChild) {         host.dataset.frameHidden = 'true';         return host.firstElementChild;       }       const img = document.createElement('img');       img.className = 'pm-topbar-avatar-only';       img.src = safeAvatar;       img.alt = 'Profil';       img.loading = 'eager';       img.decoding = 'async';       img.referrerPolicy = 'no-referrer';       img.draggable = false;       bindAvatarImageFallback(img);       host.replaceChildren(img);       host.dataset.pmAvatarKey = cacheKey;       host.dataset.frameHidden = 'true';       return img;     }
+      if (!targetId) return null;       const host = $(targetId);       if (!host) return null;       const safeAvatar = safeUrl(avatarUrl || DEFAULT_AVATAR);       const cacheKey = `topbar:${safeAvatar}:${HOME_AVATAR_REFERENCE_SIZE}`;       if (host.dataset.pmAvatarKey === cacheKey && host.firstElementChild) {         host.dataset.frameHidden = 'true';         return host.firstElementChild;       }       const img = document.createElement('img');       img.className = 'pm-topbar-avatar-only';       img.src = safeAvatar;       img.alt = 'Profil';       img.loading = 'eager';       img.decoding = 'async';       img.referrerPolicy = 'no-referrer';       img.draggable = false;       bindAvatarImageFallback(img);       host.replaceChildren(img);       host.dataset.pmAvatarKey = cacheKey;       host.dataset.frameHidden = 'true';       return img;     }
      function buildAvatarShell(avatarUrl, frameLevel, sizePx = 45, customClass = '') {       if (window.PMAvatar && typeof window.PMAvatar.buildHTML === 'function') {         return window.PMAvatar.buildHTML({           avatarUrl: avatarUrl || DEFAULT_AVATAR,
           level: normalizeFrameLevel(frameLevel),           sizePx,           extraClass: customClass,           imageClass: 'pm-avatar-img',           wrapperClass: 'pm-avatar',
           alt: 'Oyuncu'         });       }        const safeAvatar = safeUrl(avatarUrl || DEFAULT_AVATAR);
-      const size = Math.max(18, Number(sizePx) || 45);       return `<div class="pm-avatar ${customClass}" data-pm-avatar="true" data-frame-index="0" data-pm-avatar-size-px="${size}"><img src="${safeAvatar}" alt="Oyuncu" class="pm-avatar-img" loading="lazy" decoding="async" referrerpolicy="no-referrer" draggable="false"></div>`;     }      function createAvatarShellNode(avatarUrl, frameLevel, sizePx = 45, extraClass = "") {
+      const size = getHomeAvatarReferenceSize();       return `<div class="pm-avatar ${customClass}" data-pm-avatar="true" data-frame-index="0" data-pm-avatar-size-px="${size}"><img src="${safeAvatar}" alt="Oyuncu" class="pm-avatar-img" loading="lazy" decoding="async" referrerpolicy="no-referrer" draggable="false"></div>`;     }      function createAvatarShellNode(avatarUrl, frameLevel, sizePx = 45, extraClass = "") {
       let node = null;       if (window.PMAvatar && typeof window.PMAvatar.createNode === "function") {         node = window.PMAvatar.createNode({           avatarUrl,           level: normalizeFrameLevel(frameLevel),
-          sizePx,           extraClass,           imageClass: 'pm-avatar-img',           wrapperClass: 'pm-avatar',           alt: 'Oyuncu'
-        });       } else {         const safeAvatar = safeUrl(avatarUrl || DEFAULT_AVATAR);         const size = Math.max(18, Number(sizePx) || 45);         node = document.createElement('div');
+          sizePx: getHomeAvatarReferenceSize(),           extraClass,           imageClass: 'pm-avatar-img',           wrapperClass: 'pm-avatar',           alt: 'Oyuncu'
+        });       } else {         const safeAvatar = safeUrl(avatarUrl || DEFAULT_AVATAR);         const size = getHomeAvatarReferenceSize();         node = document.createElement('div');
         node.className = ('pm-avatar ' + (extraClass || '')).trim();         node.dataset.pmAvatar = 'true';         node.dataset.frameIndex = String(normalizeFrameLevel(frameLevel));         node.style.width = size + 'px';         node.style.height = size + 'px';
         const imgNode = document.createElement('img');         imgNode.src = safeAvatar;         imgNode.alt = 'Oyuncu';         imgNode.className = 'pm-avatar-img';         imgNode.loading = 'lazy';
         imgNode.decoding = 'async';         imgNode.referrerPolicy = 'no-referrer';         imgNode.draggable = false;         node.appendChild(imgNode);       }
        const img = node?.querySelector?.('img');       bindAvatarImageFallback(img);       if (img) img.referrerPolicy = 'no-referrer';       return node;
     }      function resolveAvatarFrameLevel(entity = null, fallbackFrame = 0) {       if (entity && typeof entity === 'object') {         const explicitFrame = Number(entity.selectedFrame ?? entity.progression?.selectedFrame ?? Number.NaN);
         if (Number.isFinite(explicitFrame) && explicitFrame >= 0) return normalizeFrameLevel(explicitFrame);       }       return normalizeFrameLevel(Number(fallbackFrame ?? 0));     } 
-    function mountAvatarShell(target, avatarUrl, frameLevel, sizePx = 45, extraClass = "") {       const host = typeof target === 'string' ? $(target) : target;       if (!host) return null;       const safeAvatar = safeUrl(avatarUrl || DEFAULT_AVATAR);       const safeFrame = normalizeFrameLevel(frameLevel);       const safeSize = Math.max(18, Number(sizePx) || 45);       const cacheKey = `${safeAvatar}|${safeFrame}|${safeSize}|${extraClass || ''}`;       if (host.dataset.pmAvatarKey === cacheKey && host.firstElementChild) return host.firstElementChild;       const node = createAvatarShellNode(safeAvatar, safeFrame, safeSize, extraClass);       host.replaceChildren(node);       host.dataset.pmAvatarKey = cacheKey;
+    function mountAvatarShell(target, avatarUrl, frameLevel, sizePx = 45, extraClass = "") {       const host = typeof target === 'string' ? $(target) : target;       if (!host) return null;       const safeAvatar = safeUrl(avatarUrl || DEFAULT_AVATAR);       const safeFrame = normalizeFrameLevel(frameLevel);       const safeSize = getHomeAvatarReferenceSize();       const cacheKey = `${safeAvatar}|${safeFrame}|${safeSize}|${extraClass || ''}`;       if (host.dataset.pmAvatarKey === cacheKey && host.firstElementChild) return host.firstElementChild;       const node = createAvatarShellNode(safeAvatar, safeFrame, safeSize, extraClass);       host.replaceChildren(node);       host.dataset.pmAvatarKey = cacheKey;
       return node;     }       function syncBodyOverlayState(){
       const hasActiveModal = !!document.querySelector('.ps-modal.active');       document.body.classList.toggle('modal-open', hasActiveModal);     }      function openMatrixModal(id){
       const modal = $(id);       if (!modal) return;       modal.hidden = false;       modal.style.removeProperty('display');       modal.classList.remove('is-closing');       modal.classList.add('active','is-opening');       modal.setAttribute('aria-hidden', 'false');       window.setTimeout(() => modal.classList.remove('is-opening'), 220);       syncBodyOverlayState();
@@ -891,7 +893,7 @@ function renderMessageStack(stream, messages, emptyTitle, emptyMessage, getIsSel
           pulse("triangle", 560, now, 0.06, 0.45);           pulse("sine", 760, now + 0.07, 0.08, 0.34);           return;         }         if (kind === "pop") {
           pulse("triangle", 520, now, 0.06, 0.42);           return;         }         pulse("sine", 420, now, 0.05, 0.32);       } catch(_) {}
     }      function updateSoundUI(){       $("soundIcon").className = `fa-solid ${state.soundEnabled ? "fa-volume-high" : "fa-volume-xmark"}`;     }
-     const COMPACT_SHEETS = new Set(["auth", "forgot", "wheel", "promo", "market"]);      function openSheet(name, title, subtitle){       state.currentSheet = name;
+     const COMPACT_SHEETS = new Set(["auth", "forgot", "wheel", "promo", "market", "email-update"]);      function openSheet(name, title, subtitle){       state.currentSheet = name;
       const sheetShell = $("sheetShell");       sheetShell.classList.add("is-open");       sheetShell.classList.toggle("is-social", name === "social");       sheetShell.classList.toggle("is-compact", COMPACT_SHEETS.has(name));       sheetShell.setAttribute("aria-hidden", "false");
       document.body.classList.add("sheet-open");       $("sheetTitle").textContent = title;       $("sheetSubtitle").textContent = subtitle;       document.querySelectorAll(".sheet-section").forEach((section) => section.classList.toggle("is-active", section.dataset.sheet === name));       $("sheetPanel").style.transform = "";
       playSound("pop");     }      window.openPlayMatrixSheet = openSheet;      function closeSheet(){       $("sheetShell").classList.remove("is-open", "is-social", "is-compact");
@@ -1189,6 +1191,7 @@ function buildHeroPromoSlides(overview = {}) {
     }
 function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) return [];       if (tabType === 'level') return Array.isArray(currentLeaderboardData?.tabs?.level?.items) ? currentLeaderboardData.tabs.level.items : [];       if (tabType === 'activity') return Array.isArray(currentLeaderboardData?.tabs?.activity?.items) ? currentLeaderboardData.tabs.activity.items : [];
       return [];     }      async function showPlayerStats(uid){       const targetUid = String(uid || '').trim();
+      if (!auth.currentUser) { setAuthMode('login'); openSheet('auth', 'Hesabına giriş yap', 'Oyuncu istatistiklerini görüntülemek için önce hesabına giriş yapmalısın.'); return; }
       if (!targetUid) {         showToast('İstatistikler', 'Oyuncu profili bulunamadı.', 'error');         return;       } 
       const content = $('playerStatsContent');       if (!content) return;        const formatDate = (value, includeTime = false) => {         const date = new Date(Number(value) || 0);
         if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return '—';         return includeTime ? date.toLocaleString('tr-TR') : date.toLocaleDateString('tr-TR');       };        const createHeader = () => {
@@ -1244,8 +1247,15 @@ function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) r
         if (!isSelf) {           const addFriendButton = document.createElement('button');
           addFriendButton.className = 'btn btn-primary player-stats-action';           addFriendButton.id = 'playerStatsAddFriendBtn';           addFriendButton.type = 'button';           addFriendButton.append(createFaIcon('fa-user-plus'), document.createTextNode('Arkadaş Ekle'));           addFriendButton.addEventListener('click', () => sendFriendRequest(String(p.uid || targetUid)));
           body.appendChild(addFriendButton);         }          content.replaceChildren(createHeader(), body);       } catch (error) {
-        reportClientError('home.player_stats', error, { source: 'legacy-home.runtime.js', targetUid });
-        content.replaceChildren(createHeader(), renderStatusBody('fa-triangle-exclamation', error.message || 'Veri çekilemedi.', 'error'));       }     }     window.showPlayerStats = showPlayerStats;     window.openPlayerProfile = showPlayerStats;
+        const isAuthError = /oturum|unauth|auth/i.test(String(error?.message || ''));
+        if (isAuthError) {
+          setAuthMode('login');
+          openSheet('auth', 'Hesabına giriş yap', 'Oyuncu istatistiklerini görüntülemek için önce hesabına giriş yapmalısın.');
+          content.replaceChildren(createHeader(), renderStatusBody('fa-lock', 'Oyuncu istatistikleri için giriş yapmalısın.', 'warning'));
+        } else {
+          reportClientError('home.player_stats', error, { source: 'legacy-home.runtime.js' });
+          content.replaceChildren(createHeader(), renderStatusBody('fa-triangle-exclamation', error.message || 'Veri çekilemedi.', 'error'));
+        }       }     }     window.showPlayerStats = showPlayerStats;     window.openPlayerProfile = showPlayerStats;
     window.showPlayerProfile = showPlayerStats;      function renderLeaderboardTab(tabType = "level"){
       if (!currentLeaderboardData) return;
       currentLeaderboardTab = tabType;
@@ -1379,10 +1389,43 @@ function drawWheel(){       const canvas = $("wheelCanvas");       const ctx = c
       } catch (error) {         showToast("Profil hatası", error.message, "error");       }     }
      async function sendVerificationMail(){       try {         if (!auth.currentUser) throw new Error("Önce giriş yapmalısın.");         await sendEmailVerification(auth.currentUser);
         showToast("Doğrulama maili", "E-posta adresine doğrulama bağlantısı gönderildi.", "success");       } catch (error) {         showToast("Gönderim hatası", normalizeFirebaseAuthError(error), "error");       }     }
-     async function requestEmailUpdate(){       try {         if (!auth.currentUser) throw new Error("Önce giriş yapmalısın.");         const currentEmail = auth.currentUser.email || "";
-        const rawEmail = await showInputDialog({ title:'E-posta Adresini Güncelle', message:'Yeni e-posta adresine güvenli doğrulama bağlantısı gönderilecek. Bağlantı onaylanmadan hesap e-postası değişmez.', value:currentEmail, placeholder:'ornek@mail.com', inputType:'email', confirmText:'Doğrulama Gönder' });         const nextEmail = String(rawEmail || '').trim().toLowerCase();         if (!nextEmail) return;         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) throw new Error('Geçerli bir e-posta adresi gir.');         if (nextEmail === currentEmail.toLowerCase()) {           showToast("Bilgi", "Yeni e-posta adresi mevcut adresle aynı.", "info");           return;
-        }         await verifyBeforeUpdateEmail(auth.currentUser, nextEmail);         showToast("Güncelleme bağlantısı", "Yeni e-posta adresine doğrulama bağlantısı gönderildi.", "success");       } catch (error) {         showToast("E-posta güncelleme hatası", normalizeFirebaseAuthError(error), "error");
-      }     }      async function handleVerifyEmailAction(){       try {
+     function openEmailUpdateSheet(){
+      if (!ensureAuthThen("E-posta güncelleme")) return;
+      const input = $("emailUpdateInput");
+      const help = $("emailUpdateHelp");
+      if (input) input.value = auth.currentUser?.email || "";
+      if (help) { help.textContent = "Doğrulama bağlantısı gönderilmeden hesap e-postası değişmez."; help.className = "field-help"; }
+      openSheet("email-update", "E-posta Adresini Güncelle", "Güvenli doğrulama bağlantısı ile yeni e-postanı onayla.");
+      window.setTimeout(() => input?.focus?.({ preventScroll: true }), 180);
+    }
+
+    async function submitEmailUpdateRequest(){
+      const input = $("emailUpdateInput");
+      const help = $("emailUpdateHelp");
+      try {
+        if (!auth.currentUser) throw new Error("Önce giriş yapmalısın.");
+        const currentEmail = auth.currentUser.email || "";
+        const nextEmail = String(input?.value || "").trim().toLowerCase();
+        if (!nextEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) throw new Error("Geçerli bir e-posta adresi gir.");
+        if (nextEmail === currentEmail.toLowerCase()) {
+          if (help) { help.textContent = "Bu zaten mevcut e-posta adresin."; help.className = "field-help is-warning"; }
+          showToast("E-posta", "Bu zaten mevcut e-posta adresin.", "info");
+          return;
+        }
+        if (help) { help.textContent = "Doğrulama bağlantısı hazırlanıyor…"; help.className = "field-help"; }
+        await verifyBeforeUpdateEmail(auth.currentUser, nextEmail);
+        if (help) { help.textContent = "Yeni e-posta adresine doğrulama bağlantısı gönderildi."; help.className = "field-help is-success"; }
+        showToast("Güncelleme bağlantısı", "Yeni e-posta adresine doğrulama bağlantısı gönderildi.", "success");
+        closeSheet();
+      } catch (error) {
+        if (help) { help.textContent = normalizeFirebaseAuthError(error); help.className = "field-help is-error"; }
+        showToast("E-posta güncelleme", normalizeFirebaseAuthError(error), "error");
+      }
+    }
+
+    async function requestEmailUpdate(){
+      openEmailUpdateSheet();
+    }      async function handleVerifyEmailAction(){       try {
         if (!auth.currentUser) throw new Error("Önce giriş yapmalısın.");         await reload(auth.currentUser);         syncVerifyButtonState();         if (auth.currentUser.emailVerified) {           await requestEmailUpdate();
           return;         }         await sendVerificationMail();       } catch (error) {         showToast("İşlem hatası", error.message, "error");
       }     }      async function checkUsernameAvailability(){       const value = ($("profileUsername").value || "").trim();
@@ -1447,7 +1490,19 @@ function drawWheel(){       const canvas = $("wheelCanvas");       const ctx = c
         }       });       bindIfPresent("sheetBackdrop", "click", closeSheet);       bindIfPresent("sheetClose", "click", closeSheet);       bindIfPresent("socialHomeBackBtn", "click", closeSheet);       $("authSegment").querySelectorAll("button").forEach((button) => button.addEventListener("click", () => setAuthMode(button.dataset.authMode)));
       bindIfPresent("authSubmitBtn", "click", submitAuth);       bindIfPresent("forgotPasswordBtn", "click", () => {         $("forgotEmail").value = $("authEmail").value || "";         $("forgotHelp").textContent = "";         $("forgotHelp").className = "field-help";
         openSheet("forgot", "Şifremi Unuttum", "Sıfırlama bağlantısı e-posta adresine gönderilir.");       });       bindIfPresent("forgotSubmitBtn", "click", forgotPassword);        bindIfPresent("profileSaveBtn", "click", saveProfile);
-      bindIfPresent("verifyEmailBtn", "click", handleVerifyEmailAction);       bindIfPresent("logoutBtn", "click", async () => { await endServerSession(); await signOut(auth); closeSheet(); showToast("Çıkış yapıldı", "Oturum güvenli şekilde kapatıldı.", "info"); });       bindIfPresent("wheelSpinBtn", "click", spinWheel);       bindIfPresent("wheelRefreshBtn", "click", refreshWheelUI);       bindIfPresent("promoSubmitBtn", "click", submitPromo);       bindIfPresent("homeStatsRetryBtn", "click", async () => { renderHomeStats(state.userData || {}, { state: "loading" }); await Promise.allSettled([auth.currentUser ? loadUserData() : Promise.resolve(), loadLeaderboard()]); renderHomeStats(state.userData || {}); });
+      bindIfPresent("verifyEmailBtn", "click", handleVerifyEmailAction);       bindIfPresent("emailUpdateSubmitBtn", "click", submitEmailUpdateRequest);       bindIfPresent("emailUpdateCancelBtn", "click", closeSheet);       bindIfPresent("emailUpdateInput", "keydown", (event) => { if (event.key === "Enter") submitEmailUpdateRequest(); });       bindIfPresent("logoutBtn", "click", async () => { await endServerSession(); await signOut(auth); closeSheet(); showToast("Çıkış yapıldı", "Oturum güvenli şekilde kapatıldı.", "info"); });       bindIfPresent("wheelSpinBtn", "click", spinWheel);       bindIfPresent("wheelRefreshBtn", "click", refreshWheelUI);       bindIfPresent("promoSubmitBtn", "click", submitPromo);
+      document.querySelectorAll('[data-social-tab-jump]').forEach((button) => {
+        button.addEventListener('click', () => setSocialTab(button.dataset.socialTabJump || 'global'));
+      });
+      const socialVisualSearch = $('pmSocialVisualSearch');
+      if (socialVisualSearch) {
+        socialVisualSearch.addEventListener('input', () => {
+          state.social.dmSearchQuery = socialVisualSearch.value || '';
+          if (state.social.activeTab !== 'search') setSocialTab('search');
+          searchDirectMessages(state.social.dmSearchQuery, state.social.dmSearchTargetUid || '').catch(() => null);
+        });
+      }
+       bindIfPresent("homeStatsRetryBtn", "click", async () => { renderHomeStats(state.userData || {}, { state: "loading" }); await Promise.allSettled([auth.currentUser ? loadUserData() : Promise.resolve(), loadLeaderboard()]); renderHomeStats(state.userData || {}); });
       bindIfPresent("supportSubmitBtn", "click", submitSupport);       bindIfPresent("generateInviteBtn", "click", loadInviteLink);       bindIfPresent("copyInviteCodeBtn", "click", () => copyFieldValue("inviteCode", "Davet kodu panoya kopyalandı."));       bindIfPresent("copyInviteLinkBtn", "click", () => copyFieldValue("inviteLink", "Davet bağlantısı panoya kopyalandı."));       document.querySelectorAll(".ps-tab").forEach((button) => {
         button.addEventListener("click", () => {           playSound("tap");           const targetTab = button.dataset.socialTab || "global";           setSocialTab(targetTab, { resetSelection: true, openPanel: targetTab === "global" || targetTab === "add" });         });
       });       bindIfPresent("psSendBtn", "click", () => { primeRealtimeUX().catch(() => null); sendSocialMessage(); });       bindIfPresent("psChatInput", "keydown", (event) => {         if (event.key === "Enter") {           event.preventDefault();
