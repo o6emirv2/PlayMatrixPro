@@ -13,7 +13,6 @@ const { routeData } = require('./server/core/smartDataRouter');
 const { runtimeStore } = require('./server/core/runtimeStore');
 const { globalChat, localChat, dm, presence } = require('./server/social/socialRuntimeStore');
 const { runSafeFirestoreCleanup } = require('./server/core/firestoreCleanupService');
-const { getProgression } = require('./server/core/progressionService');
 
 process.on('unhandledRejection', (reason) => console.error('[process:unhandledRejection]', reason && reason.stack || reason));
 process.on('uncaughtException', (error) => console.error('[process:uncaughtException]', error && error.stack || error));
@@ -87,95 +86,6 @@ function healthPayload() { return { ok:true, service:'playmatrix', env:env.nodeE
 app.get('/healthz', (_req,res)=>res.json(healthPayload()));
 app.get('/api/healthz', (_req,res)=>res.json(healthPayload()));
 
-
-async function optionalFirebaseUser(req) {
-  const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
-  if (!token) return null;
-  try {
-    const latest = firebase.initFirebaseAdmin();
-    if (!latest.auth) return null;
-    const decoded = await latest.auth.verifyIdToken(token);
-    return { uid: String(decoded.uid || ''), email: String(decoded.email || '') };
-  } catch (_) {
-    return null;
-  }
-}
-function publicHomeProfile(uid = '', data = {}) {
-  const xpValue = data.accountXp ?? data.xp ?? data.progression?.xp ?? 0;
-  const progression = getProgression(xpValue);
-  const username = String(data.username || data.displayName || data.fullName || data.email || uid || 'Oyuncu').trim();
-  return {
-    uid,
-    username,
-    displayName: username,
-    email: data.email || '',
-    avatar: data.avatar || '/public/assets/avatars/system/fallback.svg',
-    selectedFrame: Math.max(0, Math.min(100, Math.trunc(Number(data.selectedFrame || 0) || 0))),
-    balance: Math.max(0, Number(data.balance || data.mc || 0) || 0),
-    accountXp: progression.xp,
-    xp: progression.xp,
-    accountLevel: progression.level,
-    level: progression.level,
-    progressPercent: progression.progressPercent,
-    accountLevelProgressPct: progression.progressPercent,
-    monthlyActiveScore: Math.max(0, Number(data.monthlyActiveScore || data.activityScore || 0) || 0),
-    stats: data.stats || data.statistics || {},
-    onboardingComplete: data.onboardingComplete === true,
-    emailVerified: data.emailVerified === true,
-    phoneVerified: data.phoneVerified === true || data.gsmVerified === true,
-    phoneNumber: data.phoneNumber || data.gsm || data.phone || '',
-    progression
-  };
-}
-async function getHomepageProfiles(limit = 80) {
-  const latest = firebase.initFirebaseAdmin();
-  const db = latest.db;
-  if (!db) return [];
-  try {
-    const snap = await db.collection('users').limit(Math.max(5, Math.min(200, Number(limit) || 80))).get();
-    const rows = [];
-    snap.forEach((doc) => rows.push(publicHomeProfile(doc.id, doc.data() || {})));
-    return rows;
-  } catch (error) {
-    console.warn('[home:summary:leaderboard]', JSON.stringify({ message: error.message }));
-    return [];
-  }
-}
-app.get('/api/home/summary', async (req, res) => {
-  const viewer = await optionalFirebaseUser(req);
-  const latest = firebase.initFirebaseAdmin();
-  let profile = null;
-  if (viewer?.uid && latest.db) {
-    try {
-      const snap = await latest.db.collection('users').doc(viewer.uid).get();
-      profile = publicHomeProfile(viewer.uid, { uid: viewer.uid, email: viewer.email, ...(snap.exists ? snap.data() : {}) });
-    } catch (error) {
-      console.warn('[home:summary:profile]', JSON.stringify({ message: error.message, uid: viewer.uid }));
-      profile = publicHomeProfile(viewer.uid, { email: viewer.email });
-    }
-  }
-  const profiles = await getHomepageProfiles(120);
-  const fallback = profiles.length ? profiles : [publicHomeProfile('playmatrix', { username: 'PlayMatrix', avatar: '/public/assets/images/logo.png', selectedFrame: 100 })];
-  const byLevel = [...fallback].sort((a,b) => Number(b.accountXp || 0) - Number(a.accountXp || 0));
-  const byActivity = [...fallback].sort((a,b) => Number(b.monthlyActiveScore || 0) - Number(a.monthlyActiveScore || 0));
-  const withRank = (rows, metricKey) => rows.slice(0, 25).map((row, index) => ({ ...row, leaderboard: { rank: index + 1, metricKey, metricLabel: metricKey === 'monthlyActiveScore' ? 'Aylık Aktiflik' : 'Hesap XP', metricValue: Number(row[metricKey] || 0) || 0 } }));
-  res.json({
-    ok: true,
-    generatedAt: Date.now(),
-    profile,
-    chatPolicy: CHAT_POLICY,
-    homepage: { sections: ['hero', 'games', 'rewards', 'leaderboard', 'stats', 'social', 'profile'] },
-    leaderboard: {
-      ok: true,
-      generatedAt: Date.now(),
-      tabs: {
-        level: { label: 'En Yüksek Hesap Seviyesi', metricKey: 'accountXp', items: withRank(byLevel, 'accountXp') },
-        activity: { label: 'En Çok Aktif Oyuncular', metricKey: 'monthlyActiveScore', items: withRank(byActivity, 'monthlyActiveScore') }
-      }
-    }
-  });
-});
-
 app.use('/api', require('./server/routes/auth.routes'));
 app.use('/api', require('./server/routes/user.routes'));
 app.use('/api', require('./server/routes/admin.routes'));
@@ -203,7 +113,7 @@ async function captureClientError(req, res) {
   const payload = { ...(req.body || {}), path: req.body?.path || req.headers.referer || '', userAgent: req.headers['user-agent'] || '', at: Date.now() };
   const game = String(payload.game || resolveGameScopeFromPath(`${payload.path || ''} ${payload.source || ''} ${payload.scope || ''} ${payload.endpoint || ''}`)).toLowerCase();
   const sourceText = `${payload.path || ''} ${payload.source || ''} ${payload.scope || ''} ${payload.endpoint || ''}`.toLowerCase();
-  const isSupportedScope = game === 'chess' || game === 'crash' || game === 'home' || sourceText.includes('/games/chess') || sourceText.includes('/api/chess') || sourceText.includes('/games/crash') || sourceText.includes('/api/crash') || sourceText.includes('crash-app') || sourceText.includes('satranc') || sourceText.includes('/api/social') || sourceText.includes('/api/chat') || sourceText.includes('/api/wheel') || sourceText.includes('/api/promo') || sourceText.includes('/api/support') || sourceText.includes('script.js') || sourceText.includes('/index.html') || sourceText.includes('anasayfa');
+  const isSupportedScope = game === 'chess' || game === 'crash' || game === 'home' || sourceText.includes('/games/chess') || sourceText.includes('/api/chess') || sourceText.includes('/games/crash') || sourceText.includes('/api/crash') || sourceText.includes('crash-app') || sourceText.includes('satranc') || sourceText.includes('/api/social') || sourceText.includes('/api/chat') || sourceText.includes('/api/wheel') || sourceText.includes('/api/promo') || sourceText.includes('/api/support') || sourceText.includes('legacy-home') || sourceText.includes('script.js') || sourceText.includes('/index.html') || sourceText.includes('anasayfa');
   if (!isSupportedScope) return res.status(202).json({ ok:true, discarded:'unsupported-scope' });
   const normalizedGame = game === 'crash' || sourceText.includes('crash') ? 'crash' : (game === 'chess' || sourceText.includes('chess') || sourceText.includes('satranc')) ? 'chess' : 'home';
   const message = String(payload.message || payload.error || '').trim();
@@ -298,17 +208,14 @@ function publicLobbyMessages() {
 }
 function directKey(a, b) { return [String(a || ''), String(b || '')].filter(Boolean).sort().join('_'); }
 function emitCallback(done, payload) { if (typeof done === 'function') { try { done(payload); } catch (_) {} } }
-const SOCIAL_CENTER_DISABLED = true;
-function disabledSocialPayload() { return { ok:false, disabled:true, error:'SOCIAL_CENTER_DISABLED', message:'Sosyal Merkez anlık kullanıma kapalıdır.' }; }
 io.on('connection', socket => {
   runtimeStore.presence.set(socket.id, { socketId: socket.id, at: Date.now() });
   authenticateSocket(socket).catch(() => null);
   socket.on('presence:update', async data => { const ctx = await authenticateSocket(socket); const uid = ctx.pmUid || data?.uid || socket.id; const row = { socketId: socket.id, uid, ...data, at: Date.now() }; runtimeStore.presence.set(socket.id, row); if (uid) presence.set(uid, row); io.emit('social:presence_update', row); });
   socket.on('social:set_presence', async data => { const ctx = await authenticateSocket(socket); const uid = ctx.pmUid || data?.uid || socket.id; const row = { socketId: socket.id, uid, ...data, at: Date.now() }; runtimeStore.presence.set(socket.id, row); if (uid) presence.set(uid, row); io.emit('social:presence_update', row); });
-  socket.on('chat:lobby_load_history', async (_data, done) => { await authenticateSocket(socket); const payload = SOCIAL_CENTER_DISABLED ? { ...disabledSocialPayload(), policy: CHAT_POLICY, messages: [] } : { ok:true, policy: CHAT_POLICY, messages: publicLobbyMessages() }; socket.emit('chat:lobby_history', payload); emitCallback(done, payload); });
+  socket.on('chat:lobby_load_history', async (_data, done) => { await authenticateSocket(socket); const payload = { ok:true, policy: CHAT_POLICY, messages: publicLobbyMessages() }; socket.emit('chat:lobby_history', payload); emitCallback(done, payload); });
   socket.on('chat:lobby_send', async (data = {}, done) => {
     const ctx = await authenticateSocket(socket);
-    if (SOCIAL_CENTER_DISABLED) { const out = disabledSocialPayload(); socket.emit('chat:lobby_error', out); return emitCallback(done, out); }
     const uid = ctx.pmUid || '';
     if (!uid) { const out = { ok:false, error:'AUTH_REQUIRED', message:'Mesaj için oturum gerekli.' }; socket.emit('chat:lobby_error', out); return emitCallback(done, out); }
     const message = sanitizeSocketText(data.message || data.text || '', 280);
@@ -318,10 +225,10 @@ io.on('connection', socket => {
     io.emit('chat:lobby_new', msg);
     emitCallback(done, { ok:true, message:msg, policy:CHAT_POLICY });
   });
-  socket.on('chat:dm_load_history', async (data = {}, done) => { const ctx = await authenticateSocket(socket); const targetUid = sanitizeSocketText(data.targetUid || data.peerUid || '', 160); const payload = SOCIAL_CENTER_DISABLED ? { ...disabledSocialPayload(), targetUid, peerUid:targetUid, messages: [], policy:CHAT_POLICY } : (() => { const uid = ctx.pmUid || ''; const key = directKey(uid, targetUid); return { ok:true, targetUid, peerUid:targetUid, messages: key ? (dm.get(key) || []) : [], policy:CHAT_POLICY }; })(); socket.emit('chat:dm_history', payload); emitCallback(done, payload); });
-  socket.on('chat:dm_send', async (data = {}, done) => { const ctx = await authenticateSocket(socket); if (SOCIAL_CENTER_DISABLED) { const out = disabledSocialPayload(); socket.emit('chat:dm_error', out); return emitCallback(done, out); } const fromUid = ctx.pmUid || ''; const toUid = sanitizeSocketText(data.toUid || data.targetUid || '', 160); const message = sanitizeSocketText(data.message || data.text || '', 500); if (!fromUid || !toUid || !message) { const out = { ok:false, error:'DM_INVALID_PAYLOAD', message:'DM için kullanıcı ve mesaj gerekli.' }; socket.emit('chat:dm_error', out); return emitCallback(done, out); } const key = directKey(fromUid, toUid); const list = dm.get(key) || []; const msg = { id:`dm_${Date.now()}_${Math.random().toString(36).slice(2)}`, clientTempId:data.clientTempId || '', fromUid, byUid:fromUid, toUid, targetUid:toUid, text:message, message, at:Date.now() }; const next = [...list, msg].slice(-200); dm.set(key, next, 14 * 86400000); socket.emit('chat:dm_success', { ok:true, targetUid:toUid, clientTempId:data.clientTempId, message:msg }); socket.emit('chat:dm_new', msg); io.to(`user:${toUid}`).emit('chat:dm_new', msg); emitCallback(done, { ok:true, message:msg }); });
+  socket.on('chat:dm_load_history', async (data = {}, done) => { const ctx = await authenticateSocket(socket); const uid = ctx.pmUid || ''; const targetUid = sanitizeSocketText(data.targetUid || data.peerUid || '', 160); const key = directKey(uid, targetUid); const messages = key ? (dm.get(key) || []) : []; const payload = { ok:true, targetUid, peerUid:targetUid, messages, policy:CHAT_POLICY }; socket.emit('chat:dm_history', payload); emitCallback(done, payload); });
+  socket.on('chat:dm_send', async (data = {}, done) => { const ctx = await authenticateSocket(socket); const fromUid = ctx.pmUid || ''; const toUid = sanitizeSocketText(data.toUid || data.targetUid || '', 160); const message = sanitizeSocketText(data.message || data.text || '', 500); if (!fromUid || !toUid || !message) { const out = { ok:false, error:'DM_INVALID_PAYLOAD', message:'DM için kullanıcı ve mesaj gerekli.' }; socket.emit('chat:dm_error', out); return emitCallback(done, out); } const key = directKey(fromUid, toUid); const list = dm.get(key) || []; const msg = { id:`dm_${Date.now()}_${Math.random().toString(36).slice(2)}`, clientTempId:data.clientTempId || '', fromUid, byUid:fromUid, toUid, targetUid:toUid, text:message, message, at:Date.now() }; const next = [...list, msg].slice(-200); dm.set(key, next, 14 * 86400000); socket.emit('chat:dm_success', { ok:true, targetUid:toUid, clientTempId:data.clientTempId, message:msg }); socket.emit('chat:dm_new', msg); io.to(`user:${toUid}`).emit('chat:dm_new', msg); emitCallback(done, { ok:true, message:msg }); });
   socket.on('chat:typing', async (data = {}) => { const ctx = await authenticateSocket(socket); const fromUid = ctx.pmUid || ''; const toUid = sanitizeSocketText(data.toUid || data.targetUid || '', 160); if (fromUid && toUid) io.to(`user:${toUid}`).emit('chat:typing_status', { fromUid, isTyping: !!data.isTyping, at:Date.now() }); });
-  socket.on('game:invite_send', async (data = {}, done) => { const ctx = await authenticateSocket(socket); if (SOCIAL_CENTER_DISABLED) { const out = disabledSocialPayload(); socket.emit('game:invite_error', out); return emitCallback(done, out); } const hostUid = ctx.pmUid || ''; const targetUid = sanitizeSocketText(data.targetUid || '', 160); if (!hostUid || !targetUid) { const out = { ok:false, error:'INVITE_INVALID_PAYLOAD', message:'Davet için hedef kullanıcı gerekli.' }; socket.emit('game:invite_error', out); return emitCallback(done, out); } const invite = { id:`invite_${Date.now()}_${Math.random().toString(36).slice(2)}`, inviteId:`invite_${Date.now()}_${Math.random().toString(36).slice(2)}`, hostUid, targetUid, roomId:sanitizeSocketText(data.roomId || '', 160), gameKey:sanitizeSocketText(data.gameKey || data.gameCode || 'chess', 40), gameName:sanitizeSocketText(data.gameName || 'Oyun Daveti', 80), at:Date.now() }; runtimeStore.gameInvites.set(invite.id, invite, 90 * 1000); io.to(`user:${targetUid}`).emit('game:invite_receive', invite); socket.emit('game:invite_success', invite); emitCallback(done, { ok:true, ...invite }); });
+  socket.on('game:invite_send', async (data = {}, done) => { const ctx = await authenticateSocket(socket); const hostUid = ctx.pmUid || ''; const targetUid = sanitizeSocketText(data.targetUid || '', 160); if (!hostUid || !targetUid) { const out = { ok:false, error:'INVITE_INVALID_PAYLOAD', message:'Davet için hedef kullanıcı gerekli.' }; socket.emit('game:invite_error', out); return emitCallback(done, out); } const invite = { id:`invite_${Date.now()}_${Math.random().toString(36).slice(2)}`, inviteId:`invite_${Date.now()}_${Math.random().toString(36).slice(2)}`, hostUid, targetUid, roomId:sanitizeSocketText(data.roomId || '', 160), gameKey:sanitizeSocketText(data.gameKey || data.gameCode || 'chess', 40), gameName:sanitizeSocketText(data.gameName || 'Oyun Daveti', 80), at:Date.now() }; runtimeStore.gameInvites.set(invite.id, invite, 90 * 1000); io.to(`user:${targetUid}`).emit('game:invite_receive', invite); socket.emit('game:invite_success', invite); emitCallback(done, { ok:true, ...invite }); });
   socket.on('game:invite_response', data => socket.broadcast.emit('game:invite_response', { ...(data || {}), at: Date.now() }));
   socket.on('game:matchmake_join', data => socket.emit('game:matchmake_joined', { ok:true, queued:false, gameType:data?.gameType || data?.game || 'unknown', message:'HTTP lobby active' }));
   socket.on('game:matchmake_leave', () => socket.emit('game:matchmake_left', { ok:true }));
@@ -330,9 +237,9 @@ io.on('connection', socket => {
   socket.on('matchmaking:leave', () => socket.emit('matchmaking:left', { ok:true }));
   socket.on('disconnect', () => { const uid = socket.data?.pmUid; runtimeStore.presence.delete(socket.id); if (uid) presence.delete(uid); });
 });
-if (crashGame && typeof crashGame.installSocket === 'function') crashGame.installSocket(io);
-if (chessGame && typeof chessGame.installSocket === 'function') chessGame.installSocket(io);
-if (pistiGame && typeof pistiGame.installSocket === 'function') pistiGame.installSocket(io);
+if (typeof crashGame.installSocket === 'function') crashGame.installSocket(io);
+chessGame.installSocket?.(io);
+pistiGame.installSocket?.(io);
 
 setInterval(()=>{ Object.values(runtimeStore).forEach(store => store.prune && store.prune()); }, 60_000).unref();
 

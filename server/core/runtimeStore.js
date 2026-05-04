@@ -17,9 +17,6 @@ const runtimeStore = {
   emailCodes: new TtlStore({ ttlMs: 10 * 60 * 1000, max: 2000 }),
   errors: new TtlStore({ ttlMs: 24 * 60 * 60 * 1000, max: 1000 }),
   support: new TtlStore({ ttlMs: 24 * 60 * 60 * 1000, max: 1000 }),
-  betHistory: new TtlStore({ ttlMs: 24 * 60 * 60 * 1000, max: 5000 }),
-  sessionHistory: new TtlStore({ ttlMs: 24 * 60 * 60 * 1000, max: 5000 }),
-  userProfiles: new TtlStore({ ttlMs: 30 * 24 * 60 * 60 * 1000, max: 10000 }),
   crashRounds: new TtlStore({ ttlMs: 60 * 60 * 1000, max: 20 }),
   gameInvites: new TtlStore({ ttlMs: 90 * 1000, max: 2000 })
 };
