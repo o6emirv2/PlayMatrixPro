@@ -157,23 +157,20 @@ function startHero() { renderHeroDots(); setInterval(() => showHero(state.heroIn
 
 function gameCard(game) {
   const palette = {
-    crash: ['#ff9d00', '#ff3d4d'],
-    chess: ['#1957ff', '#22d3ee'],
-    pisti: ['#8038ff', '#ff4fd8'],
-    pattern: ['#17a94f', '#79e35d'],
-    space: ['#0047ff', '#6de7ff'],
-    snake: ['#11a84a', '#02e391']
+    crash: ['#ff8a00', '#ff4757'],
+    chess: ['#1463ff', '#22d3ee'],
+    pisti: ['#7c3cff', '#ff4fd8'],
+    pattern: ['#16a34a', '#7ee05f'],
+    space: ['#0064ff', '#67e8f9'],
+    snake: ['#10b981', '#0ee486']
   }[game.key] || ['#2f66ff', '#8b5cf6'];
-  return `<button class="pm-home-game-card" style="--card-a:${palette[0]};--card-b:${palette[1]}" data-play-game="${game.key}" type="button" aria-label="${escapeHtml(game.title)} oyununu aç">
-    <span class="pm-game-card-top">
-      <span class="pm-game-big-icon"><i class="fa-solid ${game.icon}"></i></span>
-      <span class="pm-game-category">${escapeHtml(game.category)}</span>
-    </span>
-    <span class="pm-game-card-body">
+  return `<button class="pm-home-game-card" style="--card-a:${palette[0]};--card-b:${palette[1]}" data-play-game="${escapeHtml(game.key)}" type="button" aria-label="${escapeHtml(game.title)} oyununu aç">
+    <span class="pm-game-big-icon"><i class="fa-solid ${game.icon}"></i></span>
+    <span class="pm-game-copy">
       <strong>${escapeHtml(game.title)}</strong>
-      <em>${escapeHtml(game.desc)}</em>
+      <small>${escapeHtml(game.category)} · ${escapeHtml(game.desc)}</small>
     </span>
-    <span class="pm-game-play">Oyunu Aç <i class="fa-solid fa-arrow-right"></i></span>
+    <span class="pm-game-play">Oyunu Aç</span>
   </button>`;
 }
 function renderGames() {
@@ -335,7 +332,7 @@ function renderSocial() {
   setText('socialTitle', titles[state.socialView] || '#Yerel Sohbet (TR)');
   const form = $('chatForm'); if (form) form.style.display = state.socialView === 'chat' ? '' : 'none';
   if (state.socialView === 'dm') {
-    host.innerHTML = `<div class="pm-social-tool"><h3>DM Kutusu</h3><p>Aktif DM konuşmaları listelenir; UID girerek güvenli geçici mesaj gönderilebilir.</p><label class="pm-field"><span>Alıcı UID</span><input id="dmTargetInput" maxlength="128" placeholder="Alıcı kullanıcı UID" /></label><label class="pm-field"><span>Mesaj</span><input id="dmMessageInput" maxlength="280" placeholder="Kısa mesaj yaz" /></label><div class="pm-social-actions"><button class="pm-btn pm-btn-primary" type="button" data-social-action="send-dm">DM Gönder</button><button class="pm-btn pm-btn-dark" type="button" data-social-action="load-dm">DM Kutusunu Yenile</button></div><div class="pm-social-results" id="socialToolResults"></div></div>`;
+    host.innerHTML = `<div class="pm-social-tool"><h3>DM Kutusu</h3><p>Aktif DM konuşmaların Render in-memory modelinden okunur.</p><button class="pm-btn pm-btn-primary" type="button" data-social-action="load-dm">DM Kutusunu Yenile</button><div class="pm-social-results" id="socialToolResults"></div></div>`;
     return;
   }
   if (state.socialView === 'search') {
@@ -369,33 +366,23 @@ async function handleSocialAction(action) {
       write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.username || x.peerUid || 'DM')}</strong><p>${escapeHtml(x.lastMessage || 'Son mesaj yok')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>DM kaydı yok</strong><p>Yeni konuşmalar burada görünecek.</p></div>');
       return;
     }
-    if (action === 'send-dm') {
-      const targetUid = safeText($('dmTargetInput')?.value);
-      const text = safeText($('dmMessageInput')?.value);
-      if (!targetUid || !text) throw new Error('DM için hedef UID ve mesaj gerekli.');
-      const payload = await apiFetch(`/api/chat/direct/${encodeURIComponent(targetUid)}`, { method:'POST', body:JSON.stringify({ text }) });
-      write(`<article><strong>DM gönderildi</strong><p>${escapeHtml(payload.message?.text || text)}</p></article>`);
-      return;
-    }
     if (action === 'search-message') {
       const q = safeText($('socialSearchInput')?.value);
       const payload = await apiFetch(`/api/chat/direct/search?q=${encodeURIComponent(q)}`, { timeoutMs: 5000 });
       const items = Array.isArray(payload.items) ? payload.items : [];
-      write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.peerUid || x.fromUid || x.toUid || 'Mesaj')}</strong><p>${escapeHtml(x.text || x.message || '')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>Sonuç yok</strong><p>Aktif mesajlarda eşleşme bulunmadı.</p></div>');
+      write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.peerUid || 'Mesaj')}</strong><p>${escapeHtml(x.text || x.message || '')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>Sonuç yok</strong><p>Aktif mesajlarda eşleşme bulunmadı.</p></div>');
       return;
     }
     if (action === 'load-requests') {
       const payload = await apiFetch('/api/friends/list', { timeoutMs: 5000 });
       const c = payload.counts || {};
-      const rows = Array.isArray(payload.items) ? payload.items : [];
-      const summary = `<article><strong>Arkadaşlık Özeti</strong><p>Kabul edilen: ${fmt(c.accepted || 0)} · Gelen: ${fmt(c.incoming || 0)} · Giden: ${fmt(c.outgoing || 0)}</p></article>`;
-      write(summary + (rows.length ? rows.map(x => `<article><strong>${escapeHtml(x.peerUid || x.toUid || x.fromUid || 'Arkadaşlık')}</strong><p>${escapeHtml(x.status || 'pending')}</p></article>`).join('') : ''));
+      write(`<article><strong>Arkadaşlık Özeti</strong><p>Kabul edilen: ${fmt(c.accepted || 0)} · Gelen: ${fmt(c.incoming || 0)} · Giden: ${fmt(c.outgoing || 0)}</p></article>`);
       return;
     }
     if (action === 'send-friend') {
       const targetUid = safeText($('friendTargetInput')?.value);
       if (!targetUid) throw new Error('Hedef kullanıcı UID gerekli.');
-      await apiFetch('/api/friends/request', { method:'POST', body:JSON.stringify({ targetUid, toUid: targetUid }) });
+      await apiFetch('/api/friends/request', { method:'POST', body:JSON.stringify({ targetUid }) });
       write('<article><strong>İstek gönderildi</strong><p>Arkadaşlık isteği işlendi.</p></article>');
       return;
     }
@@ -449,7 +436,7 @@ function installEvents() {
     if (target.dataset.profileAction === 'open') { event.preventDefault(); openDrawer(); return; }
     if (target.id === 'profileDrawerOpen') { event.preventDefault(); openDrawer(); return; }
     if (target.dataset.logout !== undefined) { event.preventDefault(); logout(); return; }
-    if (target.dataset.playGame) { event.preventDefault(); const game = GAMES.find(g=>g.key===target.dataset.playGame); if (game?.route) location.assign(game.route); return; }
+    if (target.dataset.playGame) { event.preventDefault(); const game = GAMES.find(g=>g.key===target.dataset.playGame); if (ensureAuth(game?.title || 'Oyun')) location.href = game.route; return; }
     if (target.dataset.leaderTab) { state.leaderTab = target.dataset.leaderTab; qsa('[data-leader-tab]').forEach(b => b.classList.toggle('is-active', b.dataset.leaderTab === state.leaderTab)); renderLeaderboard(); return; }
     if (target.dataset.avatarCategory) { state.currentAvatarCategory = target.dataset.avatarCategory; renderAvatarPicker(); return; }
     if (target.dataset.avatarSrc) { selectAvatar(target.dataset.avatarSrc); return; }
@@ -474,13 +461,12 @@ function installEvents() {
 (function installTouchHardening(){
   let lastTouchAt = 0;
   document.addEventListener('touchend', (event) => {
-    if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
     const now = Date.now();
     if (now - lastTouchAt < 320) event.preventDefault();
     lastTouchAt = now;
   }, { passive:false });
   document.addEventListener('contextmenu', (event) => {
-    if (!event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) event.preventDefault();
+    if (!event.target?.closest?.('input, textarea')) event.preventDefault();
   });
 })();
 

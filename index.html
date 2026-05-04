@@ -54,7 +54,8 @@
       <button class="is-active" data-scroll-target="heroSection" type="button"><i class="fa-solid fa-house"></i>AnaSayfa</button>
       <button data-scroll-target="gamesSection" type="button"><i class="fa-solid fa-gamepad"></i>Oyunlar</button>
       <button data-scroll-target="leaderboardSection" type="button"><i class="fa-solid fa-ranking-star"></i>Liderlik</button>
-      <button data-open-modal="supportModal" type="button"><i class="fa-solid fa-headset"></i>Destek</button>
+      <button data-open-modal="wheelModal" type="button"><i class="fa-solid fa-dharmachakra"></i>Çark</button>
+      <button data-open-modal="promoModal" type="button"><i class="fa-solid fa-gift"></i>Promo</button>
     </nav>
 
     <main class="pm-main" id="mainContent">
@@ -73,7 +74,7 @@
             <span class="pm-slide-tag"><i class="fa-solid fa-envelope-circle-check"></i> E-posta Onayı</span>
             <h2>E-postanı onayla, doğrulama ödülünü güvenli al.</h2>
             <p>E-posta onayı sonrası ödül bildirimi tekrar etmeden, idempotency korumasıyla profil hesabına işlenir.</p>
-            <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-profile-action="open">Profil Menüsü</button></div>
+            <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-open-modal="emailModal">E-posta İşlemleri</button></div>
           </div>
           <div class="pm-slide" data-slide="2">
             <span class="pm-slide-tag"><i class="fa-solid fa-chart-line"></i> Aktif Oyuncu Ödülü</span>
@@ -85,14 +86,20 @@
         </div>
       </section>
 
-      <section class="pm-action-rail" aria-label="Ana hızlı erişim">
+      <section class="pm-action-rail" aria-label="Hızlı erişim">
         <button type="button" class="pm-yellow-ticket" data-scroll-target="gamesSection"><span><i class="fa-solid fa-gamepad"></i></span><strong>Oyunlar</strong></button>
         <button type="button" class="pm-yellow-ticket" data-scroll-target="leaderboardSection"><span><i class="fa-solid fa-trophy"></i></span><strong>Liderlik</strong></button>
+        <button type="button" class="pm-yellow-ticket" data-open-modal="wheelModal"><span><i class="fa-solid fa-dharmachakra"></i></span><strong>Günlük Çark</strong></button>
+        <button type="button" class="pm-yellow-ticket" data-open-modal="promoModal"><span><i class="fa-solid fa-ticket"></i></span><strong>Promosyon</strong></button>
         <button type="button" class="pm-yellow-ticket" data-open-modal="supportModal"><span><i class="fa-solid fa-headset"></i></span><strong>Destek</strong></button>
       </section>
-
-      <section class="pm-section pm-games-section" id="gamesSection" aria-labelledby="gamesTitle">
-        <div class="pm-section-head pm-games-head"><div><h2 id="gamesTitle">OYUNLAR</h2></div></div>
+      <section class="pm-section pm-games-section" id="gamesSection">
+        <div class="pm-section-head pm-games-head">
+          <div>
+            <h2>OYUNLAR</h2>
+            <p class="pm-section-subtitle">Crash, Satranç, Pişti ve klasik PlayMatrix oyunları tek güvenli giriş modeliyle açılır.</p>
+          </div>
+        </div>
         <div class="pm-game-grid" id="gameGrid" aria-live="polite"></div>
       </section>
 
@@ -100,7 +107,6 @@
         <div class="pm-section-head"><div><span class="pm-kicker">Canlı Profil Modeli</span><h2>Liderlik</h2></div><div class="pm-tabs"><button class="is-active" data-leader-tab="level" type="button">Seviye</button><button data-leader-tab="activity" type="button">Aktiflik</button></div></div>
         <div class="pm-leader-list" id="leaderboardList" aria-live="polite"></div>
       </section>
-
 
       <section class="pm-section pm-platform-note">
         <h2>PlayMatrix ücretsiz oyun deneyimidir.</h2>
@@ -114,7 +120,7 @@
         <button class="pm-footer-acc" type="button" data-accordion="rules"><span>Güvenlik ve Kurallar</span><i class="fa-solid fa-chevron-down"></i></button>
         <div class="pm-footer-panel" id="footer-rules"><p>Oturum güvenliği, e-posta doğrulama, sohbet saklama politikası ve oyun içi sanal değer modeli esas alınır.</p></div>
         <button class="pm-footer-acc" type="button" data-accordion="pages"><span>Sayfalar</span><i class="fa-solid fa-chevron-down"></i></button>
-        <div class="pm-footer-panel" id="footer-pages"><p>Oyunlar ve Liderlik AnaSayfa’da; profil, ödül, sosyal, bildirim ve hesap araçları üst profil menüsünde yönetilir.</p></div>
+        <div class="pm-footer-panel" id="footer-pages"><p>Oyunlar, Liderlik, Çark, Promo, Profil, Sosyal Merkez ve Canlı Destek alanları tek AnaSayfa üzerinden açılır.</p></div>
         <button class="pm-footer-acc" type="button" data-accordion="contact"><span>Bize Ulaşın</span><i class="fa-solid fa-chevron-down"></i></button>
         <div class="pm-footer-panel" id="footer-contact"><p><strong>PLAYMATRIXDESTEK@GMAIL.COM</strong></p></div>
         <button class="pm-footer-acc" type="button" data-accordion="social"><span>Sosyal Medya</span><i class="fa-solid fa-chevron-down"></i></button>
@@ -126,9 +132,9 @@
       <button type="button" class="is-active" data-scroll-target="heroSection"><i class="fa-solid fa-bars"></i><span>Menü</span></button>
       <button type="button" data-scroll-target="gamesSection"><i class="fa-solid fa-futbol"></i><span>Oyunlar</span></button>
       <button type="button" data-scroll-target="leaderboardSection"><i class="fa-solid fa-clover"></i><span>Liderlik</span></button>
-      <button type="button" data-open-modal="supportModal"><i class="fa-solid fa-headset"></i><span>Destek</span></button>
+      <button type="button" data-open-modal="promoModal"><i class="fa-solid fa-gift"></i><span>Promolar</span></button>
       <button type="button" data-profile-action="open"><i class="fa-solid fa-user-lock"></i><span id="bottomProfileLabel">Giriş</span></button>
-      <button type="button" data-scroll-target="heroSection"><i class="fa-solid fa-arrow-up"></i><span>Üst</span></button>
+      <button type="button" data-open-modal="supportModal"><i class="fa-solid fa-headset"></i><span>Destek</span></button>
     </nav>
   </div>
 
@@ -149,7 +155,6 @@
         <small id="drawerProgressText">0.0%</small>
       </div>
       <div class="pm-drawer-menu">
-        <button type="button" data-scroll-target="gamesSection"><i class="fa-solid fa-gamepad"></i>Oyunlar</button>
         <button type="button" data-open-modal="accountModal"><i class="fa-solid fa-list-check"></i>Profilim</button>
         <button type="button" data-open-modal="avatarModal"><i class="fa-solid fa-user-circle"></i>Avatar Seç</button>
         <button type="button" data-open-modal="frameModal"><i class="fa-solid fa-certificate"></i>Çerçeve Seç</button>
@@ -160,6 +165,7 @@
         <button type="button" data-open-modal="inviteModal"><i class="fa-solid fa-user-group"></i>Davet Et ve Kazan</button>
         <button type="button" data-open-modal="socialModal"><i class="fa-solid fa-people-group"></i>Sosyal Merkez</button>
         <button type="button" data-open-modal="notificationsModal"><i class="fa-solid fa-bell"></i>Bildirimler</button>
+        <button type="button" data-scroll-target="gamesSection"><i class="fa-solid fa-gamepad"></i>Oyunlar</button>
         <button type="button" data-logout class="is-danger"><i class="fa-solid fa-power-off"></i>Güvenli Çıkış</button>
       </div>
     </div>
