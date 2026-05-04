@@ -153,7 +153,7 @@ function renderHeroDots() {
   qsa('.pm-slide').forEach((_, index) => { const b = document.createElement('button'); b.className = index === state.heroIndex ? 'is-active' : ''; b.type = 'button'; b.addEventListener('click', () => showHero(index)); dots.append(b); });
 }
 function showHero(index) { const slides = qsa('.pm-slide'); if (!slides.length) return; state.heroIndex = (index + slides.length) % slides.length; slides.forEach((s,i)=>s.classList.toggle('is-active', i === state.heroIndex)); renderHeroDots(); }
-function startHero() { renderHeroDots(); setInterval(() => showHero(state.heroIndex + 1), 6500); }
+function startHero() { renderHeroDots(); setInterval(() => showHero(state.heroIndex + 1), 5000); }
 
 function gameCard(game, compact = false) {
   const palette = {
@@ -170,7 +170,7 @@ function gameCard(game, compact = false) {
       <h3>${escapeHtml(game.title)}</h3>
       <p>${escapeHtml(game.category)} · ${escapeHtml(game.desc)}</p>
     </div>
-    <button class="pm-game-play" data-play-game="${game.key}" type="button">Giriş Gerekli · Oyna</button>
+    <button class="pm-game-play" data-play-game="${game.key}" type="button">Oyunu Aç</button>
   </article>`;
 }
 function renderGames() {
@@ -335,10 +335,10 @@ function renderAvatarPicker() {
 function renderFramePicker() {
   const grid = $('frameGrid'); if (!grid) return; const level = Number(state.profile?.level || 1); const selected = Number(state.profile?.selectedFrame || 0);
   const items = Array.from({ length: 100 }, (_, i) => i + 1).filter(n => state.frameFilter === 'all' || (state.frameFilter === 'open' ? n <= level : n > level));
-  grid.innerHTML = items.map(n => { const locked = n > level; return `<button class="pm-frame-card ${selected === n ? 'is-selected' : ''} ${locked ? 'is-locked' : ''}" data-frame="${n}" type="button" ${locked ? 'aria-disabled="true"' : ''}><span class="pm-frame-lock"><i class="fa-solid ${locked ? 'fa-lock' : 'fa-check'}"></i></span><span class="pm-frame-preview"><span class="pm-avatar-base"><img src="${escapeHtml(state.profile?.avatar || DEFAULT_AVATAR)}" alt=""></span><span class="pm-avatar-frame" style="background-image:url('/public/assets/frames/frame-${n}.png')"></span></span><strong>Seviye ${n}</strong><small>Çerçeve ${n}</small><span class="pm-frame-state">${locked ? `Seviye ${n} gerekli` : selected === n ? 'Şuanda Aktif' : 'Kullanılabilir'}</span></button>`; }).join('');
+  grid.innerHTML = items.map(n => { const locked = n > level; return `<button class="pm-frame-card ${selected === n ? 'is-selected' : ''} ${locked ? 'is-locked' : ''}" data-frame="${n}" type="button" ${locked ? 'aria-disabled="true"' : ''}><span class="pm-frame-lock"><i class="fa-solid ${locked ? 'fa-lock' : 'fa-check'}"></i></span><span class="pm-frame-preview"><span class="pm-avatar-base"><img src="${escapeHtml(state.profile?.avatar || DEFAULT_AVATAR)}" alt=""></span><span class="pm-avatar-frame" style="background-image:url('/public/assets/frames/frame-${n}.png')"></span></span><strong>Seviye ${n}</strong><small>Çerçeve ${n}</small><span class="pm-frame-state">${locked ? `Kilitli` : selected === n ? 'Aktif' : 'Kullanılabilir'}</span></button>`; }).join('');
 }
 async function selectAvatar(src) { if (!ensureAuth('Avatar seçimi')) return; try { await apiFetch('/api/user/avatar', { method:'POST', body:JSON.stringify({ avatar: src }) }); state.profile.avatar = src; updateShell(); renderAvatarPicker(); toast('Avatar güncellendi', 'Profil avatarı kaydedildi.', 'success'); } catch (error) { toast('Avatar kaydedilemedi', error.message, 'error'); reportHomeIssue('home.avatar.save', error); } }
-async function selectFrame(n) { if (!ensureAuth('Çerçeve seçimi')) return; const level = Number(state.profile?.level || 1); if (n > level) return toast('Çerçeve kilitli', `Bu çerçeve için Seviye ${n} gerekli.`, 'warning'); try { await apiFetch('/api/user/frame', { method:'POST', body:JSON.stringify({ frame: n }) }); state.profile.selectedFrame = n; updateShell(); renderFramePicker(); toast('Çerçeve güncellendi', `Çerçeve ${n} aktif edildi.`, 'success'); } catch (error) { toast('Çerçeve kaydedilemedi', error.message, 'error'); reportHomeIssue('home.frame.save', error); } }
+async function selectFrame(n) { if (!ensureAuth('Çerçeve seçimi')) return; const level = Number(state.profile?.level || 1); if (n > level) return toast('Çerçeve kilitli', `Bu çerçeve için Kilitli.`, 'warning'); try { await apiFetch('/api/user/frame', { method:'POST', body:JSON.stringify({ frame: n }) }); state.profile.selectedFrame = n; updateShell(); renderFramePicker(); toast('Çerçeve güncellendi', `Çerçeve ${n} aktif edildi.`, 'success'); } catch (error) { toast('Çerçeve kaydedilemedi', error.message, 'error'); reportHomeIssue('home.frame.save', error); } }
 async function updateEmail() { try { if (!state.user || !state.firebaseReady) throw new Error('Oturum gerekli.'); const email = safeText($('emailUpdateInput')?.value); if (!email.includes('@')) throw new Error('Geçerli e-posta gir.'); await state.firebase.verifyBeforeUpdateEmail(state.user, email); setText('emailResult', 'Doğrulama bağlantısı gönderildi. Bağlantı onaylanınca e-posta güncellenir.'); } catch (error) { setText('emailResult', `İşlem başarısız: ${error.message}`); reportHomeIssue('home.email.update', error, { severity:'warning' }); } }
 async function spinWheel() { if (!ensureAuth('Çark')) return; try { const payload = await apiFetch('/api/wheel/spin', { method:'POST', body:JSON.stringify({}) }); setText('wheelResult', `${fmt(payload.amount || payload.reward || payload.prize || 0)} MC kazandın.`); await refreshProfile(); } catch (error) { setText('wheelResult', error.status === 409 ? 'Bugünkü çark hakkın kullanılmış.' : `Çark hatası: ${error.message}`); } }
 async function claimPromo() { if (!ensureAuth('Promo')) return; try { const code = safeText($('promoCodeInput')?.value).toUpperCase(); const payload = await apiFetch('/api/promo/claim', { method:'POST', body:JSON.stringify({ code }) }); setText('promoResult', `${escapeHtml(code)} kodu ile ${fmt(payload.amount || 0)} MC tanımlandı.`); await refreshProfile(); } catch (error) { setText('promoResult', `Promo kullanılamadı: ${error.message}`); } }
@@ -349,22 +349,79 @@ function renderSocial() {
   qsa('[data-social-view]').forEach(btn => btn.classList.toggle('is-active', btn.dataset.socialView === state.socialView));
   const titles = { chat:'#Yerel Sohbet (TR)', dm:'DM Kutusu', search:'Mesaj Ara', requests:'İstek Listesi', add:'Arkadaş Ekleme', invites:'Oyun Daveti' };
   setText('socialTitle', titles[state.socialView] || '#Yerel Sohbet (TR)');
-  if (state.socialView !== 'chat') {
-    const copy = {
-      dm:'Direkt mesaj kutusu, arkadaş seçimi sonrası aktif konuşmaları gösterir.',
-      search:'Yerel ve DM mesajlarında aktif in-memory kayıtlar içinde arama yapılır.',
-      requests:'Gelen ve gönderilen arkadaşlık istekleri burada listelenir.',
-      add:'Kullanıcı adı veya profil bilgisiyle arkadaş ekleme akışı burada çalışır.',
-      invites:'Crash, Satranç ve Pişti oyun davetleri bu panelde görünür.'
-    };
-    host.innerHTML = `<div class="pm-empty-mini"><div><strong>${escapeHtml(titles[state.socialView])}</strong><p>${escapeHtml(copy[state.socialView] || 'Aktif kayıt yok.')}</p><button class="pm-btn pm-btn-primary" type="button" data-scroll-target="gamesSection">Oyunlara Git</button></div></div>`;
-    const form = $('chatForm'); if (form) form.style.display = 'none';
+  const form = $('chatForm'); if (form) form.style.display = state.socialView === 'chat' ? '' : 'none';
+  if (state.socialView === 'dm') {
+    host.innerHTML = `<div class="pm-social-tool"><h3>DM Kutusu</h3><p>Aktif DM konuşmaların Render in-memory modelinden okunur.</p><button class="pm-btn pm-btn-primary" type="button" data-social-action="load-dm">DM Kutusunu Yenile</button><div class="pm-social-results" id="socialToolResults"></div></div>`;
     return;
   }
-  $('chatForm').style.display = '';
+  if (state.socialView === 'search') {
+    host.innerHTML = `<div class="pm-social-tool"><h3>Mesaj Ara</h3><p>Aktif in-memory mesajlarda arama yap.</p><label class="pm-field"><span>Aranacak metin</span><input id="socialSearchInput" maxlength="80" placeholder="Mesaj içinde ara" /></label><button class="pm-btn pm-btn-primary" type="button" data-social-action="search-message">Ara</button><div class="pm-social-results" id="socialToolResults"></div></div>`;
+    return;
+  }
+  if (state.socialView === 'requests') {
+    host.innerHTML = `<div class="pm-social-tool"><h3>İstek Listesi</h3><p>Gelen, giden ve kabul edilmiş arkadaşlık kayıtları burada gösterilir.</p><button class="pm-btn pm-btn-primary" type="button" data-social-action="load-requests">Listeyi Yenile</button><div class="pm-social-results" id="socialToolResults"></div></div>`;
+    return;
+  }
+  if (state.socialView === 'add') {
+    host.innerHTML = `<div class="pm-social-tool"><h3>Arkadaş Ekleme</h3><p>Kullanıcı UID veya profil kodu ile arkadaşlık isteği gönder.</p><label class="pm-field"><span>Kullanıcı UID</span><input id="friendTargetInput" maxlength="128" placeholder="Hedef kullanıcı UID" /></label><button class="pm-btn pm-btn-primary" type="button" data-social-action="send-friend">İstek Gönder</button><div class="pm-social-results" id="socialToolResults"></div></div>`;
+    return;
+  }
+  if (state.socialView === 'invites') {
+    host.innerHTML = `<div class="pm-social-tool"><h3>Oyun Daveti</h3><p>Satranç veya Pişti için arkadaşına oyun daveti gönder.</p><label class="pm-field"><span>Hedef Kullanıcı UID</span><input id="inviteTargetInput" maxlength="128" placeholder="Hedef kullanıcı UID" /></label><label class="pm-field"><span>Oyun</span><select id="inviteGameSelect"><option value="chess">Satranç</option><option value="pisti">Pişti</option></select></label><button class="pm-btn pm-btn-primary" type="button" data-social-action="send-invite">Davet Gönder</button><div class="pm-social-results" id="socialToolResults"></div></div>`;
+    return;
+  }
   if (!state.lobbyMessages.length) { host.innerHTML = `<div class="pm-empty-mini"><div><strong>Lobi şu an sakin</strong><p>İlk mesajı göndererek akışı sen başlatabilirsin.</p></div></div>`; return; }
   host.innerHTML = state.lobbyMessages.map(m => `<div class="pm-social-message ${m.uid === state.profile?.uid ? 'is-me' : ''}"><strong>${escapeHtml(m.username || 'Oyuncu')}</strong><p>${escapeHtml(m.text || m.message || '')}</p></div>`).join('');
   host.scrollTop = host.scrollHeight;
+}
+async function handleSocialAction(action) {
+  if (!ensureAuth('Sosyal Merkez')) return;
+  const out = $('socialToolResults');
+  const write = (html) => { if (out) out.innerHTML = html; };
+  try {
+    if (action === 'load-dm') {
+      const payload = await apiFetch('/api/chat/direct/list', { timeoutMs: 5000 });
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.username || x.peerUid || 'DM')}</strong><p>${escapeHtml(x.lastMessage || 'Son mesaj yok')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>DM kaydı yok</strong><p>Yeni konuşmalar burada görünecek.</p></div>');
+      return;
+    }
+    if (action === 'search-message') {
+      const q = safeText($('socialSearchInput')?.value);
+      const payload = await apiFetch(`/api/chat/direct/search?q=${encodeURIComponent(q)}`, { timeoutMs: 5000 });
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.peerUid || 'Mesaj')}</strong><p>${escapeHtml(x.text || x.message || '')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>Sonuç yok</strong><p>Aktif mesajlarda eşleşme bulunmadı.</p></div>');
+      return;
+    }
+    if (action === 'load-requests') {
+      const payload = await apiFetch('/api/friends/list', { timeoutMs: 5000 });
+      const c = payload.counts || {};
+      write(`<article><strong>Arkadaşlık Özeti</strong><p>Kabul edilen: ${fmt(c.accepted || 0)} · Gelen: ${fmt(c.incoming || 0)} · Giden: ${fmt(c.outgoing || 0)}</p></article>`);
+      return;
+    }
+    if (action === 'send-friend') {
+      const targetUid = safeText($('friendTargetInput')?.value);
+      if (!targetUid) throw new Error('Hedef kullanıcı UID gerekli.');
+      await apiFetch('/api/friends/request', { method:'POST', body:JSON.stringify({ targetUid }) });
+      write('<article><strong>İstek gönderildi</strong><p>Arkadaşlık isteği işlendi.</p></article>');
+      return;
+    }
+    if (action === 'send-invite') {
+      const targetUid = safeText($('inviteTargetInput')?.value);
+      const gameKey = safeText($('inviteGameSelect')?.value || 'chess');
+      if (!targetUid) throw new Error('Hedef kullanıcı UID gerekli.');
+      if (state.socket?.connected) {
+        state.socket.emit('game:invite_send', { targetUid, gameKey, gameName: gameKey === 'pisti' ? 'Pişti' : 'Satranç' }, (ack) => {
+          if (ack?.ok) write('<article><strong>Davet gönderildi</strong><p>Oyun daveti karşı tarafa iletildi.</p></article>');
+          else write(`<article><strong>Davet gönderilemedi</strong><p>${escapeHtml(ack?.message || ack?.error || 'Hata')}</p></article>`);
+        });
+      } else {
+        write('<article><strong>Bağlantı bekleniyor</strong><p>Soket bağlantısı hazır değil; sosyal panel yeniden açıldığında tekrar dene.</p></article>');
+      }
+    }
+  } catch (error) {
+    write(`<article><strong>İşlem tamamlanamadı</strong><p>${escapeHtml(error.message || 'Beklenmeyen hata')}</p></article>`);
+    reportHomeIssue(`home.social.${action}`, error, { severity:'warning' });
+  }
 }
 async function loadLobbyHistory() { try { const payload = await apiFetch('/api/social/chat/tr', { timeoutMs:5000 }); state.lobbyMessages = Array.isArray(payload.messages) ? payload.messages : []; renderSocial(); } catch (error) { reportHomeIssue('home.social.history', error, { severity:'warning' }); } }
 async function connectSocialSocket() {
@@ -407,6 +464,7 @@ function installEvents() {
     if (target.dataset.rowScroll) { const row = target.dataset.rowScroll === 'newGames' ? $('newGamesRow') : $('quickGamesRow'); if (row) row.scrollBy({ left: Number(target.dataset.dir || 1) * Math.max(280, row.clientWidth * .75), behavior:'smooth' }); return; }
     if (target.dataset.accordion) { const panel = $('footer-' + target.dataset.accordion); if (panel) panel.classList.toggle('is-open'); target.classList.toggle('is-open'); return; }
     if (target.dataset.socialView) { state.socialView = target.dataset.socialView; renderSocial(); return; }
+    if (target.dataset.socialAction) { handleSocialAction(target.dataset.socialAction); return; }
   });
   $('brandButton')?.addEventListener('click', () => scrollToId('heroSection'));
   $('spinWheelBtn')?.addEventListener('click', spinWheel);
@@ -419,6 +477,19 @@ function installEvents() {
   $('chatInput')?.addEventListener('input', updateChatCounter);
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { qsa('.pm-modal.is-open').forEach(m=>closeModal(m.id)); closeDrawer(); } });
 }
+
+(function installTouchHardening(){
+  let lastTouchAt = 0;
+  document.addEventListener('touchend', (event) => {
+    const now = Date.now();
+    if (now - lastTouchAt < 320) event.preventDefault();
+    lastTouchAt = now;
+  }, { passive:false });
+  document.addEventListener('contextmenu', (event) => {
+    if (!event.target?.closest?.('input, textarea')) event.preventDefault();
+  });
+})();
+
 async function boot() {
   try {
     renderGames(); renderStats(); startHero(); installEvents(); updateShell();

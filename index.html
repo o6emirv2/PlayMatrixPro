@@ -61,30 +61,27 @@
 
     <main class="pm-main" id="mainContent">
       <section class="pm-hero" id="heroSection">
-        <div class="pm-hero-slider" id="heroSlider" aria-label="Canlı promosyon vitrini">
+        <div class="pm-hero-slider" id="heroSlider" aria-label="PlayMatrix ödül bilgileri">
           <div class="pm-slide is-active" data-slide="0">
-            <div class="pm-slide-art" aria-hidden="true"><span class="pm-wheel-ring"></span><i class="fa-solid fa-gamepad"></i></div>
-            <span class="pm-slide-tag"><i class="fa-solid fa-bolt"></i> Tarayıcıdan Anında Oyna</span>
-            <h1>PlayMatrix’te ücretsiz rekabet başlıyor.</h1>
-            <p>Crash, Satranç, Pişti ve klasik oyunlar; tek hesap, tek seviye, tek güvenli profil modeliyle çalışır.</p>
+            <span class="pm-slide-tag"><i class="fa-solid fa-user-plus"></i> Kayıt Ödülü</span>
+            <h1>Kayıt ol, PlayMatrix hesabın oyunlara hazır başlasın.</h1>
+            <p>Yeni hesap oluşturulduğunda kayıt ödülü hesabına backend kontrollü ve tek seferlik tanımlanır.</p>
             <div class="pm-slide-actions">
-              <button class="pm-btn pm-btn-primary" type="button" data-scroll-target="gamesSection">Oyunlara Git</button>
-              <button class="pm-btn pm-btn-dark" type="button" data-open-auth="register">Ücretsiz Başla</button>
+              <button class="pm-btn pm-btn-primary" type="button" data-open-auth="register">Kayıt Ol</button>
+              <button class="pm-btn pm-btn-dark" type="button" data-scroll-target="gamesSection">Oyunları Gör</button>
             </div>
           </div>
           <div class="pm-slide" data-slide="1">
-            <div class="pm-slide-art" aria-hidden="true"><span class="pm-wheel-ring"></span><i class="fa-solid fa-trophy"></i></div>
-            <span class="pm-slide-tag"><i class="fa-solid fa-gift"></i> Ödül Merkezi</span>
-            <h2>Günlük çark ve promo kodlar tek vitrinde.</h2>
-            <p>Platform gerçek para işlemi içermez; tüm ödüller oyun içi sanal MC ve eğlence amaçlıdır.</p>
-            <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-open-modal="wheelModal">Çarkı Aç</button></div>
+            <span class="pm-slide-tag"><i class="fa-solid fa-envelope-circle-check"></i> E-posta Onayı</span>
+            <h2>E-postanı onayla, doğrulama ödülünü güvenli al.</h2>
+            <p>E-posta onayı sonrası ödül bildirimi tekrar etmeden, idempotency korumasıyla profil hesabına işlenir.</p>
+            <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-open-modal="emailModal">E-posta İşlemleri</button></div>
           </div>
           <div class="pm-slide" data-slide="2">
-            <div class="pm-slide-art" aria-hidden="true"><span class="pm-wheel-ring"></span><i class="fa-solid fa-people-group"></i></div>
-            <span class="pm-slide-tag"><i class="fa-solid fa-comments"></i> Sosyal Merkez</span>
-            <h2>Sohbet, DM, arkadaşlık ve oyun daveti aynı panelde.</h2>
-            <p>Global 7 gün, DM 14 gün saklama politikası görünür ve anlaşılır şekilde gösterilir.</p>
-            <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-open-modal="socialModal">Sosyal Merkezi Aç</button></div>
+            <span class="pm-slide-tag"><i class="fa-solid fa-chart-line"></i> Aktif Oyuncu Ödülü</span>
+            <h2>Aktif kal, aylık aktif oyuncu ödülünü takip et.</h2>
+            <p>Aktiflik, oyun içi katılım ve profil modelindeki doğrulanmış verilerle izlenir; AnaSayfa’da senkron gösterilir.</p>
+            <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-scroll-target="leaderboardSection">Liderliği Gör</button></div>
           </div>
           <div class="pm-slider-dots" id="heroDots" aria-hidden="true"></div>
         </div>
@@ -107,7 +104,7 @@
       <section class="pm-section">
         <div class="pm-section-head"><div><span class="pm-kicker">Hızlı Oyunlar</span><h2>Hemen Oyna</h2></div><div class="pm-row-controls" aria-hidden="true"><button type="button" data-row-scroll="quickGames" data-dir="-1"><i class="fa-solid fa-chevron-left"></i></button><button type="button" data-row-scroll="quickGames" data-dir="1"><i class="fa-solid fa-chevron-right"></i></button></div></div>
         <div class="pm-card-row pm-compact-row" id="quickGamesRow"></div>
-        <div class="pm-game-grid" id="gameGrid" hidden></div>
+        <div class="pm-game-grid" id="gameGrid"></div>
       </section>
 
       <section class="pm-section pm-rewards" id="rewardsSection">
