@@ -724,6 +724,8 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     let currentBalance = 0;
     let balanceReady = false;
     let balanceRefreshTimer = null;
+    let canvasFrameId = 0;
+    let canvasLoopActive = false;
     let lastProfilePayload = null;
     let sPhase = 'COUNTDOWN';
     let sMult = 1.00;
@@ -1302,12 +1304,30 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
     }
 
     function startCanvasLoop() {
+        if (canvasLoopActive) return;
+        canvasLoopActive = true;
         const loop = () => {
-            drawCrashCanvas();
-            window.requestAnimationFrame(loop);
+            if (!canvasLoopActive) return;
+            if (document.visibilityState === 'visible') drawCrashCanvas();
+            canvasFrameId = window.requestAnimationFrame(loop);
         };
-        window.requestAnimationFrame(loop);
+        canvasFrameId = window.requestAnimationFrame(loop);
     }
+
+    function stopCanvasLoop() {
+        canvasLoopActive = false;
+        if (canvasFrameId) {
+            window.cancelAnimationFrame(canvasFrameId);
+            canvasFrameId = 0;
+        }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            startCanvasLoop();
+            drawCrashCanvas();
+        }
+    });
 
     startCanvasLoop();
 
@@ -1789,6 +1809,7 @@ function disposePlayMatrixRealtime() {
 }
 
 window.addEventListener('beforeunload', () => {
+    stopCanvasLoop();
     if (balanceRefreshTimer) { clearInterval(balanceRefreshTimer); balanceRefreshTimer = null; }
     if (socket) { try { socket.emit('crash:unsubscribe'); } catch (_) {} }
     if (pmRealtimeSocket) {

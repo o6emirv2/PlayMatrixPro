@@ -9,23 +9,50 @@ const PM_GAME_ROUTES = Object.freeze({
 window.__PLAYMATRIX_ROUTES__ = PM_GAME_ROUTES;
 window.__PLAYMATRIX_API_BASE__ = window.__PLAYMATRIX_API_BASE__ || window.location.origin;
 
-window.addEventListener('error', (event) => {
-  try { fetch('/api/client/error', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ game:'home', type:'error', scope:'home.window_error', message:event.message, source:event.filename, line:event.lineno, path:location.pathname }) }); } catch {}
-});
-window.addEventListener('unhandledrejection', (event) => {
-  try { fetch('/api/client/error', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ game:'home', type:'unhandledrejection', scope:'home.promise_rejection', message:String(event.reason?.message || event.reason || ''), source:'script.js', path:location.pathname }) }); } catch {}
-});
+function reportHomeIssue(scope, error, extra = {}) {
+  try {
+    if (typeof window.__PM_REPORT_CLIENT_ERROR__ === 'function') {
+      window.__PM_REPORT_CLIENT_ERROR__(scope, error, { source: 'script.js', game: 'home', ...extra });
+    }
+  } catch (_) {}
+}
+
+function currentUser() {
+  return window.__PM_RUNTIME?.auth?.currentUser || null;
+}
+
+function openAuthForGame(gameName = 'oyun') {
+  if (typeof window.openPlayMatrixSheet === 'function') {
+    window.openPlayMatrixSheet('auth', 'Hesabına giriş yap', `${gameName} için önce hesabına giriş yapmalısın.`);
+    return true;
+  }
+  const loginButton = document.getElementById('loginBtn');
+  if (loginButton) {
+    loginButton.click();
+    return true;
+  }
+  return false;
+}
 
 document.addEventListener('click', (event) => {
   const link = event.target.closest?.('a[href]');
   if (!link) return;
   const href = link.getAttribute('href') || '';
   const normalized = href.replace(/\/$/, '');
-  const mapped = Object.values(PM_GAME_ROUTES).find(route => route === normalized);
-  if (mapped && link.dataset.noNormalize !== '1') link.setAttribute('href', mapped);
-});
+  const mapped = Object.values(PM_GAME_ROUTES).find((route) => route === normalized);
+  if (!mapped) return;
+  if (link.dataset.noNormalize !== '1') link.setAttribute('href', mapped);
+  const card = link.closest('.game-card');
+  const requiresAuth = link.dataset.access === 'auth' || card?.dataset.access === 'auth' || card?.querySelector('.mini-tag')?.textContent?.toLowerCase?.().includes('giriş gerekir');
+  if (requiresAuth && !currentUser()) {
+    event.preventDefault();
+    event.stopPropagation();
+    const gameName = card?.querySelector('.game-title')?.textContent?.trim() || 'Bu oyun';
+    openAuthForGame(gameName);
+  }
+}, true);
 
 bootHomeApplication().catch((error) => {
   console.error('[PlayMatrix] Home application boot failed', error);
-  try { fetch('/api/client/error', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ game:'home', type:'boot', scope:'home.boot', message:String(error?.message || error || 'BOOT_FAILED'), source:'script.js', path:location.pathname, severity:'error' }) }); } catch {}
+  reportHomeIssue('home.boot', error, { type: 'boot', severity: 'error', path: location.pathname });
 });

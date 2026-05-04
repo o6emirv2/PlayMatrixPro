@@ -89,6 +89,11 @@ async function readProfile(req, uid = uidOf(req), seed = {}) {
   }
   const memoryBalance = runtimeStore.temporary.get(`balance:${safeUid}`);
   if (typeof memoryBalance === 'number') profile.balance = memoryBalance;
+  const memoryStats = runtimeStore.temporary.get(`gameStats:${safeUid}`);
+  if (memoryStats && typeof memoryStats === 'object') {
+    profile.gameStats = { ...(profile.gameStats || {}), ...memoryStats, total: { ...((profile.gameStats || {}).total || {}), ...(memoryStats.total || {}) } };
+    profile.totalRounds = Number(profile.gameStats.total?.rounds || profile.totalRounds || 0);
+  }
   profile = await grantEmailVerifyRewardIfNeeded(req, uid, profile);
   return addProgression(profile);
 }
@@ -190,7 +195,7 @@ router.get('/friends/list', requireAuth, (_req, res) => res.json({ ok: true, lis
 router.post('/friends/request', requireAuth, (req, res) => res.json({ ok: true, message: 'Arkadaşlık isteği işlendi.', request: { targetUid: s(req.body?.targetUid || req.body?.target, 128), at: now() } }));
 router.post('/friends/respond', requireAuth, (_req, res) => res.json({ ok: true }));
 router.post('/friends/remove', requireAuth, (_req, res) => res.json({ ok: true }));
-router.get('/social-center/summary', requireAuth, async (req, res) => { const online = presence.values().filter(x => Number(x?.at || 0) > Date.now() - 180000).length; res.json({ ok: true, me: await readProfile(req), chatPolicy: CHAT_POLICY, counts: { friends: 0, incoming: 0, notifications: 0, online }, features: { globalChat: true, localChat: true, dm: true, presence: 'memory' } }); });
+router.get('/social-center/summary', requireAuth, async (req, res) => { const uid = uidOf(req); const online = presence.values().filter(x => Number(x?.at || 0) > Date.now() - 180000).length; let accepted = 0; let incoming = 0; try { const { db } = fb(); if (db && uid) { const snap = await db.collection('friendships').where('members','array-contains',uid).limit(100).get(); snap.docs.forEach((doc) => { const data = doc.data() || {}; if (data.status === 'accepted') accepted += 1; else if (data.toUid === uid && data.status === 'pending') incoming += 1; }); } } catch (_) {} const notificationCount = runtimeStore.notifications.values().filter(x => x && typeof x === 'object' && (!x.userId || x.userId === uid) && (!x.uid || x.uid === uid) && (!x.targetUid || x.targetUid === uid)).length; res.json({ ok: true, me: await readProfile(req), chatPolicy: CHAT_POLICY, counts: { friends: accepted, incoming, notifications: notificationCount, online }, features: { globalChat: true, localChat: true, dm: true, presence: 'memory' } }); });
 router.get('/activity-pass', requireAuth, (_req, res) => res.json({ ok: true, active: true, claimable: false }));
 router.post('/activity-pass/claim', requireAuth, (_req, res) => res.json({ ok: true, claimed: false }));
 router.get('/chat/settings', requireAuth, (req, res) => res.json({ ok: true, mine: {}, theirs: {}, targetUid: s(req.query.targetUid, 128), policy: CHAT_POLICY }));

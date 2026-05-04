@@ -306,13 +306,37 @@ async function awardCrashXp(bet, options = {}) {
   };
   try {
     const { db } = initFirebaseAdmin();
+    const outcomeKey = options.outcome === 'cashout' ? 'win' : 'loss';
+    const xpToAdd = Math.max(0, Math.trunc(Number(output.xpAwarded || 0)));
     if (!db) {
       const key = `xp:${bet.uid}`;
       const current = normalizeXpBigInt(runtimeStore.temporary.get(key) || 0);
-      const next = current + BigInt(output.xpAwarded || 0);
+      const next = current + BigInt(xpToAdd);
       runtimeStore.temporary.set(key, next.toString(), 30 * 86400000);
+      const statsKey = `gameStats:${bet.uid}`;
+      const stats = runtimeStore.temporary.get(statsKey) || { total: {}, crash: {} };
+      const crash = stats.crash || {};
+      const total = stats.total || {};
+      const patchCrash = {
+        ...crash,
+        rounds: Number(crash.rounds || 0) + 1,
+        wins: Number(crash.wins || 0) + (outcomeKey === 'win' ? 1 : 0),
+        losses: Number(crash.losses || 0) + (outcomeKey === 'loss' ? 1 : 0),
+        totalBet: Number(crash.totalBet || 0) + Number(bet.amount || 0),
+        totalCashout: Number(crash.totalCashout || 0) + Number(bet.payout || 0),
+        bestMultiplier: Math.max(Number(crash.bestMultiplier || 0), Number(options.cashoutMult || 0))
+      };
+      patchCrash.winRatePct = patchCrash.rounds ? Math.round((patchCrash.wins / patchCrash.rounds) * 1000) / 10 : 0;
+      const patchTotal = {
+        ...total,
+        rounds: Number(total.rounds || 0) + 1,
+        wins: Number(total.wins || 0) + (outcomeKey === 'win' ? 1 : 0),
+        losses: Number(total.losses || 0) + (outcomeKey === 'loss' ? 1 : 0)
+      };
+      patchTotal.winRatePct = patchTotal.rounds ? Math.round((patchTotal.wins / patchTotal.rounds) * 1000) / 10 : 0;
+      runtimeStore.temporary.set(statsKey, { ...stats, crash: patchCrash, total: patchTotal }, 30 * 86400000);
       output.progression = getProgression(next);
-    } else if (output.xpAwarded > 0) {
+    } else {
       const userRef = db.collection('users').doc(bet.uid);
       const idemRef = db.collection('idempotency').doc(idempotencyKey);
       await db.runTransaction(async (tx) => {
@@ -322,34 +346,48 @@ async function awardCrashXp(bet, options = {}) {
           return;
         }
         const snap = await tx.get(userRef);
-        const current = normalizeXpBigInt(snap.exists ? ((snap.data() || {}).accountXp ?? (snap.data() || {}).xp ?? 0) : 0);
+        const data = snap.exists ? (snap.data() || {}) : {};
+        const current = normalizeXpBigInt(data.accountXp ?? data.xp ?? 0);
         const before = getProgression(current);
-        const next = current + BigInt(output.xpAwarded);
+        const next = current + BigInt(xpToAdd);
         const progression = getProgression(next);
+        const gameStats = data.gameStats && typeof data.gameStats === 'object' ? data.gameStats : {};
+        const crash = gameStats.crash && typeof gameStats.crash === 'object' ? gameStats.crash : {};
+        const total = gameStats.total && typeof gameStats.total === 'object' ? gameStats.total : {};
+        const patchCrash = {
+          ...crash,
+          rounds: Number(crash.rounds || 0) + 1,
+          wins: Number(crash.wins || 0) + (outcomeKey === 'win' ? 1 : 0),
+          losses: Number(crash.losses || 0) + (outcomeKey === 'loss' ? 1 : 0),
+          totalBet: Number(crash.totalBet || 0) + Number(bet.amount || 0),
+          totalCashout: Number(crash.totalCashout || 0) + Number(bet.payout || 0),
+          bestMultiplier: Math.max(Number(crash.bestMultiplier || 0), Number(options.cashoutMult || 0))
+        };
+        patchCrash.winRatePct = patchCrash.rounds ? Math.round((patchCrash.wins / patchCrash.rounds) * 1000) / 10 : 0;
+        const patchTotal = {
+          ...total,
+          rounds: Number(total.rounds || 0) + 1,
+          wins: Number(total.wins || 0) + (outcomeKey === 'win' ? 1 : 0),
+          losses: Number(total.losses || 0) + (outcomeKey === 'loss' ? 1 : 0)
+        };
+        patchTotal.winRatePct = patchTotal.rounds ? Math.round((patchTotal.wins / patchTotal.rounds) * 1000) / 10 : 0;
         output.progression = progression;
         output.levelBefore = before.accountLevel;
         output.levelAfter = progression.accountLevel;
         output.levelUp = progression.accountLevel > before.accountLevel;
         tx.set(userRef, {
-          xp: next.toString(),
-          accountXp: next.toString(),
+          xp: progression.xp,
+          accountXp: progression.currentXp,
           accountLevel: progression.accountLevel,
           level: progression.accountLevel,
           accountLevelProgressPct: progression.accountLevelProgressPct,
           progression,
+          gameStats: { ...gameStats, crash: patchCrash, total: patchTotal },
+          monthlyActiveScore: Number(data.monthlyActiveScore || 0) + 1,
           updatedAt: now()
         }, { merge: true });
         tx.set(idemRef, { key: idempotencyKey, type: 'crash-xp', uid: bet.uid, createdAt: now(), result: output }, { merge: false });
       });
-    } else {
-      const profileProgress = getProgression(0);
-      try {
-        const { db } = initFirebaseAdmin();
-        if (db) {
-          const snap = await db.collection('users').doc(bet.uid).get();
-          output.progression = getProgression(snap.exists ? ((snap.data() || {}).accountXp ?? (snap.data() || {}).xp ?? 0) : 0);
-        } else output.progression = profileProgress;
-      } catch (_) { output.progression = profileProgress; }
     }
   } catch (error) {
     console.error('[crash:xp:error]', JSON.stringify({ message: error.message, uid: bet.uid, roundId: bet.roundId, box: bet.box }));

@@ -78,14 +78,6 @@
   contain-intrinsic-size: auto !important;
 }
 
-/* Runtime stability guard: home content and modals must stay visible even if an ESM chunk is delayed. */
-html.pm-home-stability-guard main.container,
-html.pm-home-stability-guard #hero,
-html.pm-home-stability-guard #games,
-html.pm-home-stability-guard #leaderboard { visibility: visible !important; opacity: 1 !important; }
-html.pm-home-stability-guard .fade-up,
-html.pm-fast-painted .fade-up,
-html.pm-home-fallback-active .fade-up { opacity: 1 !important; visibility: visible !important; transform: none !important; }
 .ps-modal.active,
 .ps-modal.is-open { display: flex !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }
 .ps-modal[aria-hidden="false"] { display: flex !important; }

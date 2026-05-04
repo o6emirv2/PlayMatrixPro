@@ -467,10 +467,31 @@ async function applyXpAndStats({ uid, xp, outcome, roomId, mode, bet }) {
   const { db } = initFirebaseAdmin();
   if (!db) {
     const xpKey = `xp:${uid}`;
+    const statsKey = `gameStats:${uid}`;
     const current = normalizeXpBigInt(runtimeStore.temporary.get(xpKey) || 0);
     const next = current + BigInt(Math.max(0, Math.trunc(xp)));
     const progression = getProgression(next);
+    const previousStats = runtimeStore.temporary.get(statsKey) || {};
+    const previousChess = previousStats.chess && typeof previousStats.chess === 'object' ? previousStats.chess : {};
+    const previousTotal = previousStats.total && typeof previousStats.total === 'object' ? previousStats.total : {};
+    const patchChess = {
+      ...previousChess,
+      rounds: Number(previousChess.rounds || 0) + 1,
+      wins: Number(previousChess.wins || 0) + (outcome === 'win' ? 1 : 0),
+      losses: Number(previousChess.losses || 0) + (outcome === 'loss' ? 1 : 0),
+      draws: Number(previousChess.draws || 0) + (outcome === 'draw' ? 1 : 0)
+    };
+    patchChess.winRatePct = patchChess.rounds ? Math.round((patchChess.wins / patchChess.rounds) * 1000) / 10 : 0;
+    const patchTotal = {
+      ...previousTotal,
+      rounds: Number(previousTotal.rounds || 0) + 1,
+      wins: Number(previousTotal.wins || 0) + (outcome === 'win' ? 1 : 0),
+      losses: Number(previousTotal.losses || 0) + (outcome === 'loss' ? 1 : 0),
+      draws: Number(previousTotal.draws || 0) + (outcome === 'draw' ? 1 : 0)
+    };
+    patchTotal.winRatePct = patchTotal.rounds ? Math.round((patchTotal.wins / patchTotal.rounds) * 1000) / 10 : 0;
     runtimeStore.temporary.set(xpKey, next.toString(), 30 * 86400000);
+    runtimeStore.temporary.set(statsKey, { ...previousStats, chess: patchChess, total: patchTotal }, 30 * 86400000);
     const out = { ok: true, firestore: false, xpAwarded: xp, progression };
     runtimeStore.temporary.set(memoryKey, out, 24 * 3600000);
     return out;

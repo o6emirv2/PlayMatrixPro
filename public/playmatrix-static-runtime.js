@@ -46,9 +46,30 @@
   window.__PM_RUNTIME.firebaseReady = true;
   window.__PLAYMATRIX_API_URL__ = normalizeBase(window.__PM_RUNTIME.apiBase || window.__PLAYMATRIX_API_URL__ || apiBase);
 
+  const reportedClientErrors = new Map();
+
+  function shouldSendClientError(type, payload) {
+    try {
+      const key = [type, payload?.scope || '', payload?.message || '', payload?.source || '', payload?.line || ''].join('|').slice(0, 360);
+      const now = Date.now();
+      const previous = reportedClientErrors.get(key) || 0;
+      if (now - previous < 2500) return false;
+      reportedClientErrors.set(key, now);
+      if (reportedClientErrors.size > 80) {
+        const cutoff = now - 30000;
+        for (const [entryKey, at] of reportedClientErrors) if (at < cutoff) reportedClientErrors.delete(entryKey);
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   function reportClientRuntimeError(type, payload) {
     try {
-      const body = JSON.stringify(Object.assign({ type, path: location.pathname, href: location.href, at: Date.now() }, payload || {}));
+      const normalizedPayload = Object.assign({ game: 'home', type, path: location.pathname, href: location.href, at: Date.now() }, payload || {});
+      if (!shouldSendClientError(type, normalizedPayload)) return;
+      const body = JSON.stringify(normalizedPayload);
       const endpoint = `${normalizeBase(window.__PLAYMATRIX_API_URL__ || apiBase)}/api/client/error`;
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: 'application/json' });
@@ -59,13 +80,27 @@
     } catch (_) {}
   }
 
-  window.addEventListener('error', function (event) {
-    reportClientRuntimeError('window.error', { message: event.message, source: event.filename, line: event.lineno, column: event.colno });
-  });
-  window.addEventListener('unhandledrejection', function (event) {
-    var reason = event.reason || {};
-    reportClientRuntimeError('unhandledrejection', { message: reason.message || String(reason || ''), stack: reason.stack || '' });
-  });
+  window.__PM_REPORT_CLIENT_ERROR__ = function reportPlayMatrixClientError(scope, error, extra) {
+    const err = error || {};
+    reportClientRuntimeError(scope || 'client.error', Object.assign({
+      scope: scope || 'client.error',
+      message: err.message || String(err || ''),
+      stack: err.stack || '',
+      source: 'home',
+      severity: 'error'
+    }, extra || {}));
+  };
+
+  if (window.__PM_GLOBAL_ERROR_LISTENERS__ !== 'installed') {
+    window.__PM_GLOBAL_ERROR_LISTENERS__ = 'installed';
+    window.addEventListener('error', function (event) {
+      reportClientRuntimeError('window.error', { scope: 'home.window_error', message: event.message, source: event.filename, line: event.lineno, column: event.colno });
+    });
+    window.addEventListener('unhandledrejection', function (event) {
+      var reason = event.reason || {};
+      reportClientRuntimeError('unhandledrejection', { scope: 'home.promise_rejection', message: reason.message || String(reason || ''), stack: reason.stack || '', source: 'promise' });
+    });
+  }
 
 
   function parseActionArgs(raw) {

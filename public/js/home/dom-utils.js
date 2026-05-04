@@ -71,7 +71,19 @@ export function setText(id, value, fallback = "") {
 export function reportHomeError(scope, error, extra = {}) {
   try {
     if (typeof window.__PM_REPORT_CLIENT_ERROR__ === "function") {
-      window.__PM_REPORT_CLIENT_ERROR__(scope, error, { source: "home-module", ...extra });
+      window.__PM_REPORT_CLIENT_ERROR__(scope, error, { source: "home-module", game: "home", ...extra });
+      return;
     }
+    const body = JSON.stringify({
+      game: "home",
+      scope,
+      type: "home-module",
+      message: error?.message || String(error || ""),
+      stack: error?.stack || "",
+      path: location.pathname,
+      source: "home-module",
+      ...extra
+    });
+    fetch("/api/client/error", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
   } catch (_) {}
 }

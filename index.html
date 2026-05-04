@@ -120,6 +120,7 @@
               <div class="drop-item" id="navProfileItem"><i class="fa-solid fa-user-astronaut"></i> Hesabım</div>
               <div class="drop-item" id="navWheelItem"><i class="fa-solid fa-dharmachakra"></i> Günlük Çark</div>
               <div class="drop-item" id="navBonusItem"><i class="fa-solid fa-gift"></i> Promosyon Kodu</div>
+              <div class="drop-item" id="navMarketItem"><i class="fa-solid fa-store"></i> Market</div>
               <div class="drop-item" id="navSupportItem"><i class="fa-solid fa-headset"></i> Canlı Destek</div>
               <div class="drop-item" id="navInviteItem"><i class="fa-solid fa-user-group"></i> Davet Et ve Kazan</div>
               <div class="drop-item" id="navSocialItem"><i class="fa-solid fa-people-group"></i> Sosyal Merkez</div>
@@ -311,15 +312,15 @@
       </div>
 
       <div class="games-grid" id="gamesGrid" data-static-painted="1">
-        <article class="game-card static-game-card game-card--crash" data-static-card="crash">
+        <article class="game-card static-game-card game-card--crash" data-static-card="crash" data-access="auth">
           <div class="game-top"><div class="game-icon"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i></div><div class="tag-stack"><span class="mini-tag"><span class="live-dot"></span>Online</span><span class="mini-tag">Giriş Gerekir</span></div></div>
           <div class="game-body"><h3 class="game-title">Crash</h3><div class="game-desc">Gerçek para içermeyen, refleks ve zamanlama odaklı hızlı tempo multiplier oyunu.</div><div class="feature-list"><span class="feature-pill">Canlı Oyun</span><span class="feature-pill">Rekabet</span><span class="feature-pill">Hızlı Tur</span></div></div>
-          <div class="game-footer"><span class="game-status">Önce oturum aç</span><a class="game-cta" href="/games/crash">Giriş Yap</a></div>
+          <div class="game-footer"><span class="game-status">Önce oturum aç</span><a class="game-cta" href="/games/crash" data-access="auth">Giriş Yap</a></div>
         </article>
-        <article class="game-card static-game-card game-card--chess" data-static-card="chess">
+        <article class="game-card static-game-card game-card--chess" data-static-card="chess" data-access="auth">
           <div class="game-top"><div class="game-icon"><i class="fa-solid fa-chess" aria-hidden="true"></i></div><div class="tag-stack"><span class="mini-tag"><span class="live-dot"></span>Online</span><span class="mini-tag">Giriş Gerekir</span></div></div>
           <div class="game-body"><h3 class="game-title">Satranç</h3><div class="game-desc">Klasik satranç deneyimini modern arayüz ve giriş tabanlı rekabet akışıyla oyna.</div><div class="feature-list"><span class="feature-pill">PvP</span><span class="feature-pill">Strateji</span><span class="feature-pill">Arena</span></div></div>
-          <div class="game-footer"><span class="game-status">Önce oturum aç</span><a class="game-cta" href="/games/chess">Giriş Yap</a></div>
+          <div class="game-footer"><span class="game-status">Önce oturum aç</span><a class="game-cta" href="/games/chess" data-access="auth">Giriş Yap</a></div>
         </article>
         <article class="game-card static-game-card game-card--pisti" data-static-card="pisti">
           <div class="game-top"><div class="game-icon"><i class="fa-solid fa-layer-group" aria-hidden="true"></i></div><div class="tag-stack"><span class="mini-tag"><span class="live-dot"></span>Online</span><span class="mini-tag">Giriş Gerekir</span></div></div>
@@ -588,6 +589,18 @@
             <div class="field-help" id="promoHelp"></div>
             <button class="btn btn-primary promo-cta" id="promoSubmitBtn">KODU AKTİF ET</button>
           </div>
+        </section>
+
+
+        <section class="sheet-section" data-sheet="market">
+          <div class="sheet-hero-card">
+            <div class="sheet-hero-icon" aria-hidden="true"><i class="fa-solid fa-store"></i></div>
+            <div class="sheet-hero-copy">
+              <h4>Market</h4>
+              <p>Profil görünümü, avatar ve çerçeve ürünleri güvenli market akışından listelenir.</p>
+            </div>
+          </div>
+          <div class="market-items" id="marketItems" aria-live="polite"></div>
         </section>
 
         <section class="sheet-section" data-sheet="support">

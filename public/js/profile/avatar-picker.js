@@ -112,31 +112,49 @@ export function createAvatarPicker({
     if (!container) return;
     container.replaceChildren();
 
-    const fragment = documentRef.createDocumentFragment();
-    categories.forEach((category) => {
-      if (!Array.isArray(category.items) || category.items.length === 0) return;
-
-      const section = documentRef.createElement('section');
-      section.className = 'avatar-picker-category';
-      section.dataset.avatarCategory = category.id;
-
-      const grid = documentRef.createElement('div');
-      grid.className = 'avatar-picker-grid';
-      category.items.forEach((item) => grid.appendChild(createAvatarButton(category, item)));
-
-      section.append(createCategoryHeader(category), grid);
-      fragment.appendChild(section);
-    });
-
-    if (!fragment.childNodes.length) {
+    const availableCategories = categories.filter((category) => Array.isArray(category.items) && category.items.length > 0);
+    if (!availableCategories.length) {
       const empty = documentRef.createElement('div');
       empty.className = 'avatar-picker-empty';
       empty.textContent = 'Avatar kataloğu şu anda boş görünüyor.';
-      fragment.appendChild(empty);
+      container.appendChild(empty);
+      return;
     }
 
-    container.appendChild(fragment);
-    updateActiveSelection();
+    let categoryIndex = 0;
+    const schedule = (callback) => {
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(callback, { timeout: 180 });
+      else window.requestAnimationFrame(() => callback({ timeRemaining: () => 8 }));
+    };
+
+    const renderNextCategory = () => {
+      const category = availableCategories[categoryIndex];
+      if (!category) {
+        updateActiveSelection();
+        return;
+      }
+      categoryIndex += 1;
+      const section = documentRef.createElement('section');
+      section.className = 'avatar-picker-category';
+      section.dataset.avatarCategory = category.id;
+      const grid = documentRef.createElement('div');
+      grid.className = 'avatar-picker-grid';
+      section.append(createCategoryHeader(category), grid);
+      container.appendChild(section);
+
+      let itemIndex = 0;
+      const renderItems = () => {
+        const fragment = documentRef.createDocumentFragment();
+        const limit = Math.min(itemIndex + 18, category.items.length);
+        for (; itemIndex < limit; itemIndex += 1) fragment.appendChild(createAvatarButton(category, category.items[itemIndex]));
+        grid.appendChild(fragment);
+        if (itemIndex < category.items.length) schedule(renderItems);
+        else schedule(renderNextCategory);
+      };
+      renderItems();
+    };
+
+    renderNextCategory();
   }
 
   async function selectAvatarFromCatalog(categoryId, avatarId) {
