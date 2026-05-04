@@ -1,4 +1,4 @@
-import { bootHomeApplication } from '/public/js/home/app.js?v=pm25-final';
+import { bootHomeApplication } from '/public/js/home/app.js';
 
 const PM_GAME_ROUTES = Object.freeze({
   crash: '/games/crash', chess: '/games/chess', satranc: '/games/chess', pisti: '/games/pisti',

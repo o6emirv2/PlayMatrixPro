@@ -122,13 +122,6 @@ async function captureClientError(req, res) {
   const message = String(payload.message || payload.error || '').trim();
   const code = message.toUpperCase();
   const scope = String(payload.scope || payload.type || 'client.error');
-  if (normalizedGame === 'home' && /auth\.refresh_verification_state/i.test(scope) && /network-request-failed|failed to fetch|networkerror|load failed|timeout/i.test(message)) {
-    const transientKey = `clientTransient:${normalizedGame}:${scope}:${message.slice(0,80)}`;
-    if (!runtimeStore.temporary.get(transientKey)) {
-      runtimeStore.temporary.set(transientKey, true, 15 * 60 * 1000);
-    }
-    return res.status(202).json({ ok:true, discarded:'transient-auth-network' });
-  }
   const status = Number(payload.status || 0) || 0;
   const expectedCodes = new Set(['STATE_VERSION_MISMATCH','ROOM_NOT_FOUND','ROOM_CLOSED','CASHOUT_NOT_AVAILABLE','CASHOUT_TOO_LATE','BET_ALREADY_LOST','BET_REFUNDED','REFUND_IN_PROGRESS','AUTO_CASHOUT_MISSED','AUTH_REQUIRED','UNAUTHENTICATED','USER_CANCELLED']);
   const isHomeDataContractIssue = normalizedGame === 'home' && /undefined|schema|contract|policy|chat|socket|route|wheel|promo|support|frame|avatar|leaderboard|user-stats|notification|market|modal/i.test(`${message} ${scope} ${sourceText}`);
@@ -139,34 +132,17 @@ async function captureClientError(req, res) {
   const dedupeKey = `clientIssue:${normalizedGame}:${scope}:${message.slice(0,120)}:${String(payload.source || payload.endpoint || '').slice(-80)}:${payload.line || ''}`;
   if (runtimeStore.temporary.get(dedupeKey)) return res.status(202).json({ ok:true, deduped:true });
   runtimeStore.temporary.set(dedupeKey, true, 10 * 60 * 1000);
-  const safePayload = sanitizeRuntimeLogPayload({
-    game: normalizedGame,
-    scope,
-    source: payload.source,
-    endpoint: payload.endpoint,
-    path: payload.path,
-    line: payload.line,
-    message: payload.message || payload.error,
-    status: payload.status,
-    reason: payload.reason,
-    solution: payload.solution,
-    severity: payload.severity
-  });
   const row = {
+    ...payload,
     id:`client_${normalizedGame}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     game: normalizedGame,
     scope,
-    source: String(safePayload.source || '').slice(0, 180),
-    endpoint: String(safePayload.endpoint || '').slice(0, 180),
-    path: String(safePayload.path || '').slice(0, 180),
-    line: safePayload.line || null,
-    status: Number(safePayload.status || 0) || 0,
     area: normalizedGame === 'chess' ? 'Satranç Frontend' : normalizedGame === 'crash' ? 'Crash Frontend' : 'AnaSayfa Frontend',
-    error: String(safePayload.message || safePayload.error || 'Frontend hata kaydı').slice(0, 400),
-    reason: String(safePayload.reason || `Kaynak: ${String(safePayload.source || safePayload.endpoint || 'bilinmiyor').slice(0, 180)}${safePayload.line ? `:${safePayload.line}` : ''}`).slice(0, 400),
-    solution: String(safePayload.solution || 'İlgili oyun script dosyası, socket ACK akışı ve backend API cevabı gerçek hata detayıyla kontrol edilmeli.').slice(0, 400),
+    error: String(payload.message || payload.error || 'Frontend hata kaydı').slice(0, 400),
+    reason: String(payload.reason || `Kaynak: ${String(payload.source || payload.endpoint || 'bilinmiyor').slice(0, 180)}${payload.line ? `:${payload.line}` : ''}`).slice(0, 400),
+    solution: String(payload.solution || 'İlgili oyun script dosyası, socket ACK akışı ve backend API cevabı gerçek hata detayıyla kontrol edilmeli.').slice(0, 400),
     createdAt: Date.now(),
-    severity: safePayload.severity || 'error'
+    severity: payload.severity || 'error'
   };
   runtimeStore.errors.set(row.id, row, 24*3600000);
   console.error('[client:runtime:error]', JSON.stringify({ game: row.game, scope: row.scope, message: row.error, path: String(row.path || '').slice(0, 180), source: String(row.source || '').slice(0, 180), line: row.line || null }));

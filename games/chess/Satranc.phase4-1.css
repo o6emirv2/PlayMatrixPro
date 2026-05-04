@@ -336,7 +336,7 @@
       border: 1px solid rgba(255,255,255,.10); box-shadow: var(--shadow-sm);
       transition: border-color .25s var(--ease), box-shadow .25s var(--ease), transform .25s var(--ease);
     }
-    .player-plate.active{ border-color: rgba(212,175,55,.55); box-shadow: 0 0 0 1px rgba(212,175,55,.18), var(--shadow-md); transform:none; }
+    .player-plate.active{ border-color: rgba(212,175,55,.55); box-shadow: 0 0 0 1px rgba(212,175,55,.18), var(--shadow-md); transform: translateY(-1px); }
     .player-info{ display:flex; align-items:center; gap:10px; min-width:0; }
     .pm-game-avatar-shell{ position:relative; width:38px; height:38px; flex:0 0 38px; overflow:visible; display:inline-grid; place-items:center; }
     .p-avatar{
@@ -642,22 +642,3 @@
 #myAvatarHost [data-frame-index="18"],#oppAvatarHost [data-frame-index="18"],#myAvatarHost [data-frame-asset-index="18"],#oppAvatarHost [data-frame-asset-index="18"]{--pm-avatar-scale:.88!important;--pm-frame-scale:1.18!important;--pm-frame-shift-x:0px!important;--pm-frame-shift-y:0px!important;}
 .pm-game-topbar-avatar-host [class*="frame"],.pm-game-topbar-avatar-host .pm-frame-image,.pm-game-topbar-avatar-host .pm-avatar-shell__frame{display:none!important;}
 @media (max-width:560px){.player-info{grid-template-columns:70px minmax(0,1fr) 26px!important;}#myAvatarHost,#oppAvatarHost,#myAvatarHost > [data-pm-avatar="true"],#oppAvatarHost > [data-pm-avatar="true"],#myAvatarHost > .pm-avatar,#oppAvatarHost > .pm-avatar{inline-size:62px!important;block-size:62px!important;min-inline-size:62px!important;min-block-size:62px!important;max-inline-size:62px!important;max-block-size:62px!important;}}
-
-/* PLAYMATRIX FINAL PM24 — Chess viewport/avatar/network polish */
-html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;}
-.player-plate.active{transform:none!important;will-change:auto!important;}
-.pm-game-topbar-avatar-host{width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;border-radius:50%!important;overflow:hidden!important;}
-.pm-game-topbar-avatar-host img,.pm-game-topbar-avatar-fallback{width:100%!important;height:100%!important;border-radius:50%!important;object-fit:cover!important;}
-#myAvatarHost,#oppAvatarHost,.pm-game-avatar-shell{width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;}
-#myAvatarHost [data-pm-avatar="true"],#oppAvatarHost [data-pm-avatar="true"],.pm-game-avatar-shell [data-pm-avatar="true"]{width:52px!important;height:52px!important;}
-#myAvatarHost .pm-avatar-img,#oppAvatarHost .pm-avatar-img,.pm-game-avatar-shell .pm-avatar-img,.pm-game-avatar-shell .p-avatar{width:calc(100% * var(--pm-avatar-fit,var(--pm-avatar-scale,.74)))!important;height:calc(100% * var(--pm-avatar-fit,var(--pm-avatar-scale,.74)))!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;}
-#myAvatarHost .pm-frame-image,#oppAvatarHost .pm-frame-image,.pm-game-avatar-shell .pm-frame-image,.pm-game-avatar-shell .pm-avatar-shell__frame{width:calc(100% * var(--pm-frame-scale,1.22))!important;height:calc(100% * var(--pm-frame-scale,1.22))!important;}
-@media(max-width:720px){.chess-app,.chess-shell,.chess-lobby,.chess-game{max-width:100%!important;overflow-x:hidden!important;}.player-plate{min-width:0!important;}.p-name{max-width:100%!important;}}
-
-
-/* PLAYMATRIX FINAL PM25 — Chess compact/topbar consistency */
-.pm-game-topbar-avatar-host{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;overflow:hidden!important;border-radius:50%!important;}
-.pm-game-topbar-avatar-host .pm-frame-image,.pm-game-topbar-avatar-host .pm-avatar-shell__frame{display:none!important;}
-#myAvatarHost,#oppAvatarHost,.pm-game-avatar-shell,.t-avatar-wrap{width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;}
-.player-plate.active{transform:none!important;will-change:auto!important;}
-@media(max-width:760px){.chess-shell,.chess-wrap,.chess-app{max-width:100%!important;overflow-x:hidden!important;}.chess-board-wrap,.chess-panel,.chess-card{max-width:calc(100vw - 22px)!important;}}
