@@ -126,7 +126,6 @@ async function captureClientError(req, res) {
     const transientKey = `clientTransient:${normalizedGame}:${scope}:${message.slice(0,80)}`;
     if (!runtimeStore.temporary.get(transientKey)) {
       runtimeStore.temporary.set(transientKey, true, 15 * 60 * 1000);
-      console.warn('[client:runtime:transient]', JSON.stringify({ game: normalizedGame, scope, message: message.slice(0,180) }));
     }
     return res.status(202).json({ ok:true, discarded:'transient-auth-network' });
   }

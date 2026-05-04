@@ -896,7 +896,7 @@ function renderMessageStack(stream, messages, emptyTitle, emptyMessage, getIsSel
       document.body.classList.add("sheet-open");       $("sheetTitle").textContent = title;       $("sheetSubtitle").textContent = subtitle;       document.querySelectorAll(".sheet-section").forEach((section) => section.classList.toggle("is-active", section.dataset.sheet === name));       $("sheetPanel").style.transform = "";
       playSound("pop");     }      window.openPlayMatrixSheet = openSheet;      function closeSheet(){       $("sheetShell").classList.remove("is-open", "is-social", "is-compact");
       $("sheetShell").setAttribute("aria-hidden", "true");       document.body.classList.remove("sheet-open");       state.currentSheet = null;       state.drag.active = false;       state.drag.deltaY = 0;
-      state.social.mobilePanelOpen = !isSocialMobile();       state.social.renderCache = { tabs: "", list: "", main: "" };       document.querySelectorAll('.pm-social-layout.is-chat-active').forEach((layout) => layout.classList.remove('is-chat-active'));       $("sheetPanel").style.transform = "";     }
+      state.social.mobilePanelOpen = false;       state.social.renderCache = { tabs: "", list: "", main: "" };       document.querySelectorAll('.pm-social-layout.is-chat-active').forEach((layout) => layout.classList.remove('is-chat-active'));       $("sheetPanel").style.transform = "";     }
      function setAuthMode(mode){       state.authMode = mode;       $("authSegment").querySelectorAll("button").forEach((button) => button.classList.toggle("is-active", button.dataset.authMode === mode));       $("authFullNameGroup").classList.toggle("hidden", mode !== "register");
       $("authUsernameGroup").classList.toggle("hidden", mode !== "register");       $("authHelp").textContent = "";       $("authHelp").className = "field-help";       $("authSubmitBtn").textContent = mode === "login" ? "Giriş Yap" : "Hesap Oluştur";     }
      function ensureAuthThen(actionName){       if (auth.currentUser) return true;       setAuthMode("login");       openSheet("auth", "Hesabına giriş yap", `${actionName} için önce hesabına giriş yapmalısın.`);
@@ -1190,7 +1190,7 @@ function buildHeroPromoSlides(overview = {}) {
 function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) return [];       if (tabType === 'level') return Array.isArray(currentLeaderboardData?.tabs?.level?.items) ? currentLeaderboardData.tabs.level.items : [];       if (tabType === 'activity') return Array.isArray(currentLeaderboardData?.tabs?.activity?.items) ? currentLeaderboardData.tabs.activity.items : [];
       return [];     }      async function showPlayerStats(uid){       const targetUid = String(uid || '').trim();
       if (!targetUid) {         showToast('İstatistikler', 'Oyuncu profili bulunamadı.', 'error');         return;       }
-      if (!auth.currentUser) {         setAuthMode("login");         openSheet("auth", "Hesabına giriş yap", "Oyuncu istatistiklerini görüntülemek için önce hesabına giriş yapmalısın.");         return;       } 
+      if (!auth.currentUser || !auth.currentUser.uid) {         try { closeMatrixModal('playerStatsModal'); } catch (_) {}         setAuthMode("login");         openSheet("auth", "Hesabına giriş yap", "Oyuncu istatistiklerini görüntülemek için önce hesabına giriş yapmalısın.");         return;       } 
       const content = $('playerStatsContent');       if (!content) return;        const formatDate = (value, includeTime = false) => {         const date = new Date(Number(value) || 0);
         if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return '—';         return includeTime ? date.toLocaleString('tr-TR') : date.toLocaleDateString('tr-TR');       };        const createHeader = () => {
         const header = document.createElement('div');         header.className = 'ps-modal-header';         header.appendChild(createTextElement('div', 'ps-modal-title', 'Oyuncu İstatistikleri'));         header.firstElementChild.id = 'playerStatsTitle';         const close = document.createElement('button');
@@ -1437,7 +1437,23 @@ function drawWheel(){       const canvas = $("wheelCanvas");       const ctx = c
           if (action === 'promo') { event.preventDefault(); openPromoSheet(); return; }           if (action === 'profile') { event.preventDefault(); openProfileSheet(); return; }           return;         } 
         if (trigger.matches('.nav-link[href^="#"]')) {           const target = trigger.getAttribute('href');           if (!target) return;           const section = document.querySelector(target);           if (!section) return;
           event.preventDefault();           section.scrollIntoView({ behavior:'smooth', block:'start' });         }       }, { passive:false });     }
-     function hydrateHomepageCore(){       if (!document.body.dataset.leaderboardStatsDelegationBound) {         document.body.dataset.leaderboardStatsDelegationBound = '1';         document.addEventListener('click', (event) => {           const item = event.target?.closest?.('#leaderboardListArea .lb-item');           if (!item || item.classList.contains('skeleton')) return;           const targetUid = String(item.dataset.uid || '').trim() || String(auth.currentUser?.uid || '').trim();           if (targetUid && typeof showPlayerStats === 'function') showPlayerStats(targetUid);         });       }       safeExecute('games skeleton', () => safeRenderGameShowcaseSkeleton(3));       safeExecute('leaderboard skeleton', leaderboardSkeleton);       requestAnimationFrame(() => {
+     function hydrateHomepageCore(){       if (!document.body.dataset.socialMobileDelegationBound) {
+        document.body.dataset.socialMobileDelegationBound = '1';
+        document.addEventListener('click', (event) => {
+          const item = event.target?.closest?.('.social-center-v3 .ps-list-item');
+          if (!item) return;
+          const layout = document.getElementById('pmSocialLayout');
+          if (layout && typeof isSocialMobile === 'function' && isSocialMobile()) {
+            state.social.mobilePanelOpen = true;
+            layout.classList.add('is-chat-active');
+            window.setTimeout(() => {
+              const input = document.getElementById('psChatInput');
+              if (input && ['global','friends'].includes(String(state.social.activeTab || ''))) input.focus?.({ preventScroll:true });
+            }, 90);
+          }
+        });
+      }
+      if (!document.body.dataset.leaderboardStatsDelegationBound) {         document.body.dataset.leaderboardStatsDelegationBound = '1';         document.addEventListener('click', (event) => {           const item = event.target?.closest?.('#leaderboardListArea .lb-item');           if (!item || item.classList.contains('skeleton')) return;           const targetUid = String(item.dataset.uid || '').trim() || String(auth.currentUser?.uid || '').trim();           if (targetUid && typeof showPlayerStats === 'function') showPlayerStats(targetUid);         });       }       safeExecute('games skeleton', () => safeRenderGameShowcaseSkeleton(3));       safeExecute('leaderboard skeleton', leaderboardSkeleton);       requestAnimationFrame(() => {
         safeExecute('render games', renderGames);         safeExecute('update overview', updateSystemOverview);         Promise.resolve(loadLeaderboard()).catch((error) => console.error('[PlayMatrix] leaderboard boot', error));         safeExecute('update user shell', updateUserShell);         safeExecute('verify button', syncVerifyButtonState);
         safeExecute('mobile tabs', updateMobileTabs);         safeExecute('fade up reveal', revealFadeUps);       });     } 
     function bindEvents(){       bindIfPresent("profileTrigger", "click", (e) => {         e.stopPropagation();         playSound("tap");         $("userDropdown").classList.toggle("active");

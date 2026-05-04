@@ -1,17 +1,17 @@
 /* PlayMatrix clean: real home orchestrator. Each imported module owns one UI responsibility; legacy runtime remains the compatibility layer until later phases remove the final monolith. */
-import { reportHomeError } from "./dom-utils.js?v=pm24-final";
-import { installHomeWidgetContract } from "./widget-contract.js?v=pm24-final";
-import { installGameRouteNormalizer } from "./game-catalog.js?v=pm24-final";
-import { installAuthModalGuards } from "./auth-modal.js?v=pm24-final";
-import { installProfilePanelGuards } from "./profile-panel.js?v=pm24-final";
-import { installLeaderboardGuards } from "./leaderboard.js?v=pm24-final";
-import { installStatsGuards } from "./stats.js?v=pm24-final";
-import { installSocialEntryGuards } from "./social-entry.js?v=pm24-final";
-import { installHeroSliderGuards } from "./hero-slider.js?v=pm24-final";
-import { installModalSafety } from "./modal.js?v=pm24-final";
-import { installRewardUiGuards } from "./reward-ui.js?v=pm24-final";
-import { installInviteUiGuards } from "./invite-ui.js?v=pm24-final";
-import "./legacy-home.runtime.js?v=pm24-final";
+import { reportHomeError } from "./dom-utils.js?v=pm25-final";
+import { installHomeWidgetContract } from "./widget-contract.js?v=pm25-final";
+import { installGameRouteNormalizer } from "./game-catalog.js?v=pm25-final";
+import { installAuthModalGuards } from "./auth-modal.js?v=pm25-final";
+import { installProfilePanelGuards } from "./profile-panel.js?v=pm25-final";
+import { installLeaderboardGuards } from "./leaderboard.js?v=pm25-final";
+import { installStatsGuards } from "./stats.js?v=pm25-final";
+import { installSocialEntryGuards } from "./social-entry.js?v=pm25-final";
+import { installHeroSliderGuards } from "./hero-slider.js?v=pm25-final";
+import { installModalSafety } from "./modal.js?v=pm25-final";
+import { installRewardUiGuards } from "./reward-ui.js?v=pm25-final";
+import { installInviteUiGuards } from "./invite-ui.js?v=pm25-final";
+import "./legacy-home.runtime.js?v=pm25-final";
 
 let booted = false;
 

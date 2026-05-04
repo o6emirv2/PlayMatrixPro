@@ -932,7 +932,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       playSfx('start');
       syncBoardUI(roomData);
       showGameNotice('');
-      pollingInterval = setInterval(pollGameState, 6000);
+      pollingInterval = setInterval(() => { if (!(chessSocket && chessSocket.connected)) pollGameState(); }, 9000);
       startGamePing();
     }
 
