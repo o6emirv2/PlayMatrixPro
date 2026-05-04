@@ -2,22 +2,71 @@ const DEFAULT_ROOT_ID = 'framePickerModal';
 const DEFAULT_CONTAINER_ID = 'framePickerContainer';
 const DEFAULT_FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
 const FRAME_MAX_LEVEL = 100;
-const FRAME_BATCH_SIZE = 18;
+
+const FALLBACK_FRAME_RANGES = Object.freeze([
+  { min: 1, max: 15, asset: 1 },
+  { min: 16, max: 30, asset: 2 },
+  { min: 31, max: 40, asset: 3 },
+  { min: 41, max: 50, asset: 4 },
+  { min: 51, max: 60, asset: 5 },
+  { min: 61, max: 80, asset: 6 },
+  { min: 81, max: 85, asset: 7 },
+  { min: 86, max: 90, asset: 8 },
+  { min: 91, max: 91, asset: 9 },
+  { min: 92, max: 92, asset: 10 },
+  { min: 93, max: 93, asset: 11 },
+  { min: 94, max: 94, asset: 12 },
+  { min: 95, max: 95, asset: 13 },
+  { min: 96, max: 96, asset: 14 },
+  { min: 97, max: 97, asset: 15 },
+  { min: 98, max: 98, asset: 16 },
+  { min: 99, max: 99, asset: 17 },
+  { min: 100, max: 100, asset: 18 }
+]);
 
 function normalizeFrameLevel(value = 0) {
   const parsed = Math.floor(Number(value) || 0);
   return Math.max(0, Math.min(FRAME_MAX_LEVEL, parsed));
 }
 
+function getFrameRanges() {
+  if (window.PMAvatar && typeof window.PMAvatar.getFrameRanges === 'function') return window.PMAvatar.getFrameRanges();
+  return FALLBACK_FRAME_RANGES.map((range) => ({ ...range }));
+}
+
+function getFrameRangeForLevel(level = 0) {
+  const normalized = normalizeFrameLevel(level);
+  if (normalized <= 0) return null;
+  return getFrameRanges().find((range) => normalized >= range.min && normalized <= range.max) || getFrameRanges().at(-1) || null;
+}
+
+function getFrameCardKey(value = 0) {
+  const normalized = normalizeFrameLevel(value);
+  const range = getFrameRangeForLevel(normalized);
+  return range ? normalizeFrameLevel(range.min) : 0;
+}
+
+function getFrameAssetIndex(level = 0) {
+  if (window.PMAvatar && typeof window.PMAvatar.getFrameAssetIndex === 'function') return window.PMAvatar.getFrameAssetIndex(level);
+  return getFrameRangeForLevel(level)?.asset || 0;
+}
+
+function getFrameLabel(level = 0) {
+  if (level <= 0) return 'Çerçevesiz';
+  const range = getFrameRangeForLevel(level);
+  if (!range) return 'Çerçevesiz';
+  return range.min === range.max ? `Seviye ${range.min}` : `Seviye ${range.min}-${range.max}`;
+}
+
 function isFrameUnlocked(frameLevel = 0, accountLevel = 1) {
-  const normalizedFrame = normalizeFrameLevel(frameLevel);
-  if (normalizedFrame <= 0) return true;
-  return normalizedFrame <= Math.max(1, normalizeFrameLevel(accountLevel));
+  const key = getFrameCardKey(frameLevel);
+  if (key <= 0) return true;
+  return key <= Math.max(1, normalizeFrameLevel(accountLevel));
 }
 
 function getSafeSelectedFrame(rawSelectedFrame = 0, currentLevel = 1) {
-  const normalizedSelected = normalizeFrameLevel(rawSelectedFrame);
-  return isFrameUnlocked(normalizedSelected, currentLevel) ? normalizedSelected : 0;
+  const key = getFrameCardKey(rawSelectedFrame);
+  return isFrameUnlocked(key, currentLevel) ? key : 0;
 }
 
 function createElement(tagName, className = '') {
@@ -26,24 +75,22 @@ function createElement(tagName, className = '') {
   return element;
 }
 
-function resolveFrameAssetIndex(level = 0) {
-  if (window.PMAvatar?.getFrameAssetIndex) return window.PMAvatar.getFrameAssetIndex(level);
-  const normalized = normalizeFrameLevel(level);
-  return normalized <= 0 ? 0 : normalized;
-}
-
 function mountFramePreview(host, { avatar = DEFAULT_FALLBACK_AVATAR, frameLevel = 0, exactFrameIndex = null, size = 64, extraClass = 'pm-avatar--picker' } = {}) {
   if (!host) return null;
+  const key = JSON.stringify({ avatar, frameLevel: normalizeFrameLevel(frameLevel), exactFrameIndex, size, extraClass });
+  if (host.dataset.pmFramePreviewKey === key && host.firstElementChild) return host.firstElementChild;
   if (window.PMAvatar?.mount) {
-    return window.PMAvatar.mount(host, {
+    const node = window.PMAvatar.mount(host, {
       avatarUrl: avatar || DEFAULT_FALLBACK_AVATAR,
       level: normalizeFrameLevel(frameLevel),
-      exactFrameIndex: exactFrameIndex == null ? resolveFrameAssetIndex(frameLevel) : exactFrameIndex,
+      exactFrameIndex,
       sizePx: size,
       extraClass,
       alt: 'Çerçeve önizlemesi',
       sizeTag: 'frame-picker'
     });
+    host.dataset.pmFramePreviewKey = key;
+    return node;
   }
   const img = document.createElement('img');
   img.src = avatar || DEFAULT_FALLBACK_AVATAR;
@@ -57,12 +104,8 @@ function mountFramePreview(host, { avatar = DEFAULT_FALLBACK_AVATAR, frameLevel 
     img.src = DEFAULT_FALLBACK_AVATAR;
   });
   host.replaceChildren(img);
+  host.dataset.pmFramePreviewKey = key;
   return img;
-}
-
-function idle(callback) {
-  if (typeof window.requestIdleCallback === 'function') return window.requestIdleCallback(callback, { timeout: 150 });
-  return window.requestAnimationFrame(() => callback({ timeRemaining: () => 8 }));
 }
 
 export function createFramePicker({
@@ -89,23 +132,26 @@ export function createFramePicker({
 
   function getCardStatus(level, selectedFrame, currentLevel) {
     if (!isFrameUnlocked(level, currentLevel)) return 'Kilitli';
-    if (level === selectedFrame) return 'Kullanımda';
+    if (getFrameCardKey(level) === getFrameCardKey(selectedFrame)) return 'Kullanımda';
     return 'Seç';
   }
 
   function refreshSummary(host, selectedFrame, currentLevel, avatar) {
+    const safeSelected = getSafeSelectedFrame(selectedFrame, currentLevel);
     const title = host?.querySelector('[data-frame-summary-title]');
     const text = host?.querySelector('[data-frame-summary-text]');
     const preview = host?.querySelector('[data-frame-summary-preview]');
-    if (title) title.textContent = selectedFrame > 0 ? `Seviye ${selectedFrame} Çerçevesi` : 'Çerçevesiz Görünüm';
-    if (text) text.textContent = `Mevcut seviyen: ${currentLevel}. Kilitli çerçeveler pasif görünür; avatar netliği korunur.`;
-    if (preview) mountFramePreview(preview, { avatar, frameLevel: selectedFrame, exactFrameIndex: resolveFrameAssetIndex(selectedFrame), size: 78, extraClass: 'pm-avatar--picker' });
+    const assetIndex = getFrameAssetIndex(safeSelected);
+    if (title) title.textContent = safeSelected > 0 ? `${getFrameLabel(safeSelected)} Çerçevesi` : 'Çerçevesiz Görünüm';
+    if (text) text.textContent = `Mevcut seviyen: ${currentLevel}. Kullanılabilir çerçeveler seviye aralığına göre açılır; avatar netliği korunur.`;
+    if (preview) mountFramePreview(preview, { avatar, frameLevel: safeSelected, exactFrameIndex: assetIndex || null, size: 78, extraClass: 'pm-avatar--picker' });
   }
 
   function updateOneCard(card, selectedFrame, currentLevel) {
     const level = normalizeFrameLevel(card.dataset.frameLevel);
+    const assetIndex = getFrameAssetIndex(level);
     const locked = !isFrameUnlocked(level, currentLevel);
-    const selected = level === selectedFrame;
+    const selected = getFrameCardKey(level) === getFrameCardKey(selectedFrame);
     card.classList.toggle('is-locked', locked);
     card.dataset.frameLocked = locked ? 'true' : 'false';
     card.classList.toggle('is-selected', selected);
@@ -113,15 +159,16 @@ export function createFramePicker({
     card.tabIndex = locked ? -1 : 0;
     card.setAttribute('aria-disabled', locked ? 'true' : 'false');
     card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    card.dataset.frameAssetIndex = String(assetIndex);
     const status = card.querySelector('.frame-picker-card-status');
     if (status) status.textContent = getCardStatus(level, selectedFrame, currentLevel);
   }
 
-  function buildFrameCard(level, selectedFrame, currentLevel, avatar) {
-    const normalizedLevel = normalizeFrameLevel(level);
+  function buildFrameCard(option, selectedFrame, currentLevel, avatar) {
+    const normalizedLevel = normalizeFrameLevel(option.level);
+    const frameAssetIndex = Number(option.asset || getFrameAssetIndex(normalizedLevel)) || 0;
     const isLocked = !isFrameUnlocked(normalizedLevel, currentLevel);
-    const isSelected = normalizedLevel === selectedFrame;
-    const frameAssetIndex = resolveFrameAssetIndex(normalizedLevel);
+    const isSelected = getFrameCardKey(normalizedLevel) === getFrameCardKey(selectedFrame);
     const card = createElement('button', 'frame-picker-card');
     card.type = 'button';
     card.dataset.frameLevel = String(normalizedLevel);
@@ -133,30 +180,33 @@ export function createFramePicker({
     card.tabIndex = isLocked ? -1 : 0;
     card.setAttribute('aria-disabled', isLocked ? 'true' : 'false');
     card.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
-    card.setAttribute('aria-label', normalizedLevel === 0 ? 'Çerçevesiz profil görünümü' : `Seviye ${normalizedLevel} çerçevesi`);
-    if (isLocked) card.setAttribute('title', `Seviye ${normalizedLevel} kilitli. Açmak için hesap seviyen ${normalizedLevel} olmalı.`);
+    card.setAttribute('aria-label', normalizedLevel === 0 ? 'Çerçevesiz profil görünümü' : `${getFrameLabel(normalizedLevel)} çerçevesi`);
+    if (isLocked) card.setAttribute('title', `${getFrameLabel(normalizedLevel)} kilitli. Açmak için hesap seviyen en az ${normalizedLevel} olmalı.`);
 
     const preview = createElement('span', 'frame-picker-preview');
-    mountFramePreview(preview, { avatar, frameLevel: normalizedLevel, exactFrameIndex: frameAssetIndex, size: normalizedLevel === 0 ? 60 : 64 });
+    mountFramePreview(preview, { avatar, frameLevel: normalizedLevel, exactFrameIndex: frameAssetIndex || null, size: normalizedLevel === 0 ? 60 : 64 });
 
     const meta = createElement('span', 'frame-picker-meta');
     const title = createElement('strong', 'frame-picker-card-title');
-    title.textContent = normalizedLevel === 0 ? 'Çerçevesiz' : `Seviye ${normalizedLevel}`;
+    title.textContent = normalizedLevel === 0 ? 'Çerçevesiz' : getFrameLabel(normalizedLevel);
+    const asset = createElement('span', 'frame-picker-card-asset');
+    asset.textContent = frameAssetIndex > 0 ? `frame-${frameAssetIndex}.png` : 'Standart';
     const status = createElement('span', 'frame-picker-card-status');
     status.textContent = getCardStatus(normalizedLevel, selectedFrame, currentLevel);
-    const asset = createElement('span', 'frame-picker-card-asset');
-    asset.textContent = frameAssetIndex > 0 ? `Çerçeve ${frameAssetIndex}` : 'Standart';
     meta.append(title, asset, status);
     card.append(preview, meta);
 
     if (!isLocked) {
       card.addEventListener('click', async () => {
         if (card.disabled) return;
+        const scrollHost = container();
+        const previousScrollTop = scrollHost ? scrollHost.scrollTop : 0;
         card.disabled = true;
         card.classList.add('is-saving');
         try {
           if (typeof onSelect === 'function') await onSelect(normalizedLevel);
           updateActiveSelection();
+          if (scrollHost) scrollHost.scrollTop = previousScrollTop;
         } finally {
           card.classList.remove('is-saving');
         }
@@ -172,6 +222,7 @@ export function createFramePicker({
     const currentLevel = normalizeFrameLevel(getCurrentLevel());
     const selectedFrame = getSafeSelectedFrame(getSelectedFrame(), currentLevel);
     const avatar = getCurrentAvatar() || fallbackAvatar;
+    const previousScrollTop = host.scrollTop || 0;
     host.replaceChildren();
 
     const summary = createElement('div', 'frame-picker-summary');
@@ -185,21 +236,16 @@ export function createFramePicker({
     summaryCopy.append(summaryTitle, summaryText);
     summary.append(summaryPreview, summaryCopy);
 
-    const grid = createElement('div', 'frame-picker-grid');
+    const grid = createElement('div', 'frame-picker-grid frame-picker-grid--tiered');
     host.append(summary, grid);
     refreshSummary(host, selectedFrame, currentLevel, avatar);
 
-    const levels = Array.from({ length: FRAME_MAX_LEVEL + 1 }, (_, level) => level);
-    let index = 0;
-    const renderBatch = () => {
-      if (token !== renderToken) return;
-      const fragment = documentRef.createDocumentFragment();
-      const limit = Math.min(index + FRAME_BATCH_SIZE, levels.length);
-      for (; index < limit; index += 1) fragment.appendChild(buildFrameCard(levels[index], selectedFrame, currentLevel, avatar));
-      grid.appendChild(fragment);
-      if (index < levels.length) idle(renderBatch);
-    };
-    renderBatch();
+    const options = [{ level: 0, asset: 0 }, ...getFrameRanges().map((range) => ({ level: range.min, asset: range.asset }))];
+    const fragment = documentRef.createDocumentFragment();
+    options.forEach((option) => fragment.appendChild(buildFrameCard(option, selectedFrame, currentLevel, avatar)));
+    if (token !== renderToken) return host;
+    grid.appendChild(fragment);
+    host.scrollTop = previousScrollTop;
     return host;
   }
 

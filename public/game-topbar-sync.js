@@ -4,15 +4,24 @@
   function fmt(n){ return Number(n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   function pct(profile){ const v=Number(profile?.progression?.accountLevelProgressPct ?? profile?.accountLevelProgressPct ?? 0); return Math.max(0,Math.min(100,Number.isFinite(v)?v:0)); }
   function profileFromPayload(payload){ return payload?.user || payload?.profile || payload?.me || payload || {}; }
+  function safeAvatar(value){ return window.PMAvatar?.safeAvatarUrl ? window.PMAvatar.safeAvatarUrl(value || DEFAULT_AVATAR) : (value || DEFAULT_AVATAR); }
   function mountAvatar(profile){
-    const avatar = profile.avatar || DEFAULT_AVATAR;
-    const frame = Number(profile.selectedFrame || 0) || 0;
-    const hosts = ['uiAccountAvatarHost','topbarAvatarShell','myAvatarHost','oppAvatarHost'].map(id=>document.getElementById(id)).filter(Boolean);
+    const avatar = safeAvatar(profile.avatar || DEFAULT_AVATAR);
+    const hosts = ['uiAccountAvatarHost','topbarAvatarShell'].map(id=>document.getElementById(id)).filter(Boolean);
     for(const host of hosts){
-      if(host.id === 'oppAvatarHost') continue;
-      if(window.PMAvatar && typeof window.PMAvatar.mount==='function'){
-        window.PMAvatar.mount(host,{ avatarUrl: avatar, level: frame, exactFrameIndex: frame, sizePx: Math.max(38, host.clientWidth || 44), extraClass:'pm-avatar--topbar', sizeTag:'game-topbar', alt:'Hesap avatarı' });
-      }
+      const key = `topbar:${avatar}`;
+      if(host.dataset.pmTopbarAvatarKey === key && host.firstElementChild) continue;
+      const img = document.createElement('img');
+      img.src = avatar;
+      img.alt = 'Hesap avatarı';
+      img.loading = 'eager';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.draggable = false;
+      img.className = 'pm-topbar-avatar-only';
+      host.replaceChildren(img);
+      host.dataset.pmTopbarAvatarKey = key;
+      host.dataset.frameHidden = 'true';
     }
   }
   function apply(payload){

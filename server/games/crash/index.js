@@ -16,6 +16,8 @@ const MAX_BET = 1_000_000;
 const MIN_AUTO_CASHOUT = 2;
 const MAX_AUTO_CASHOUT = 100;
 const TICK_MS = 80;
+const STATE_EMIT_MIN_MS = 120;
+let lastStateEmitAt = 0;
 const XP_UNIT_MC = 1000;
 const XP_PER_UNIT = 10;
 const MIN_MANUAL_XP_CASHOUT_MULT = 1.50;
@@ -458,8 +460,12 @@ function snapshot({ viewerUid = '' } = {}) {
   };
 }
 
-function emitState() {
+function emitState(options = {}) {
   if (!state.io) return;
+  const force = !!options.force;
+  const ts = now();
+  if (!force && state.phase === 'FLYING' && ts - lastStateEmitAt < STATE_EMIT_MIN_MS) return;
+  lastStateEmitAt = ts;
   for (const socket of state.io.sockets.sockets.values()) {
     if (!socket.data?.crashSubscribed) continue;
     socket.emit('crash:update', snapshot({ viewerUid: socket.data?.crashUid || '' }));
@@ -482,7 +488,7 @@ function startCountdown() {
   state.startedAt = 0;
   state.multiplier = 1;
   state.bets.clear();
-  emitState();
+  emitState({ force: true });
   clearTimer();
   state.timer = setTimeout(startFlying, WAIT_MS);
   state.timer.unref?.();
@@ -492,7 +498,7 @@ function startFlying() {
   state.phase = 'FLYING';
   state.startedAt = now();
   state.multiplier = 1;
-  emitState();
+  emitState({ force: true });
   scheduleAutoCashouts();
   clearTimer();
   state.timer = setInterval(tick, TICK_MS);
@@ -518,7 +524,7 @@ async function endRound() {
   state.history.push(item);
   state.history = state.history.slice(-20);
   runtimeStore.crashRounds.set(item.roundId, item, 3600000);
-  emitState();
+  emitState({ force: true });
   clearTimer();
   state.timer = setTimeout(startCountdown, CRASHED_HOLD_MS);
   state.timer.unref?.();
@@ -552,7 +558,7 @@ async function cashoutBet(bet, { automatic = false, forcedMultiplier = null } = 
   bet.cashoutMode = automatic ? 'auto' : 'manual';
   bet.settlementPending = true;
   bet.cashoutAcceptedAt = now();
-  emitState();
+  emitState({ force: true });
   try {
     const result = await creditBalance({ uid: bet.uid, amount: bet.winAmount, reason: automatic ? 'crash-auto-cashout' : 'crash-cashout', idempotencyKey: `crash:cashout:${bet.roundId}:${bet.uid}:${bet.box}`, metadata: { roundId: bet.roundId, box: bet.box, multiplier: mult, automatic } });
     if (!result.ok) throw makeHttpError(result.error || 'CASHOUT_FAILED', 409);
@@ -560,7 +566,7 @@ async function cashoutBet(bet, { automatic = false, forcedMultiplier = null } = 
     bet.settlementPending = false;
     bet.cashingOut = false;
     bet.xpResult = await awardCrashXp(bet, { outcome: 'cashout', cashoutMult: mult, automatic });
-    emitState();
+    emitState({ force: true });
     return { ok: true, bet, balance: result.balance, xpResult: bet.xpResult };
   } catch (error) {
     bet.cashed = false;
@@ -569,7 +575,7 @@ async function cashoutBet(bet, { automatic = false, forcedMultiplier = null } = 
     bet.winAmount = 0;
     bet.cashoutMult = 0;
     if (state.phase === 'CRASHED' && !bet.refunded) bet.lost = true;
-    emitState();
+    emitState({ force: true });
     throw error;
   }
 }
@@ -626,7 +632,7 @@ router.post('/bet', requireAuth, async (req, res, next) => {
     const profile = await readCrashProfile(req).catch(() => ({ username: safeDisplayName(req.user), avatar: '', selectedFrame: 0 }));
     const bet = { betId: key, roundId: state.roundId, uid, username: profile.username || safeDisplayName(req.user), avatar: safeAvatarUrl(profile.avatar || profile.photoURL || ''), selectedFrame: Number(profile.selectedFrame || 0) || 0, box, amount, autoCashout, cashed: false, lost: false, refunded: false, refunding: false, cashingOut: false, settlementPending: false, xpSettled: false, xpResult: null, winAmount: 0, cashoutMult: 0, at: now() };
     state.bets.set(key, bet);
-    emitState();
+    emitState({ force: true });
     res.json({ ok: true, bet: publicBet(bet, uid), balance: debit.balance, roundId: state.roundId });
   } catch (error) { if (error.statusCode) return res.status(error.statusCode).json({ ok: false, error: error.message }); next(error); }
 });
@@ -659,7 +665,7 @@ router.post('/refund-active', requireAuth, async (req, res, next) => {
         if (result.ok) { clearAutoTimer(bet); bet.refunded = true; refunded += bet.amount; refundedBets.push(publicBet(bet, uid)); state.bets.delete(key); }
       } finally { bet.refunding = false; }
     }
-    emitState();
+    emitState({ force: true });
     res.json({ ok: true, refunded, refundedBets, balance: await readBalance(uid), hasActiveBet: false });
   } catch (error) { next(error); }
 });

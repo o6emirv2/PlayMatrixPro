@@ -2,14 +2,29 @@
 
 (() => {
   const FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
-  const FRAME_ASSET_COUNT = 100;
+  const FRAME_ASSET_COUNT = 18;
+  const FRAME_LEVEL_TO_ASSET = Object.freeze([
+    { min: 1, max: 15, asset: 1 },
+    { min: 16, max: 30, asset: 2 },
+    { min: 31, max: 40, asset: 3 },
+    { min: 41, max: 50, asset: 4 },
+    { min: 51, max: 60, asset: 5 },
+    { min: 61, max: 80, asset: 6 },
+    { min: 81, max: 85, asset: 7 },
+    { min: 86, max: 90, asset: 8 },
+    { min: 91, max: 91, asset: 9 },
+    { min: 92, max: 92, asset: 10 },
+    { min: 93, max: 93, asset: 11 },
+    { min: 94, max: 94, asset: 12 },
+    { min: 95, max: 95, asset: 13 },
+    { min: 96, max: 96, asset: 14 },
+    { min: 97, max: 97, asset: 15 },
+    { min: 98, max: 98, asset: 16 },
+    { min: 99, max: 99, asset: 17 },
+    { min: 100, max: 100, asset: 18 }
+  ].map(Object.freeze));
+
   const DEFAULT_FRAME_PROFILE = Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' });
-  const FRAME_LEVEL_TO_ASSET = Object.freeze(
-    Array.from({ length: FRAME_ASSET_COUNT }, (_, index) => {
-      const level = index + 1;
-      return Object.freeze({ min: level, max: level, asset: level });
-    })
-  );
   const FRAME_VISUAL_PROFILES = Object.freeze({
     1: Object.freeze({ scale: 1.34, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
     2: Object.freeze({ scale: 1.34, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
@@ -28,8 +43,7 @@
     15: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
     16: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
     17: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
-    18: Object.freeze({ scale: 1.46, avatar: 0.78, shiftX: '0px', shiftY: '4px' }),
-    100: Object.freeze({ scale: 1.18, avatar: 0.88, shiftX: '0px', shiftY: '0px' })
+    18: Object.freeze({ scale: 1.46, avatar: 0.78, shiftX: '0px', shiftY: '4px' })
   });
 
   function normalizeAssetPath(value = '') {
@@ -40,19 +54,23 @@
         const parsed = new URL(raw, window.location.origin);
         if (parsed.protocol !== 'https:') return '';
         return parsed.href;
-      } catch (_) {
-        return '';
-      }
+      } catch (_) { return ''; }
     }
     if (raw.startsWith('/')) return raw.replace(/\/+/g, '/');
-    if (/^(assets\/|\.\/assets\/)/i.test(raw)) return `/${raw.replace(/^\.?\//, '')}`.replace(/\/+/g, '/');
+    if (/^(assets\/|\.\/assets\/|public\/|\.\/public\/)/i.test(raw)) return `/${raw.replace(/^\.?\//, '')}`.replace(/\/+/g, '/');
     return '';
   }
 
   function getAvatarRegistry() {
     const registry = window.PMAvatarRegistry && typeof window.PMAvatarRegistry === 'object' ? window.PMAvatarRegistry : {};
     const fallback = normalizeAssetPath(registry.fallback || FALLBACK_AVATAR) || FALLBACK_AVATAR;
-    const avatarSet = new Set(Array.isArray(registry.avatars) ? registry.avatars : []);
+    const avatarSet = new Set();
+    if (Array.isArray(registry.avatars)) {
+      registry.avatars.forEach((entry) => {
+        const normalized = normalizeAssetPath(entry);
+        if (normalized) avatarSet.add(normalized);
+      });
+    }
     avatarSet.add(fallback);
     return { fallback, avatarSet };
   }
@@ -69,11 +87,6 @@
     const { fallback, avatarSet } = getAvatarRegistry();
     if (!normalized) return fallback;
     return avatarSet.has(normalized) ? normalized : fallback;
-  }
-
-  function isRegisteredFrameAssetIndex(frameIndex = 0) {
-    const normalized = normalizeFrameIndex(frameIndex);
-    return normalized >= 1 && normalized <= FRAME_ASSET_COUNT;
   }
 
   function escapeAttr(value = '') {
@@ -94,20 +107,44 @@
     return Math.max(0, Math.min(FRAME_ASSET_COUNT, value));
   }
 
-  function getFrameAssetIndex(level = 0) {
+  function getFrameRange(level = 0) {
     const lvl = normalizeLevel(level);
-    if (lvl <= 0) return 0;
-    const matchedRange = FRAME_LEVEL_TO_ASSET.find((item) => lvl >= item.min && lvl <= item.max);
-    return matchedRange ? matchedRange.asset : FRAME_ASSET_COUNT;
+    if (lvl <= 0) return null;
+    return FRAME_LEVEL_TO_ASSET.find((item) => lvl >= item.min && lvl <= item.max) || FRAME_LEVEL_TO_ASSET[FRAME_LEVEL_TO_ASSET.length - 1];
+  }
+
+  function getFrameRangeByAssetIndex(assetIndex = 0) {
+    const idx = normalizeFrameIndex(assetIndex);
+    if (idx <= 0) return null;
+    return FRAME_LEVEL_TO_ASSET.find((item) => item.asset === idx) || null;
+  }
+
+  function getFrameAssetIndex(level = 0) {
+    const matchedRange = getFrameRange(level);
+    return matchedRange ? matchedRange.asset : 0;
+  }
+
+  function getFrameUnlockLevel(value = 0) {
+    const range = getFrameRange(value);
+    return range ? range.min : 0;
+  }
+
+  function getFrameLabel(level = 0) {
+    const range = getFrameRange(level);
+    if (!range) return 'Çerçevesiz';
+    return range.min === range.max ? `Seviye ${range.min}` : `Seviye ${range.min}-${range.max}`;
   }
 
   function resolveFrameIndex(level = 0, exactFrameIndex = null) {
     const numericExact = Math.floor(Number(exactFrameIndex) || 0);
-    if (numericExact > 0) {
-      if (numericExact <= FRAME_ASSET_COUNT) return normalizeFrameIndex(numericExact);
-      return getFrameAssetIndex(numericExact);
-    }
+    if (numericExact > 0 && numericExact <= FRAME_ASSET_COUNT) return normalizeFrameIndex(numericExact);
+    if (numericExact > FRAME_ASSET_COUNT) return getFrameAssetIndex(numericExact);
     return getFrameAssetIndex(level);
+  }
+
+  function isRegisteredFrameAssetIndex(frameIndex = 0) {
+    const normalized = normalizeFrameIndex(frameIndex);
+    return normalized >= 1 && normalized <= FRAME_ASSET_COUNT;
   }
 
   function getFrameProfile(frameIndex = 0) {
@@ -118,13 +155,14 @@
 
   function isFrameUnlocked(frameLevel = 0, accountLevel = 1) {
     const selected = normalizeLevel(frameLevel);
-    if (Number(frameLevel) <= 0) return true;
-    return selected <= normalizeLevel(accountLevel);
+    if (selected <= 0) return true;
+    const unlockLevel = getFrameUnlockLevel(selected);
+    return unlockLevel <= normalizeLevel(accountLevel);
   }
 
   function getSafeSelectedFrame(frameLevel = 0, accountLevel = 1) {
     const selected = normalizeLevel(frameLevel);
-    if (Number(frameLevel) <= 0) return 0;
+    if (selected <= 0) return 0;
     return isFrameUnlocked(selected, accountLevel) ? selected : 0;
   }
 
@@ -180,6 +218,8 @@
     if (frame) {
       frame.dataset.frameIndex = String(frameIndex);
       frame.dataset.frameLevel = String(normalizedLevel);
+      frame.dataset.fallback = `/public/assets/frames/frame-${frameIndex}.png`;
+      frame.src = frameIndex > 0 ? `/public/assets/frames/frame-${frameIndex}.png` : '';
       frame.style.setProperty('--pm-frame-scale', String(profile.scale));
       frame.style.setProperty('--pm-frame-shift-x', profile.shiftX || '0px');
       frame.style.setProperty('--pm-frame-shift-y', profile.shiftY || '0px');
@@ -188,38 +228,17 @@
   }
 
   function createNode(options = {}) {
-    const {
-      avatarUrl = '',
-      level = 0,
-      exactFrameIndex = null,
-      sizePx = 45,
-      extraClass = '',
-      imageClass = 'pm-avatar-img',
-      wrapperClass = 'pm-avatar',
-      alt = 'Oyuncu',
-      sizeTag = ''
-    } = options || {};
+    const { avatarUrl = '', level = 0, exactFrameIndex = null, sizePx = 45, extraClass = '', imageClass = 'pm-avatar-img', wrapperClass = 'pm-avatar', alt = 'Oyuncu', sizeTag = '' } = options || {};
     const normalizedLevel = normalizeLevel(level);
     const frameIndex = resolveFrameIndex(normalizedLevel, exactFrameIndex);
     const node = document.createElement('div');
     node.className = [wrapperClass, frameIndex > 0 ? 'has-frame' : '', extraClass].filter(Boolean).join(' ');
     node.dataset.pmAvatar = 'true';
     if (sizeTag) node.dataset.pmAvatarSize = String(sizeTag);
-    const avatar = createImage({
-      src: safeAvatarUrl(avatarUrl),
-      className: imageClass,
-      alt: alt || 'Oyuncu',
-      fallback: FALLBACK_AVATAR
-    });
+    const avatar = createImage({ src: safeAvatarUrl(avatarUrl), className: imageClass, alt: alt || 'Oyuncu', fallback: FALLBACK_AVATAR });
     node.appendChild(avatar);
     if (frameIndex > 0) {
-      const frame = createImage({
-        src: `/public/assets/frames/frame-${frameIndex}.png`,
-        className: `pm-frame-image pm-avatar-shell__frame frame-${frameIndex}`,
-        alt: '',
-        fallback: `/public/assets/frames/frame-${frameIndex}.png`,
-        ariaHidden: true
-      });
+      const frame = createImage({ src: `/public/assets/frames/frame-${frameIndex}.png`, className: `pm-frame-image pm-avatar-shell__frame frame-${frameIndex}`, alt: '', fallback: `/public/assets/frames/frame-${frameIndex}.png`, ariaHidden: true });
       node.appendChild(frame);
     }
     applyNodeProfile(node, { ...options, level: normalizedLevel, sizePx });
@@ -242,9 +261,25 @@
   function mount(target, options = {}) {
     const host = typeof target === 'string' ? document.getElementById(target) : target;
     if (!host) return null;
+    const key = JSON.stringify({
+      avatarUrl: options.avatarUrl || '',
+      level: normalizeLevel(options.level || 0),
+      exactFrameIndex: options.exactFrameIndex ?? null,
+      sizePx: Math.max(18, Number(options.sizePx) || 45),
+      extraClass: options.extraClass || '',
+      imageClass: options.imageClass || 'pm-avatar-img',
+      wrapperClass: options.wrapperClass || 'pm-avatar',
+      sizeTag: options.sizeTag || ''
+    });
+    if (host.dataset.pmAvatarMountKey === key && host.firstElementChild) return host.firstElementChild;
     const node = createNode(options);
     host.replaceChildren(node);
+    host.dataset.pmAvatarMountKey = key;
     return node;
+  }
+
+  function getFrameRanges() {
+    return FRAME_LEVEL_TO_ASSET.map((item) => Object.freeze({ ...item }));
   }
 
   window.PMAvatar = Object.freeze({
@@ -254,6 +289,11 @@
     FRAME_VISUAL_PROFILES,
     normalizeLevel,
     normalizeFrameIndex,
+    getFrameRange,
+    getFrameRanges,
+    getFrameRangeByAssetIndex,
+    getFrameUnlockLevel,
+    getFrameLabel,
     getFrameAssetIndex,
     resolveFrameIndex,
     getFrameProfile,
@@ -265,6 +305,7 @@
     buildHTML,
     applyNodeProfile,
     createNode,
+    renderAvatarNode: createNode,
     mount
   });
 })();

@@ -412,7 +412,7 @@ function showConfirmModal(title, message, onConfirm, onCancel = null, options = 
 }
 function resetToLobby() {
   clearInterval(pollingInterval);
-  clearInterval(pingInterval);
+  stopGamePing();
   try { chessSocket?.emit?.('chess:join', ''); } catch (_) {}
   currentRoomId = '';
   currentRoomState = null;
@@ -888,14 +888,22 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       return fetchAPI('/api/chess/extend', 'POST', payload);
     }
 
+    function stopGamePing() {
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
+    }
+
     function startGamePing() {
+      stopGamePing();
       pingInterval = setInterval(async () => {
         if (!currentRoomId) return;
         try {
           const res = await fetchAPI('/api/chess/ping', 'POST', { roomId: currentRoomId });
           if (res && res.room && res.room.status === 'abandoned') {
             clearInterval(pollingInterval);
-            clearInterval(pingInterval);
+            stopGamePing();
             showMatrixModal("OYUN İPTAL", res.room.message, "error", true);
           }
         } catch(e) {}
@@ -934,7 +942,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         const res = await fetchAPI(`/api/chess/state/${currentRoomId}?t=${Date.now()}`);
         if(res.room.status === 'abandoned') {
           clearInterval(pollingInterval);
-          clearInterval(pingInterval);
+          stopGamePing();
           showMatrixModal("OYUN İPTAL", "Rakip odadan ayrıldı.", "error", true);
           return;
         }
@@ -943,7 +951,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       } catch(e) {
         if (e.message === "Oda bulunamadı.") {
           clearInterval(pollingInterval);
-          clearInterval(pingInterval);
+          stopGamePing();
           showMatrixModal("BİLGİ", "Oda kapandı veya oyun sona erdi.", "info", true);
         } else {
           showGameNotice('Oyun durumu güncellenemedi. Tekrar deneniyor.', 'warning', 'Lobiye Dön', () => { try { localStorage.removeItem('activeChessRoom'); } catch (_) {} window.location.reload(); });
@@ -976,17 +984,21 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       const host = document.getElementById(`${avatarId}Host`) || document.getElementById(avatarId)?.parentElement;
       if (!host) return;
       const safeAvatar = avatarUrl || DEFAULT_AVATAR;
-      const rawFrame = Math.max(0, Math.min(100, Math.trunc(Number(selectedFrameLevel || 0) || 0)));
+      const frameLevel = Math.max(0, Math.min(100, Math.trunc(Number(selectedFrameLevel || 0) || 0)));
       const explicitIndexMatch = String(explicitFrameUrl || '').match(/frame-(\d+)\.png/i);
-      const exactFrameIndex = explicitIndexMatch ? Math.max(0, Math.min(100, Math.trunc(Number(explicitIndexMatch[1]) || 0))) : rawFrame;
-      const signature = JSON.stringify({ avatar: safeAvatar, frame: exactFrameIndex });
+      const explicitIndexRaw = explicitIndexMatch ? Math.trunc(Number(explicitIndexMatch[1]) || 0) : 0;
+      const exactFrameIndex = explicitIndexRaw > 0
+        ? (explicitIndexRaw <= 18 ? explicitIndexRaw : resolveFrameIndex(explicitIndexRaw))
+        : null;
+      const resolvedFrameIndex = exactFrameIndex || resolveFrameIndex(frameLevel);
+      const signature = JSON.stringify({ avatar: safeAvatar, frameLevel, frame: resolvedFrameIndex });
       if (avatarRenderCache.get(avatarId) === signature && host.childElementCount) return;
       avatarRenderCache.set(avatarId, signature);
       if (window.PMAvatar && typeof window.PMAvatar.createNode === 'function') {
         try {
           const node = window.PMAvatar.createNode({
             avatarUrl: safeAvatar,
-            level: 0,
+            level: frameLevel,
             exactFrameIndex,
             sizePx: 64,
             extraClass: 'pm-game-avatar-shell',
@@ -1006,12 +1018,12 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       img.alt = 'Oyuncu avatarı';
       img.src = safeAvatar;
       wrap.appendChild(img);
-      if (exactFrameIndex > 0) {
+      if (resolvedFrameIndex > 0) {
         const frame = document.createElement('img');
-        frame.className = `pm-frame-image pm-avatar-shell__frame pm-game-frame frame-${exactFrameIndex}`;
+        frame.className = `pm-frame-image pm-avatar-shell__frame pm-game-frame frame-${resolvedFrameIndex}`;
         frame.alt = '';
         frame.setAttribute('aria-hidden', 'true');
-        frame.src = explicitFrameUrl || `/public/assets/frames/frame-${exactFrameIndex}.png`;
+        frame.src = exactFrameIndex && explicitFrameUrl ? explicitFrameUrl : `/public/assets/frames/frame-${resolvedFrameIndex}.png`;
         wrap.appendChild(frame);
       }
       host.replaceChildren(wrap);
@@ -1078,7 +1090,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         statusTxt.style.color = myTurn ? "#00ffa3" : "#f1c40f";
       } else if (r.status === 'finished') {
         clearInterval(pollingInterval);
-        clearInterval(pingInterval);
+        stopGamePing();
         statusTxt.innerText = "OYUN BİTTİ";
         statusTxt.style.color = "#ff3b30";
         try { if (r.resultSummary?.progression) applyProgressionFromPayload({ progression: r.resultSummary.progression }); } catch (_) {}

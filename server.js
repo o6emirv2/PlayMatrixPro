@@ -13,6 +13,7 @@ const { routeData } = require('./server/core/smartDataRouter');
 const { runtimeStore } = require('./server/core/runtimeStore');
 const { globalChat, localChat, dm, presence } = require('./server/social/socialRuntimeStore');
 const { runSafeFirestoreCleanup } = require('./server/core/firestoreCleanupService');
+const { addAdminLog, sanitizeRuntimeLogPayload } = require('./server/admin/adminRuntimeLogStore');
 
 process.on('unhandledRejection', (reason) => console.error('[process:unhandledRejection]', reason && reason.stack || reason));
 process.on('uncaughtException', (error) => console.error('[process:uncaughtException]', error && error.stack || error));
@@ -43,8 +44,9 @@ function shouldRecordApiIssue(req, statusCode) {
   const status = Number(statusCode || 0);
   if (status >= 500) return true;
   const scope = resolveGameScopeFromPath(req.originalUrl || req.url || '');
-  if (scope !== 'home') return false;
   const pathValue = String(req.originalUrl || req.url || '').toLowerCase();
+  if (scope === 'crash' || scope === 'chess') return status >= 400;
+  if (scope !== 'home') return false;
   if (isExpectedClientOrApiStatus(status)) return false;
   return pathValue.includes('/api/social') || pathValue.includes('/api/chat') || pathValue.includes('/api/wheel') || pathValue.includes('/api/promo') || pathValue.includes('/api/support') || pathValue.includes('/api/leaderboard') || pathValue.includes('/api/user-stats');
 }
@@ -72,6 +74,7 @@ app.use((req, res, next) => {
         severity:status >= 500 ? 'error' : 'warning'
       };
       runtimeStore.errors.set(row.id, row, 24*3600000);
+      addAdminLog('api.issue', { ...row, level: row.severity, source: row.area, category: row.scope, code: 'SERVER_ROUTE_ERROR' });
       const tag = status >= 500 ? '[api:error]' : '[api:warning]';
       const log = status >= 500 ? console.error : console.warn;
       log(tag, JSON.stringify({ method: row.method, path: row.path, status: row.status, ms: row.ms, requestId: row.requestId, game: row.game }));
@@ -233,7 +236,14 @@ io.on('connection', socket => {
   socket.on('game:invite_response', data => socket.broadcast.emit('game:invite_response', { ...(data || {}), at: Date.now() }));
   socket.on('game:matchmake_join', data => socket.emit('game:matchmake_joined', { ok:true, queued:false, gameType:data?.gameType || data?.game || 'unknown', message:'HTTP lobby active' }));
   socket.on('game:matchmake_leave', () => socket.emit('game:matchmake_left', { ok:true }));
-  socket.on('client:error', data => { console.error('[socket:client:error]', JSON.stringify({ socketId: socket.id, data })); runtimeStore.errors.set(`socket_${Date.now()}_${socket.id}`, data || {}, 24*3600000); });
+  socket.on('client:error', data => {
+    const safePayload = sanitizeRuntimeLogPayload({ ...(data || {}), socketId: socket.id, source: data?.source || data?.page || 'client', category: data?.type || 'CLIENT_ERROR' });
+    const id = `socket_${Date.now()}_${socket.id}`;
+    const row = { id, ...safePayload, at: Date.now(), message: safePayload.message || safePayload.error || 'Client runtime error' };
+    runtimeStore.errors.set(id, row, 24*3600000);
+    addAdminLog('client.error', { ...row, level: 'warning' });
+    console.warn('[socket:client:error]', JSON.stringify({ socketId: socket.id, source: row.source, category: row.category, message: row.message }));
+  });
   socket.on('matchmaking:join', data => socket.emit('matchmaking:status', { ok:true, queued:false, game:data?.game || 'unknown', message:'HTTP lobby active' }));
   socket.on('matchmaking:leave', () => socket.emit('matchmaking:left', { ok:true }));
   socket.on('disconnect', () => { const uid = socket.data?.pmUid; runtimeStore.presence.delete(socket.id); if (uid) presence.delete(uid); });

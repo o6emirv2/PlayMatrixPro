@@ -136,18 +136,23 @@ const INLINE_DEFAULT_AVATAR = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3
         return Math.min(18, Math.max(9, lvl - 82));
     }
 
-    function getCrashFrameIndex(player) {
+    function getCrashFrameLevel(player) {
         const raw = Math.trunc(Number(player?.selectedFrame ?? player?.frame ?? 0) || 0);
         return Math.max(0, Math.min(100, raw));
     }
 
+    function getCrashFrameIndex(player) {
+        return resolveFrameIndex(getCrashFrameLevel(player));
+    }
+
     function renderCrashAvatar(player, avatarUrl) {
-        const frameIndex = getCrashFrameIndex(player);
+        const frameLevel = getCrashFrameLevel(player);
+        const frameIndex = resolveFrameIndex(frameLevel);
         const avatarHtml = window.PMAvatar && typeof window.PMAvatar.buildHTML === 'function'
           ? window.PMAvatar.buildHTML({
               avatarUrl: avatarUrl || DEFAULT_AVATAR,
-              level: 0,
-              exactFrameIndex: frameIndex,
+              level: frameLevel,
+              exactFrameIndex: null,
               sizePx: 40,
               extraClass: 't-avatar-core',
               imageClass: 't-avatar',

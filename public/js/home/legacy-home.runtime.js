@@ -1099,11 +1099,11 @@ function buildHeroPromoSlides(overview = {}) {
        try {         await persistSelectedAvatar(normalized);         showToast('Avatar kaydedildi', 'Profil fotoğrafın güncellendi.', 'success');         return normalized;
       } catch (error) {         syncAvatarEverywhere(previousAvatar);         showToast('Avatar kaydedilemedi', error.message || 'Seçili avatar sunucuya kaydedilemedi.', 'error');         return null;       }
     }      function selectAvatar(src){       return syncAvatarEverywhere(src || DEFAULT_AVATAR);     }
-     async function selectFrame(level) {       const nextFrame = normalizeFrameLevel(level);       const unlockedMax = getCurrentAccountLevel();       
-      if (nextFrame > unlockedMax) {         showMatrixModal('Şuanda Aktif Değil', `Bu çerçeveyi kullanmak için en az Seviye ${nextFrame} olmalısın. Mevcut seviyen: ${getUserLevel(state.userData)}.`, 'warning');         return;       } 
-      const previousFrame = getSelectedFrameLevel();       syncSelectedFrameState(nextFrame);        renderFrameOptions();       updateAppearanceSummary();
+     async function selectFrame(level) {       const nextFrame = normalizeFrameLevel(level);       const unlockedMax = getCurrentAccountLevel();       const frameLabel = window.PMAvatar?.getFrameLabel ? window.PMAvatar.getFrameLabel(nextFrame) : `Seviye ${nextFrame}`;       
+      if (nextFrame > unlockedMax) {         showMatrixModal('Şuanda Aktif Değil', `${frameLabel} çerçevesini kullanmak için en az Seviye ${nextFrame} olmalısın. Mevcut seviyen: ${getUserLevel(state.userData)}.`, 'warning');         return;       } 
+      const previousFrame = getSelectedFrameLevel();       syncSelectedFrameState(nextFrame);       framePickerController?.updateActiveSelection?.();       updateAppearanceSummary();
       refreshCurrentUserAvatarSurfaces();        if (!auth.currentUser) return;        try {
-        await persistSelectedFramePreference(nextFrame);       } catch (error) {         syncSelectedFrameState(previousFrame);         renderFrameOptions();         updateAppearanceSummary();
+        await persistSelectedFramePreference(nextFrame);       } catch (error) {         syncSelectedFrameState(previousFrame);         framePickerController?.updateActiveSelection?.();         updateAppearanceSummary();
         refreshCurrentUserAvatarSurfaces();         showToast('Çerçeve kaydedilemedi', error.message || 'Seçili çerçeve sunucuya kaydedilemedi.', 'error');       }     } 
     function renderAvatarCategories(){       return avatarPickerController.renderAvatarCategories();     }      function openAvatarPicker(){
       return avatarPickerController.openAvatarPicker();     }      function closeAvatarPicker(){       return avatarPickerController.closeAvatarPicker();
