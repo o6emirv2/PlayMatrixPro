@@ -155,7 +155,7 @@ function renderHeroDots() {
 function showHero(index) { const slides = qsa('.pm-slide'); if (!slides.length) return; state.heroIndex = (index + slides.length) % slides.length; slides.forEach((s,i)=>s.classList.toggle('is-active', i === state.heroIndex)); renderHeroDots(); }
 function startHero() { renderHeroDots(); setInterval(() => showHero(state.heroIndex + 1), 5000); }
 
-function gameCard(game, compact = false) {
+function gameCard(game) {
   const palette = {
     crash: ['#ff9d00', '#ff3d4d'],
     chess: ['#1957ff', '#22d3ee'],
@@ -164,37 +164,21 @@ function gameCard(game, compact = false) {
     space: ['#0047ff', '#6de7ff'],
     snake: ['#11a84a', '#02e391']
   }[game.key] || ['#2f66ff', '#8b5cf6'];
-  return `<article class="pm-home-game-card ${compact ? 'is-compact' : ''}" style="--card-a:${palette[0]};--card-b:${palette[1]}">
-    <div>
-      <div class="pm-game-big-icon"><i class="fa-solid ${game.icon}"></i></div>
-      <h3>${escapeHtml(game.title)}</h3>
-      <p>${escapeHtml(game.category)} · ${escapeHtml(game.desc)}</p>
-    </div>
-    <button class="pm-game-play" data-play-game="${game.key}" type="button">Oyunu Aç</button>
-  </article>`;
+  return `<button class="pm-home-game-card" style="--card-a:${palette[0]};--card-b:${palette[1]}" data-play-game="${game.key}" type="button" aria-label="${escapeHtml(game.title)} oyununu aç">
+    <span class="pm-game-card-top">
+      <span class="pm-game-big-icon"><i class="fa-solid ${game.icon}"></i></span>
+      <span class="pm-game-category">${escapeHtml(game.category)}</span>
+    </span>
+    <span class="pm-game-card-body">
+      <strong>${escapeHtml(game.title)}</strong>
+      <em>${escapeHtml(game.desc)}</em>
+    </span>
+    <span class="pm-game-play">Oyunu Aç <i class="fa-solid fa-arrow-right"></i></span>
+  </button>`;
 }
 function renderGames() {
-  const newRow = $('newGamesRow');
-  const quickRow = $('quickGamesRow');
   const grid = $('gameGrid');
-  const online = GAMES.filter(g => g.category === 'Online');
-  const quick = GAMES.filter(g => g.category !== 'Online');
-  if (newRow) newRow.innerHTML = online.map(g => gameCard(g)).join('');
-  if (quickRow) quickRow.innerHTML = quick.map(g => gameCard(g, true)).join('');
   if (grid) grid.innerHTML = GAMES.map(g => gameCard(g)).join('');
-}
-function renderStats() {
-  const grid = $('statsGrid'); if (!grid) return;
-  const p = state.profile;
-  const cards = [
-    ['Hesap Seviyesi', p ? `Seviye ${p.level}` : 'Giriş bekleniyor', 'fa-layer-group'],
-    ['Seviye İlerlemesi', p ? `%${Number(p.progressPercent || 0).toFixed(1)}` : '%0.0', 'fa-chart-line'],
-    ['MC Bakiye', p ? `${fmt(p.balance)} MC` : '0 MC', 'fa-coins'],
-    ['Sosyal Durum', state.user ? 'Bağlı' : 'Misafir', 'fa-signal'],
-    ['Oyun Profili', p ? 'Aktif' : 'Kilitli', 'fa-gamepad'],
-    ['Veri Kaynağı', p ? 'Backend' : 'Genel vitrin', 'fa-server']
-  ];
-  grid.innerHTML = cards.map(([label,value,icon]) => `<article class="pm-stat-card"><i class="fa-solid ${icon}"></i><h3>${escapeHtml(value)}</h3><p>${escapeHtml(label)}</p></article>`).join('');
 }
 function normalizeLeaderboard(payload) {
   const tabs = payload?.tabs || {};
@@ -224,7 +208,7 @@ async function loadPublicData() {
     normalizeLeaderboard({});
     reportHomeIssue('home.public_data', error, { severity:'warning' });
   }
-  renderLeaderboard(); renderStats();
+  renderLeaderboard();
 }
 async function refreshProfile() {
   if (!state.user) { state.profile = null; updateShell(); return null; }
@@ -236,7 +220,7 @@ async function refreshProfile() {
     state.profile = normalizeProfile({ uid: state.user.uid, email: state.user.email, username: state.user.displayName || state.user.email?.split('@')[0], avatar: DEFAULT_AVATAR, balance:0, xp:0, selectedFrame:0 });
     reportHomeIssue('home.profile_load', error, { severity:'warning' });
   }
-  updateShell(); renderStats(); return state.profile;
+  updateShell(); return state.profile;
 }
 function updateShell() {
   const loggedIn = !!state.user;
@@ -351,7 +335,7 @@ function renderSocial() {
   setText('socialTitle', titles[state.socialView] || '#Yerel Sohbet (TR)');
   const form = $('chatForm'); if (form) form.style.display = state.socialView === 'chat' ? '' : 'none';
   if (state.socialView === 'dm') {
-    host.innerHTML = `<div class="pm-social-tool"><h3>DM Kutusu</h3><p>Aktif DM konuşmaların Render in-memory modelinden okunur.</p><button class="pm-btn pm-btn-primary" type="button" data-social-action="load-dm">DM Kutusunu Yenile</button><div class="pm-social-results" id="socialToolResults"></div></div>`;
+    host.innerHTML = `<div class="pm-social-tool"><h3>DM Kutusu</h3><p>Aktif DM konuşmaları listelenir; UID girerek güvenli geçici mesaj gönderilebilir.</p><label class="pm-field"><span>Alıcı UID</span><input id="dmTargetInput" maxlength="128" placeholder="Alıcı kullanıcı UID" /></label><label class="pm-field"><span>Mesaj</span><input id="dmMessageInput" maxlength="280" placeholder="Kısa mesaj yaz" /></label><div class="pm-social-actions"><button class="pm-btn pm-btn-primary" type="button" data-social-action="send-dm">DM Gönder</button><button class="pm-btn pm-btn-dark" type="button" data-social-action="load-dm">DM Kutusunu Yenile</button></div><div class="pm-social-results" id="socialToolResults"></div></div>`;
     return;
   }
   if (state.socialView === 'search') {
@@ -385,23 +369,33 @@ async function handleSocialAction(action) {
       write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.username || x.peerUid || 'DM')}</strong><p>${escapeHtml(x.lastMessage || 'Son mesaj yok')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>DM kaydı yok</strong><p>Yeni konuşmalar burada görünecek.</p></div>');
       return;
     }
+    if (action === 'send-dm') {
+      const targetUid = safeText($('dmTargetInput')?.value);
+      const text = safeText($('dmMessageInput')?.value);
+      if (!targetUid || !text) throw new Error('DM için hedef UID ve mesaj gerekli.');
+      const payload = await apiFetch(`/api/chat/direct/${encodeURIComponent(targetUid)}`, { method:'POST', body:JSON.stringify({ text }) });
+      write(`<article><strong>DM gönderildi</strong><p>${escapeHtml(payload.message?.text || text)}</p></article>`);
+      return;
+    }
     if (action === 'search-message') {
       const q = safeText($('socialSearchInput')?.value);
       const payload = await apiFetch(`/api/chat/direct/search?q=${encodeURIComponent(q)}`, { timeoutMs: 5000 });
       const items = Array.isArray(payload.items) ? payload.items : [];
-      write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.peerUid || 'Mesaj')}</strong><p>${escapeHtml(x.text || x.message || '')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>Sonuç yok</strong><p>Aktif mesajlarda eşleşme bulunmadı.</p></div>');
+      write(items.length ? items.map(x => `<article><strong>${escapeHtml(x.peerUid || x.fromUid || x.toUid || 'Mesaj')}</strong><p>${escapeHtml(x.text || x.message || '')}</p></article>`).join('') : '<div class="pm-empty-mini"><strong>Sonuç yok</strong><p>Aktif mesajlarda eşleşme bulunmadı.</p></div>');
       return;
     }
     if (action === 'load-requests') {
       const payload = await apiFetch('/api/friends/list', { timeoutMs: 5000 });
       const c = payload.counts || {};
-      write(`<article><strong>Arkadaşlık Özeti</strong><p>Kabul edilen: ${fmt(c.accepted || 0)} · Gelen: ${fmt(c.incoming || 0)} · Giden: ${fmt(c.outgoing || 0)}</p></article>`);
+      const rows = Array.isArray(payload.items) ? payload.items : [];
+      const summary = `<article><strong>Arkadaşlık Özeti</strong><p>Kabul edilen: ${fmt(c.accepted || 0)} · Gelen: ${fmt(c.incoming || 0)} · Giden: ${fmt(c.outgoing || 0)}</p></article>`;
+      write(summary + (rows.length ? rows.map(x => `<article><strong>${escapeHtml(x.peerUid || x.toUid || x.fromUid || 'Arkadaşlık')}</strong><p>${escapeHtml(x.status || 'pending')}</p></article>`).join('') : ''));
       return;
     }
     if (action === 'send-friend') {
       const targetUid = safeText($('friendTargetInput')?.value);
       if (!targetUid) throw new Error('Hedef kullanıcı UID gerekli.');
-      await apiFetch('/api/friends/request', { method:'POST', body:JSON.stringify({ targetUid }) });
+      await apiFetch('/api/friends/request', { method:'POST', body:JSON.stringify({ targetUid, toUid: targetUid }) });
       write('<article><strong>İstek gönderildi</strong><p>Arkadaşlık isteği işlendi.</p></article>');
       return;
     }
@@ -447,7 +441,7 @@ function copyInvite(){ const text = $('inviteLink')?.textContent || 'https://pla
 function installEvents() {
   document.addEventListener('click', (event) => {
     const target = event.target.closest('button,a'); if (!target) return;
-    if (target.dataset.scrollTarget) { event.preventDefault(); scrollToId(target.dataset.scrollTarget); return; }
+    if (target.dataset.scrollTarget) { event.preventDefault(); if (target.closest('.pm-drawer-panel')) closeDrawer(); scrollToId(target.dataset.scrollTarget); return; }
     if (target.dataset.openModal) { event.preventDefault(); if (target.closest('.pm-drawer-panel')) closeDrawer(); openModal(target.dataset.openModal); return; }
     if (target.dataset.closeModal) { event.preventDefault(); closeModal(target.dataset.closeModal); return; }
     if (target.dataset.openAuth) { event.preventDefault(); openAuth(target.dataset.openAuth); return; }
@@ -455,13 +449,12 @@ function installEvents() {
     if (target.dataset.profileAction === 'open') { event.preventDefault(); openDrawer(); return; }
     if (target.id === 'profileDrawerOpen') { event.preventDefault(); openDrawer(); return; }
     if (target.dataset.logout !== undefined) { event.preventDefault(); logout(); return; }
-    if (target.dataset.playGame) { event.preventDefault(); const game = GAMES.find(g=>g.key===target.dataset.playGame); if (ensureAuth(game?.title || 'Oyun')) location.href = game.route; return; }
+    if (target.dataset.playGame) { event.preventDefault(); const game = GAMES.find(g=>g.key===target.dataset.playGame); if (game?.route) location.assign(game.route); return; }
     if (target.dataset.leaderTab) { state.leaderTab = target.dataset.leaderTab; qsa('[data-leader-tab]').forEach(b => b.classList.toggle('is-active', b.dataset.leaderTab === state.leaderTab)); renderLeaderboard(); return; }
     if (target.dataset.avatarCategory) { state.currentAvatarCategory = target.dataset.avatarCategory; renderAvatarPicker(); return; }
     if (target.dataset.avatarSrc) { selectAvatar(target.dataset.avatarSrc); return; }
     if (target.dataset.frameFilter) { state.frameFilter = target.dataset.frameFilter; qsa('[data-frame-filter]').forEach(b => b.classList.toggle('is-active', b.dataset.frameFilter === state.frameFilter)); renderFramePicker(); return; }
     if (target.dataset.frame) { selectFrame(Number(target.dataset.frame)); return; }
-    if (target.dataset.rowScroll) { const row = target.dataset.rowScroll === 'newGames' ? $('newGamesRow') : $('quickGamesRow'); if (row) row.scrollBy({ left: Number(target.dataset.dir || 1) * Math.max(280, row.clientWidth * .75), behavior:'smooth' }); return; }
     if (target.dataset.accordion) { const panel = $('footer-' + target.dataset.accordion); if (panel) panel.classList.toggle('is-open'); target.classList.toggle('is-open'); return; }
     if (target.dataset.socialView) { state.socialView = target.dataset.socialView; renderSocial(); return; }
     if (target.dataset.socialAction) { handleSocialAction(target.dataset.socialAction); return; }
@@ -481,18 +474,19 @@ function installEvents() {
 (function installTouchHardening(){
   let lastTouchAt = 0;
   document.addEventListener('touchend', (event) => {
+    if (event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
     const now = Date.now();
     if (now - lastTouchAt < 320) event.preventDefault();
     lastTouchAt = now;
   }, { passive:false });
   document.addEventListener('contextmenu', (event) => {
-    if (!event.target?.closest?.('input, textarea')) event.preventDefault();
+    if (!event.target?.closest?.('input, textarea, select, [contenteditable="true"]')) event.preventDefault();
   });
 })();
 
 async function boot() {
   try {
-    renderGames(); renderStats(); startHero(); installEvents(); updateShell();
+    renderGames(); startHero(); installEvents(); updateShell();
     await window.__PM_API__?.ensureApiBase?.().catch(()=>null);
     await initFirebase();
     await loadPublicData();

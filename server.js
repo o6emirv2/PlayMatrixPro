@@ -160,7 +160,7 @@ app.get('/api/home/summary', async (req, res) => {
     generatedAt: Date.now(),
     profile,
     chatPolicy: CHAT_POLICY,
-    homepage: { sections: ['hero', 'games', 'rewards', 'leaderboard', 'stats', 'social', 'profile'] },
+    homepage: { sections: ['hero', 'games', 'leaderboard', 'platform-note'] },
     leaderboard: {
       ok: true,
       generatedAt: Date.now(),
@@ -199,7 +199,7 @@ async function captureClientError(req, res) {
   const payload = { ...(req.body || {}), path: req.body?.path || req.headers.referer || '', userAgent: req.headers['user-agent'] || '', at: Date.now() };
   const game = String(payload.game || resolveGameScopeFromPath(`${payload.path || ''} ${payload.source || ''} ${payload.scope || ''} ${payload.endpoint || ''}`)).toLowerCase();
   const sourceText = `${payload.path || ''} ${payload.source || ''} ${payload.scope || ''} ${payload.endpoint || ''}`.toLowerCase();
-  const isSupportedScope = game === 'chess' || game === 'crash' || game === 'home' || sourceText.includes('/games/chess') || sourceText.includes('/api/chess') || sourceText.includes('/games/crash') || sourceText.includes('/api/crash') || sourceText.includes('crash-app') || sourceText.includes('satranc') || sourceText.includes('/api/social') || sourceText.includes('/api/chat') || sourceText.includes('/api/wheel') || sourceText.includes('/api/promo') || sourceText.includes('/api/support') || sourceText.includes('legacy-home') || sourceText.includes('script.js') || sourceText.includes('/index.html') || sourceText.includes('anasayfa');
+  const isSupportedScope = game === 'chess' || game === 'crash' || game === 'home' || sourceText.includes('/games/chess') || sourceText.includes('/api/chess') || sourceText.includes('/games/crash') || sourceText.includes('/api/crash') || sourceText.includes('crash-app') || sourceText.includes('satranc') || sourceText.includes('/api/social') || sourceText.includes('/api/chat') || sourceText.includes('/api/wheel') || sourceText.includes('/api/promo') || sourceText.includes('/api/support') || sourceText.includes('script.js') || sourceText.includes('/index.html') || sourceText.includes('anasayfa');
   if (!isSupportedScope) return res.status(202).json({ ok:true, discarded:'unsupported-scope' });
   const normalizedGame = game === 'crash' || sourceText.includes('crash') ? 'crash' : (game === 'chess' || sourceText.includes('chess') || sourceText.includes('satranc')) ? 'chess' : 'home';
   const message = String(payload.message || payload.error || '').trim();
