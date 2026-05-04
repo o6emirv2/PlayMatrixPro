@@ -68,7 +68,10 @@ function getProgression(xpValue = 0) {
     accountLevel: level,
     currentXp: safeNumber(xp),
     accountLevelProgressPct: Math.max(0, Math.min(100, progressPercent)),
-    version: 'playmatrix-progression-v1'
+    version: 'playmatrix-progression-v1',
+    accountProgressionVersion: 'playmatrix-progression-v1',
+    accountLevelCurveMode: 'PM_TIERED_MULTIPLIER_BACKEND_V1',
+    curveMode: 'PM_TIERED_MULTIPLIER_BACKEND_V1'
   };
 }
 module.exports = { MAX_LEVEL, BASE_LEVEL_STEP_XP, MULTIPLIERS, THRESHOLDS, normalizeXpBigInt, formatBigInt, getProgression };

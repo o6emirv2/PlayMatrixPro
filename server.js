@@ -237,7 +237,7 @@ io.on('connection', socket => {
   socket.on('matchmaking:leave', () => socket.emit('matchmaking:left', { ok:true }));
   socket.on('disconnect', () => { const uid = socket.data?.pmUid; runtimeStore.presence.delete(socket.id); if (uid) presence.delete(uid); });
 });
-crashGame.installSocketcrashGame.installSocket?.(io);
+if (typeof crashGame.installSocket === 'function') crashGame.installSocket(io);
 chessGame.installSocket?.(io);
 pistiGame.installSocket?.(io);
 

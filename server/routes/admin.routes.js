@@ -177,7 +177,7 @@ router.post('/admin/promos', strictLimiter, async (req, res) => {
   if (!code || !amount) return res.status(400).json({ ok:false, error:'PROMO_CODE_AMOUNT_REQUIRED' });
   const { db } = fb();
   const promo = { code, amount, maxClaims, active: req.body.active !== false, createdAt: now(), actor: adminActor(req) };
-  if (db) await db.collection('promos').doc(code).set(promo, { merge: true });
+  if (db) await Promise.all([db.collection('promos').doc(code).set(promo, { merge: true }), db.collection('promoCodes').doc(code).set(promo, { merge: true })]);
   logAdmin(req, 'admin.promo.save', { code, amount, maxClaims });
   res.json({ ok: true, promo, firestore: !!db });
 });
@@ -239,7 +239,7 @@ router.get('/admin/matrix/issues', (_req, res) => {
   };
   const gameIssues = all
     .filter(x => ['chess','crash','home'].includes(String(x.game || '').toLowerCase()))
-    .filter(x => String(x.severity || 'error') === 'error' || String(x.severity || '') === 'critical' || Number(x.status || 0) >= 500)
+    .filter(x => String(x.severity || 'error') === 'error' || String(x.severity || '') === 'critical' || String(x.severity || '') === 'warning' || Number(x.status || 0) >= 500)
     .map(normalizeIssue)
     .slice(0, 30);
   const systemIssues = all
@@ -254,7 +254,7 @@ router.patch('/admin/matrix/maintenance', strictLimiter, (req, res) => { runtime
 router.post('/admin/matrix/restrict-user', strictLimiter, (req, res) => { logAdmin(req, 'admin.matrix.restrict-user', { identifier:safe(req.body?.identifier,160), action:safe(req.body?.action,80), durationMinutes:Number(req.body?.durationMinutes||0), reason:safe(req.body?.reason,220) }); res.json({ ok:true }); });
 router.post('/admin/matrix/reward-user', strictLimiter, async (req, res) => { const identifier = safe(req.body?.identifier,160); const amount = nonNegativeMoney(req.body?.amount); if (!identifier || !amount) return res.status(400).json({ ok:false, error:'IDENTIFIER_AMOUNT_REQUIRED' }); const result = await incrementBalance(identifier, amount, safe(req.body?.reason || 'admin-matrix-reward',120), req).catch(error => ({ ok:false, error:error.message })); res.json({ ok:!!result.ok, result }); });
 router.post('/admin/matrix/reward-all', strictLimiter, (req, res) => { const amount = nonNegativeMoney(req.body?.amount); logAdmin(req, 'admin.matrix.reward-all.requested', { amount, reason:safe(req.body?.reason,160) }); res.json({ ok:true, dryRun:true, amount }); });
-router.post('/admin/matrix/promo-codes', strictLimiter, async (req, res) => { const code = safe(req.body.code, 40).toUpperCase(); const amount = nonNegativeMoney(req.body.amount); const usageLimit = Math.max(1, Math.min(100000, Math.trunc(Number(req.body.usageLimit || req.body.maxClaims) || 1))); if (!code || !amount) return res.status(400).json({ ok:false, error:'PROMO_CODE_AMOUNT_REQUIRED' }); const { db } = fb(); const promo = { code, amount, usageLimit, maxClaims:usageLimit, onePerAccount:req.body.onePerAccount !== false, description:safe(req.body.description,200), expiresAt: now() + Math.max(1, Number(req.body.durationHours || 24))*3600000, active:true, createdAt:now(), actor:adminActor(req) }; if (db) await db.collection('promos').doc(code).set(promo, { merge:true }); logAdmin(req, 'admin.matrix.promo.create', { code, amount, usageLimit }); res.json({ ok:true, promo }); });
+router.post('/admin/matrix/promo-codes', strictLimiter, async (req, res) => { const code = safe(req.body.code, 40).toUpperCase(); const amount = nonNegativeMoney(req.body.amount); const usageLimit = Math.max(1, Math.min(100000, Math.trunc(Number(req.body.usageLimit || req.body.maxClaims) || 1))); if (!code || !amount) return res.status(400).json({ ok:false, error:'PROMO_CODE_AMOUNT_REQUIRED' }); const { db } = fb(); const promo = { code, amount, usageLimit, maxClaims:usageLimit, onePerAccount:req.body.onePerAccount !== false, description:safe(req.body.description,200), expiresAt: now() + Math.max(1, Number(req.body.durationHours || 24))*3600000, active:true, createdAt:now(), actor:adminActor(req) }; if (db) await Promise.all([db.collection('promos').doc(code).set(promo, { merge:true }), db.collection('promoCodes').doc(code).set(promo, { merge:true })]); logAdmin(req, 'admin.matrix.promo.create', { code, amount, usageLimit }); res.json({ ok:true, promo }); });
 
 router.get('/admin/runtime-logs', (_req, res) => res.json({ ok:true, logs:listAdminLogs() }));
 
