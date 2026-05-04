@@ -13,6 +13,7 @@ const { routeData } = require('./server/core/smartDataRouter');
 const { runtimeStore } = require('./server/core/runtimeStore');
 const { globalChat, localChat, dm, presence } = require('./server/social/socialRuntimeStore');
 const { runSafeFirestoreCleanup } = require('./server/core/firestoreCleanupService');
+const { getProgression } = require('./server/core/progressionService');
 
 process.on('unhandledRejection', (reason) => console.error('[process:unhandledRejection]', reason && reason.stack || reason));
 process.on('uncaughtException', (error) => console.error('[process:uncaughtException]', error && error.stack || error));
@@ -85,6 +86,91 @@ app.use(express.static(__dirname, { extensions: ['html'], maxAge: env.nodeEnv ==
 function healthPayload() { return { ok:true, service:'playmatrix', env:env.nodeEnv, firebaseEnabled: !!fb.enabled, time:Date.now() }; }
 app.get('/healthz', (_req,res)=>res.json(healthPayload()));
 app.get('/api/healthz', (_req,res)=>res.json(healthPayload()));
+
+
+async function optionalFirebaseUser(req) {
+  const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  try {
+    const latest = firebase.initFirebaseAdmin();
+    if (!latest.auth) return null;
+    const decoded = await latest.auth.verifyIdToken(token);
+    return { uid: String(decoded.uid || ''), email: String(decoded.email || '') };
+  } catch (_) {
+    return null;
+  }
+}
+function publicHomeProfile(uid = '', data = {}) {
+  const xpValue = data.accountXp ?? data.xp ?? data.progression?.xp ?? 0;
+  const progression = getProgression(xpValue);
+  const username = String(data.username || data.displayName || data.fullName || data.email || uid || 'Oyuncu').trim();
+  return {
+    uid,
+    username,
+    displayName: username,
+    email: data.email || '',
+    avatar: data.avatar || '/public/assets/avatars/system/fallback.svg',
+    selectedFrame: Math.max(0, Math.min(100, Math.trunc(Number(data.selectedFrame || 0) || 0))),
+    balance: Math.max(0, Number(data.balance || data.mc || 0) || 0),
+    accountXp: progression.xp,
+    xp: progression.xp,
+    accountLevel: progression.level,
+    level: progression.level,
+    progressPercent: progression.progressPercent,
+    accountLevelProgressPct: progression.progressPercent,
+    monthlyActiveScore: Math.max(0, Number(data.monthlyActiveScore || data.activityScore || 0) || 0),
+    stats: data.stats || data.statistics || {},
+    progression
+  };
+}
+async function getHomepageProfiles(limit = 80) {
+  const latest = firebase.initFirebaseAdmin();
+  const db = latest.db;
+  if (!db) return [];
+  try {
+    const snap = await db.collection('users').limit(Math.max(5, Math.min(200, Number(limit) || 80))).get();
+    const rows = [];
+    snap.forEach((doc) => rows.push(publicHomeProfile(doc.id, doc.data() || {})));
+    return rows;
+  } catch (error) {
+    console.warn('[home:summary:leaderboard]', JSON.stringify({ message: error.message }));
+    return [];
+  }
+}
+app.get('/api/home/summary', async (req, res) => {
+  const viewer = await optionalFirebaseUser(req);
+  const latest = firebase.initFirebaseAdmin();
+  let profile = null;
+  if (viewer?.uid && latest.db) {
+    try {
+      const snap = await latest.db.collection('users').doc(viewer.uid).get();
+      profile = publicHomeProfile(viewer.uid, { uid: viewer.uid, email: viewer.email, ...(snap.exists ? snap.data() : {}) });
+    } catch (error) {
+      console.warn('[home:summary:profile]', JSON.stringify({ message: error.message, uid: viewer.uid }));
+      profile = publicHomeProfile(viewer.uid, { email: viewer.email });
+    }
+  }
+  const profiles = await getHomepageProfiles(120);
+  const fallback = profiles.length ? profiles : [publicHomeProfile('playmatrix', { username: 'PlayMatrix', avatar: '/public/assets/images/logo.png', selectedFrame: 100 })];
+  const byLevel = [...fallback].sort((a,b) => Number(b.accountXp || 0) - Number(a.accountXp || 0));
+  const byActivity = [...fallback].sort((a,b) => Number(b.monthlyActiveScore || 0) - Number(a.monthlyActiveScore || 0));
+  const withRank = (rows, metricKey) => rows.slice(0, 25).map((row, index) => ({ ...row, leaderboard: { rank: index + 1, metricKey, metricLabel: metricKey === 'monthlyActiveScore' ? 'Aylık Aktiflik' : 'Hesap XP', metricValue: Number(row[metricKey] || 0) || 0 } }));
+  res.json({
+    ok: true,
+    generatedAt: Date.now(),
+    profile,
+    chatPolicy: CHAT_POLICY,
+    homepage: { sections: ['hero', 'games', 'rewards', 'leaderboard', 'stats', 'social', 'profile'] },
+    leaderboard: {
+      ok: true,
+      generatedAt: Date.now(),
+      tabs: {
+        level: { label: 'En Yüksek Hesap Seviyesi', metricKey: 'accountXp', items: withRank(byLevel, 'accountXp') },
+        activity: { label: 'En Çok Aktif Oyuncular', metricKey: 'monthlyActiveScore', items: withRank(byActivity, 'monthlyActiveScore') }
+      }
+    }
+  });
+});
 
 app.use('/api', require('./server/routes/auth.routes'));
 app.use('/api', require('./server/routes/user.routes'));
@@ -237,9 +323,9 @@ io.on('connection', socket => {
   socket.on('matchmaking:leave', () => socket.emit('matchmaking:left', { ok:true }));
   socket.on('disconnect', () => { const uid = socket.data?.pmUid; runtimeStore.presence.delete(socket.id); if (uid) presence.delete(uid); });
 });
-if (typeof crashGame.installSocket === 'function') crashGame.installSocket(io);
-chessGame.installSocket?.(io);
-pistiGame.installSocket?.(io);
+if (crashGame && typeof crashGame.installSocket === 'function') crashGame.installSocket(io);
+if (chessGame && typeof chessGame.installSocket === 'function') chessGame.installSocket(io);
+if (pistiGame && typeof pistiGame.installSocket === 'function') pistiGame.installSocket(io);
 
 setInterval(()=>{ Object.values(runtimeStore).forEach(store => store.prune && store.prune()); }, 60_000).unref();
 
