@@ -59,8 +59,9 @@ function getCurrentHomeUser() {
 function openHomeAuthSheet(gameName = 'Online oyun') {
   try { if (typeof window.setAuthMode === 'function') window.setAuthMode('login'); } catch (_) {}
   try {
-    if (typeof window.openSheet === 'function') {
-      window.openSheet('auth', 'Hesabına giriş yap', `${gameName} için önce hesabına giriş yapmalısın.`);
+    const sheetOpener = typeof window.openPlayMatrixSheet === 'function' ? window.openPlayMatrixSheet : window.openSheet;
+    if (typeof sheetOpener === 'function') {
+      sheetOpener('auth', 'Hesabına giriş yap', `${gameName} için önce hesabına giriş yapmalısın.`);
       return;
     }
   } catch (_) {}

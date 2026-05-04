@@ -88,7 +88,7 @@ export function createFramePicker({
   }
 
   function getCardStatus(level, selectedFrame, currentLevel) {
-    if (!isFrameUnlocked(level, currentLevel)) return 'Şu anda aktif değil';
+    if (!isFrameUnlocked(level, currentLevel)) return 'Kilitli';
     if (level === selectedFrame) return 'Kullanımda';
     return 'Seç';
   }
@@ -98,7 +98,7 @@ export function createFramePicker({
     const text = host?.querySelector('[data-frame-summary-text]');
     const preview = host?.querySelector('[data-frame-summary-preview]');
     if (title) title.textContent = selectedFrame > 0 ? `Seviye ${selectedFrame} Çerçevesi` : 'Çerçevesiz Görünüm';
-    if (text) text.textContent = `Mevcut seviyen: ${currentLevel}. Kilidi açık olan çerçeveler hızlı render ile gösterilir.`;
+    if (text) text.textContent = `Mevcut seviyen: ${currentLevel}. Kilitli çerçeveler pasif görünür; avatar netliği korunur.`;
     if (preview) mountFramePreview(preview, { avatar, frameLevel: selectedFrame, exactFrameIndex: resolveFrameAssetIndex(selectedFrame), size: 78, extraClass: 'pm-avatar--picker' });
   }
 
