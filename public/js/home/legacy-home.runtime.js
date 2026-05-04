@@ -473,11 +473,11 @@ function getSocialRankMeta(){ return { name: "SEVİYE", className: "rank-level" 
       if (needsFriendLists && state.social.friendsLoading && !state.friends.accepted.length && !state.friends.incoming.length && !state.friends.outgoing.length) {         wrap.appendChild(buildSocialEmptyState("Liste hazırlanıyor", "Arkadaş ve davet verileri yükleniyor..."));         return;       } 
       if (needsFriendLists && state.social.friendsError && !state.friends.accepted.length && !state.friends.incoming.length && !state.friends.outgoing.length) {         wrap.appendChild(buildSocialActionState("Sosyal liste yüklenemedi", state.social.friendsError, "Tekrar Dene", () => retrySocialBootstrap(), "error"));         return;       } 
       if (state.social.activeTab === "global" && state.social.centerLoading && !state.social.centerSummary && !state.lobbyMessages.length) {         wrap.appendChild(buildSocialEmptyState("Sosyal merkez hazırlanıyor", "Özet ve sohbet alanı yükleniyor..."));         return;       } 
-      const items = getSocialListItems(state.social.activeTab);       const selected = ensureSocialSelection();        if (!items.length) {         const emptyMessage = state.social.activeTab === "friends"
+      const items = getSocialListItems(state.social.activeTab);       const selected = ensureSocialSelection();        if (isSocialMobile() && selected && ['global','friends','search','requests','add','invites'].includes(state.social.activeTab)) { state.social.mobilePanelOpen = !!selected; }        if (!items.length) {         const emptyMessage = state.social.activeTab === "friends"
           ? "Henüz arkadaş eklemedin. Sağdaki ekleme sekmesinden yeni bağlantı kurabilirsin."           : state.social.activeTab === "invites"             ? "Davet gönderebilmek için önce en az bir arkadaş eklemelisin."             : state.social.activeTab === "search"                 ? "Mesaj aramak için en az 2 karakter gir."
                 : state.social.activeTab === "requests"                   ? "Şu an bekleyen bir sosyal işlem görünmüyor."                   : "Bu bölüm için gösterilecek kayıt bulunamadı.";         wrap.appendChild(buildSocialEmptyState("Liste boş", emptyMessage));         return;
       }        items.forEach((item) => wrap.appendChild(createSocialListItem(item, item.key === selected?.key)));     } 
-    function setSocialHeader(entry, subtitle = "") {       const title = $("psChatTitle");       const subtitleEl = $("psChatSubtitle");       const avatarWrap = $("psChatAvatar");       const avatarImg = avatarWrap?.querySelector("img");
+    function setSocialHeader(entry, subtitle = "") {       const title = $("psChatTitle");       const subtitleEl = $("psChatSubtitle");       const avatarWrap = $("psChatAvatar");
       const backBtn = $("psMobileBackBtn");       const mainPanel = $("psMainPanel");       const socialLayout = document.querySelector('.sheet-shell.is-social .pm-social-layout');       const chatIsActive = !isSocialMobile() || !!state.social.mobilePanelOpen; 
       if (title) {         title.textContent = entry?.title || entry?.username || "Sosyal Merkez";         title.style.display = "block";       }       if (subtitleEl) {
         subtitleEl.textContent = subtitle;         subtitleEl.style.display = subtitle ? "block" : "none";       }        if (avatarWrap) {
@@ -1191,7 +1191,7 @@ function buildHeroPromoSlides(overview = {}) {
     }
 function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) return [];       if (tabType === 'level') return Array.isArray(currentLeaderboardData?.tabs?.level?.items) ? currentLeaderboardData.tabs.level.items : [];       if (tabType === 'activity') return Array.isArray(currentLeaderboardData?.tabs?.activity?.items) ? currentLeaderboardData.tabs.activity.items : [];
       return [];     }      async function showPlayerStats(uid){       const targetUid = String(uid || '').trim();
-      if (!auth.currentUser) { setAuthMode('login'); openSheet('auth', 'Hesabına giriş yap', 'Oyuncu istatistiklerini görüntülemek için önce hesabına giriş yapmalısın.'); return; }
+      if (!auth.currentUser || !auth.currentUser.uid) { try { closeMatrixModal('playerStatsModal'); } catch (_) {} setAuthMode('login'); openSheet('auth', 'Hesabına giriş yap', 'Oyuncu istatistiklerini görüntülemek için önce hesabına giriş yapmalısın.'); return; }
       if (!targetUid) {         showToast('İstatistikler', 'Oyuncu profili bulunamadı.', 'error');         return;       } 
       const content = $('playerStatsContent');       if (!content) return;        const formatDate = (value, includeTime = false) => {         const date = new Date(Number(value) || 0);
         if (!Number.isFinite(date.getTime()) || date.getTime() <= 0) return '—';         return includeTime ? date.toLocaleString('tr-TR') : date.toLocaleDateString('tr-TR');       };        const createHeader = () => {
@@ -1247,7 +1247,7 @@ function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) r
         if (!isSelf) {           const addFriendButton = document.createElement('button');
           addFriendButton.className = 'btn btn-primary player-stats-action';           addFriendButton.id = 'playerStatsAddFriendBtn';           addFriendButton.type = 'button';           addFriendButton.append(createFaIcon('fa-user-plus'), document.createTextNode('Arkadaş Ekle'));           addFriendButton.addEventListener('click', () => sendFriendRequest(String(p.uid || targetUid)));
           body.appendChild(addFriendButton);         }          content.replaceChildren(createHeader(), body);       } catch (error) {
-        const isAuthError = /oturum|unauth|auth/i.test(String(error?.message || ''));
+        const isAuthError = /oturum|unauth|auth|session|login/i.test(String(error?.message || ''));
         if (isAuthError) {
           setAuthMode('login');
           openSheet('auth', 'Hesabına giriş yap', 'Oyuncu istatistiklerini görüntülemek için önce hesabına giriş yapmalısın.');

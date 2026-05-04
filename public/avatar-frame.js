@@ -25,26 +25,26 @@
   ].map(Object.freeze));
 
   const AVATAR_REFERENCE_SIZE = 64;
-  const DEFAULT_FRAME_PROFILE = Object.freeze({ scale: 1.30, avatar: 0.78, shiftX: '0px', shiftY: '0px' });
+  const DEFAULT_FRAME_PROFILE = Object.freeze({ scale: 1.24, avatar: 0.74, shiftX: '0px', shiftY: '0px' });
   const FRAME_VISUAL_PROFILES = Object.freeze({
-    1: Object.freeze({ scale: 1.30, avatar: 0.76, shiftX: '0px', shiftY: '0px' }),
-    2: Object.freeze({ scale: 1.34, avatar: 0.71, shiftX: '0px', shiftY: '1px' }),
-    3: Object.freeze({ scale: 1.22, avatar: 0.80, shiftX: '0px', shiftY: '0px' }),
-    4: Object.freeze({ scale: 1.30, avatar: 0.76, shiftX: '0px', shiftY: '0px' }),
-    5: Object.freeze({ scale: 1.36, avatar: 0.71, shiftX: '0px', shiftY: '-1px' }),
-    6: Object.freeze({ scale: 1.18, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
-    7: Object.freeze({ scale: 1.34, avatar: 0.74, shiftX: '0px', shiftY: '2px' }),
-    8: Object.freeze({ scale: 1.28, avatar: 0.76, shiftX: '0px', shiftY: '0px' }),
-    9: Object.freeze({ scale: 1.28, avatar: 0.78, shiftX: '0px', shiftY: '0px' }),
-    10: Object.freeze({ scale: 1.24, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
-    11: Object.freeze({ scale: 1.28, avatar: 0.78, shiftX: '0px', shiftY: '0px' }),
-    12: Object.freeze({ scale: 1.29, avatar: 0.80, shiftX: '0px', shiftY: '0px' }),
-    13: Object.freeze({ scale: 1.30, avatar: 0.78, shiftX: '0px', shiftY: '0px' }),
-    14: Object.freeze({ scale: 1.32, avatar: 0.74, shiftX: '0px', shiftY: '0px' }),
-    15: Object.freeze({ scale: 1.28, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
-    16: Object.freeze({ scale: 1.36, avatar: 0.76, shiftX: '0px', shiftY: '0px' }),
-    17: Object.freeze({ scale: 1.30, avatar: 0.78, shiftX: '0px', shiftY: '0px' }),
-    18: Object.freeze({ scale: 1.38, avatar: 0.74, shiftX: '0px', shiftY: '3px' })
+    1: Object.freeze({ scale: 1.24, avatar: 0.73, shiftX: '0px', shiftY: '0px' }),
+    2: Object.freeze({ scale: 1.28, avatar: 0.69, shiftX: '0px', shiftY: '1px' }),
+    3: Object.freeze({ scale: 1.18, avatar: 0.76, shiftX: '0px', shiftY: '0px' }),
+    4: Object.freeze({ scale: 1.24, avatar: 0.73, shiftX: '0px', shiftY: '0px' }),
+    5: Object.freeze({ scale: 1.30, avatar: 0.69, shiftX: '0px', shiftY: '-1px' }),
+    6: Object.freeze({ scale: 1.15, avatar: 0.80, shiftX: '0px', shiftY: '0px' }),
+    7: Object.freeze({ scale: 1.28, avatar: 0.71, shiftX: '0px', shiftY: '2px' }),
+    8: Object.freeze({ scale: 1.22, avatar: 0.73, shiftX: '0px', shiftY: '0px' }),
+    9: Object.freeze({ scale: 1.22, avatar: 0.74, shiftX: '0px', shiftY: '0px' }),
+    10: Object.freeze({ scale: 1.18, avatar: 0.78, shiftX: '0px', shiftY: '0px' }),
+    11: Object.freeze({ scale: 1.22, avatar: 0.74, shiftX: '0px', shiftY: '0px' }),
+    12: Object.freeze({ scale: 1.24, avatar: 0.76, shiftX: '0px', shiftY: '0px' }),
+    13: Object.freeze({ scale: 1.24, avatar: 0.74, shiftX: '0px', shiftY: '0px' }),
+    14: Object.freeze({ scale: 1.26, avatar: 0.70, shiftX: '0px', shiftY: '0px' }),
+    15: Object.freeze({ scale: 1.22, avatar: 0.78, shiftX: '0px', shiftY: '0px' }),
+    16: Object.freeze({ scale: 1.30, avatar: 0.72, shiftX: '0px', shiftY: '0px' }),
+    17: Object.freeze({ scale: 1.24, avatar: 0.74, shiftX: '0px', shiftY: '0px' }),
+    18: Object.freeze({ scale: 1.30, avatar: 0.70, shiftX: '0px', shiftY: '2px' })
   });
 
   function normalizeAssetPath(value = '') {

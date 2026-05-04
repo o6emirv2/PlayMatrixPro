@@ -1365,3 +1365,12 @@ img,svg,canvas,video{max-width:100%;}
   .stat-label{font-size:.58rem!important;padding:3px 7px!important;}
   .stat-balance{font-size:.78rem!important;}
 }
+
+
+/* PLAYMATRIX FINAL v21r2 — Crash compact avatar/topbar parity */
+.pm-game-topbar-avatar-host{width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important;flex:0 0 38px!important;border-radius:50%!important;overflow:hidden!important;}
+.pm-game-topbar-avatar-only,.pm-game-topbar-avatar-host .pm-avatar-img{width:100%!important;height:100%!important;border-radius:50%!important;object-fit:cover!important;}
+.t-avatar-wrap{inline-size:40px!important;block-size:40px!important;}
+.t-avatar-wrap > [data-pm-avatar="true"],.t-avatar-wrap > .pm-avatar{inline-size:40px!important;block-size:40px!important;}
+.t-avatar-wrap .pm-avatar-img,.t-avatar-wrap .t-avatar{transform:translate(-50%,-50%) scale(var(--pm-avatar-scale,.78))!important;}
+.t-avatar-wrap .pm-frame-image,.t-avatar-wrap .pm-avatar-shell__frame,.t-avatar-wrap .t-frame{inline-size:calc(100% * var(--pm-frame-scale,1.20))!important;block-size:calc(100% * var(--pm-frame-scale,1.20))!important;}
