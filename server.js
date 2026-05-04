@@ -132,25 +132,20 @@ async function captureClientError(req, res) {
   const dedupeKey = `clientIssue:${normalizedGame}:${scope}:${message.slice(0,120)}:${String(payload.source || payload.endpoint || '').slice(-80)}:${payload.line || ''}`;
   if (runtimeStore.temporary.get(dedupeKey)) return res.status(202).json({ ok:true, deduped:true });
   runtimeStore.temporary.set(dedupeKey, true, 10 * 60 * 1000);
-  const safePayload = sanitizeRuntimeLogPayload(payload) || {};
   const row = {
+    ...payload,
     id:`client_${normalizedGame}_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     game: normalizedGame,
-    scope: String(safePayload.scope || scope || 'client.error').slice(0, 120),
+    scope,
     area: normalizedGame === 'chess' ? 'Satranç Frontend' : normalizedGame === 'crash' ? 'Crash Frontend' : 'AnaSayfa Frontend',
-    error: String(safePayload.message || safePayload.error || 'Frontend hata kaydı').slice(0, 400),
-    reason: String(safePayload.reason || `Kaynak: ${String(safePayload.source || safePayload.endpoint || 'bilinmiyor').slice(0, 180)}${safePayload.line ? `:${safePayload.line}` : ''}`).slice(0, 400),
-    solution: String(safePayload.solution || 'İlgili oyun script dosyası, socket ACK akışı ve backend API cevabı gerçek hata detayıyla kontrol edilmeli.').slice(0, 400),
-    path: String(safePayload.path || '').slice(0, 180),
-    source: String(safePayload.source || '').slice(0, 180),
-    line: safePayload.line || null,
-    safeContext: safePayload,
+    error: String(payload.message || payload.error || 'Frontend hata kaydı').slice(0, 400),
+    reason: String(payload.reason || `Kaynak: ${String(payload.source || payload.endpoint || 'bilinmiyor').slice(0, 180)}${payload.line ? `:${payload.line}` : ''}`).slice(0, 400),
+    solution: String(payload.solution || 'İlgili oyun script dosyası, socket ACK akışı ve backend API cevabı gerçek hata detayıyla kontrol edilmeli.').slice(0, 400),
     createdAt: Date.now(),
-    severity: safePayload.severity || 'error'
+    severity: payload.severity || 'error'
   };
   runtimeStore.errors.set(row.id, row, 24*3600000);
-  addAdminLog('client.runtime.error', { ...row, level: row.severity === 'critical' ? 'critical' : 'error', source: row.area, category: row.scope, code: 'CLIENT_RUNTIME_ERROR' });
-  console.error('[client:runtime:error]', JSON.stringify({ game: row.game, scope: row.scope, message: row.error, path: row.path, source: row.source, line: row.line }));
+  console.error('[client:runtime:error]', JSON.stringify({ game: row.game, scope: row.scope, message: row.error, path: String(row.path || '').slice(0, 180), source: String(row.source || '').slice(0, 180), line: row.line || null }));
   res.status(202).json({ ok:true, stored:'runtime' });
 }
 app.post('/api/client/error', captureClientError);

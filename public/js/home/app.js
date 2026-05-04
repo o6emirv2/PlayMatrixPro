@@ -1,17 +1,17 @@
 /* PlayMatrix clean: real home orchestrator. Each imported module owns one UI responsibility; legacy runtime remains the compatibility layer until later phases remove the final monolith. */
-import { reportHomeError } from "./dom-utils.js?v=pm21r2";
-import { installHomeWidgetContract } from "./widget-contract.js?v=pm21r2";
-import { installGameRouteNormalizer } from "./game-catalog.js?v=pm21r2";
-import { installAuthModalGuards } from "./auth-modal.js?v=pm21r2";
-import { installProfilePanelGuards } from "./profile-panel.js?v=pm21r2";
-import { installLeaderboardGuards } from "./leaderboard.js?v=pm21r2";
-import { installStatsGuards } from "./stats.js?v=pm21r2";
-import { installSocialEntryGuards } from "./social-entry.js?v=pm21r2";
-import { installHeroSliderGuards } from "./hero-slider.js?v=pm21r2";
-import { installModalSafety } from "./modal.js?v=pm21r2";
-import { installRewardUiGuards } from "./reward-ui.js?v=pm21r2";
-import { installInviteUiGuards } from "./invite-ui.js?v=pm21r2";
-import "./legacy-home.runtime.js?v=pm21r2";
+import { reportHomeError } from "./dom-utils.js";
+import { installHomeWidgetContract } from "./widget-contract.js";
+import { installGameRouteNormalizer } from "./game-catalog.js";
+import { installAuthModalGuards } from "./auth-modal.js";
+import { installProfilePanelGuards } from "./profile-panel.js";
+import { installLeaderboardGuards } from "./leaderboard.js";
+import { installStatsGuards } from "./stats.js";
+import { installSocialEntryGuards } from "./social-entry.js";
+import { installHeroSliderGuards } from "./hero-slider.js";
+import { installModalSafety } from "./modal.js";
+import { installRewardUiGuards } from "./reward-ui.js";
+import { installInviteUiGuards } from "./invite-ui.js";
+import "./legacy-home.runtime.js";
 
 let booted = false;
 

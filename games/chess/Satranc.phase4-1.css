@@ -642,26 +642,3 @@
 #myAvatarHost [data-frame-index="18"],#oppAvatarHost [data-frame-index="18"],#myAvatarHost [data-frame-asset-index="18"],#oppAvatarHost [data-frame-asset-index="18"]{--pm-avatar-scale:.88!important;--pm-frame-scale:1.18!important;--pm-frame-shift-x:0px!important;--pm-frame-shift-y:0px!important;}
 .pm-game-topbar-avatar-host [class*="frame"],.pm-game-topbar-avatar-host .pm-frame-image,.pm-game-topbar-avatar-host .pm-avatar-shell__frame{display:none!important;}
 @media (max-width:560px){.player-info{grid-template-columns:70px minmax(0,1fr) 26px!important;}#myAvatarHost,#oppAvatarHost,#myAvatarHost > [data-pm-avatar="true"],#oppAvatarHost > [data-pm-avatar="true"],#myAvatarHost > .pm-avatar,#oppAvatarHost > .pm-avatar{inline-size:62px!important;block-size:62px!important;min-inline-size:62px!important;min-block-size:62px!important;max-inline-size:62px!important;max-block-size:62px!important;}}
-
-/* PLAYMATRIX FINAL v20 — viewport initial-scale=1.0 CSS compact parity */
-*,*::before,*::after{box-sizing:border-box;}
-html{width:100%;max-width:100%;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%;font-size:clamp(14.4px,3.85vw,16px);}
-body{width:100%;max-width:100%;overflow:hidden!important;margin:0;}
-img,svg,canvas,video{max-width:100%;}
-@media (max-width:720px){
-  .top-bar-full{height:calc(68px + env(safe-area-inset-top,0px))!important;padding-inline:clamp(9px,2.6vw,14px)!important;}
-  .chess-shell,.chess-stage,.lobby-card,.game-card,.chess-modal{max-width:100%;}
-  .player-plate.active{transform:none!important;will-change:auto!important;}
-  .account-level-section{gap:10px!important;}
-  .action-icon-btn{width:34px!important;height:34px!important;}
-}
-
-
-/* PLAYMATRIX FINAL v21r2 — Satranç compact avatar/topbar parity */
-.pm-game-topbar-avatar-host{width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important;flex:0 0 38px!important;border-radius:50%!important;overflow:hidden!important;}
-.pm-game-topbar-avatar-host [data-pm-avatar="true"],.pm-game-topbar-avatar-host .pm-avatar{width:38px!important;height:38px!important;}
-.pm-game-topbar-avatar-fallback,.pm-game-topbar-avatar-host .pm-avatar-img{width:100%!important;height:100%!important;border-radius:50%!important;object-fit:cover!important;}
-#myAvatarHost,#oppAvatarHost,.pm-game-avatar-shell,.t-avatar-wrap{width:44px!important;height:44px!important;min-width:44px!important;min-height:44px!important;}
-.pm-game-avatar-shell [data-pm-avatar="true"],.t-avatar-wrap [data-pm-avatar="true"]{width:44px!important;height:44px!important;}
-.pm-game-avatar-shell .pm-avatar-img,.t-avatar-wrap .pm-avatar-img,.pm-game-avatar-shell .p-avatar,.t-avatar-wrap .t-avatar{transform:translateZ(0) scale(var(--pm-avatar-scale,.78))!important;}
-.pm-game-avatar-shell .pm-frame-image,.pm-game-avatar-shell .pm-avatar-shell__frame,.t-avatar-wrap .pm-frame-image,.t-avatar-wrap .pm-avatar-shell__frame,.pm-game-avatar-shell .pm-game-frame,.t-avatar-wrap .t-frame{width:calc(100% * var(--pm-frame-scale,1.20))!important;height:calc(100% * var(--pm-frame-scale,1.20))!important;}

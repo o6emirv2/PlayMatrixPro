@@ -1460,7 +1460,7 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         if (balanceRefreshTimer) return;
         balanceRefreshTimer = setInterval(() => {
             if (document.visibilityState === 'visible' && auth.currentUser) updateBal();
-        }, 30000);
+        }, 12000);
     }
 
 
@@ -1784,7 +1784,13 @@ async function initPlayMatrixRealtime() {
         pmRtEnsureShell();
         await pmRtRefreshFriendCounts(true);
         await pmRtLoadSocketScript();
-        const sock = await connectStream();
+        const sock = await core.createAuthedSocket(null, {
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 8,
+            timeout: 6000,
+            extraOptions: { reconnectionDelay: 1000, reconnectionDelayMax: 5000 }
+        });
         return pmRtBindSocketEvents(sock);
     })();
 
@@ -1800,7 +1806,7 @@ function disposePlayMatrixRealtime() {
     pmRtCloseModal();
     if (balanceRefreshTimer) { clearInterval(balanceRefreshTimer); balanceRefreshTimer = null; }
     if (socket) { try { socket.emit('crash:unsubscribe'); } catch (_) {} }
-    if (pmRealtimeSocket && pmRealtimeSocket !== socket) {
+    if (pmRealtimeSocket) {
         try { pmRealtimeSocket.close(); } catch (_) {}
     }
     pmRealtimeSocket = null;
