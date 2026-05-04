@@ -1,10 +1,26 @@
-const express = require('express'); const { requireAuth } = require('../core/security'); const { initFirebaseAdmin } = require('../config/firebaseAdmin'); const { globalChat, localChat, dm, presence } = require('../social/socialRuntimeStore'); const friends = require('../social/friendshipService');
+const express = require('express');
+const { requireAuth } = require('../core/security');
+const { presence } = require('../social/socialRuntimeStore');
+
 const router = express.Router();
-router.get('/social/chat/:scope', (req,res)=>{ const store = req.params.scope === 'tr' ? localChat : globalChat; res.json({ ok:true, messages: store.values().slice(-100) }); });
-router.post('/social/chat/:scope', requireAuth, (req,res)=>{ const store = req.params.scope === 'tr' ? localChat : globalChat; const msg = { id:`m_${Date.now()}_${Math.random().toString(36).slice(2)}`, uid:req.user.uid, text:String(req.body.text||'').slice(0,500), at:Date.now() }; store.set(msg.id,msg); res.json({ ok:true, message:msg }); });
-router.get('/social/dm/:peerUid', requireAuth, (req,res)=>{ const key = [req.user.uid, req.params.peerUid].sort().join('_'); res.json({ ok:true, messages: dm.get(key) || [] }); });
-router.post('/social/dm/:peerUid', requireAuth, (req,res)=>{ const key = [req.user.uid, req.params.peerUid].sort().join('_'); const list = dm.get(key) || []; const msg={ id:`dm_${Date.now()}`, from:req.user.uid, to:req.params.peerUid, text:String(req.body.text||'').slice(0,500), at:Date.now() }; list.push(msg); dm.set(key, list.slice(-200)); res.json({ ok:true, message:msg }); });
-router.post('/social/presence', requireAuth, (req,res)=>{ presence.set(req.user.uid, { uid:req.user.uid, status:String(req.body.status||'online'), game:req.body.game||'', at:Date.now() }); res.json({ ok:true }); });
-router.get('/social/friends', requireAuth, async (req,res)=>{ const { db } = initFirebaseAdmin(); res.json({ ok:true, friends: await friends.listFriends(db, req.user.uid) }); });
-router.post('/social/friends/request', requireAuth, async (req,res)=>{ const { db } = initFirebaseAdmin(); res.json(await friends.requestFriend(db, req.user.uid, String(req.body.toUid||''))); });
+const SOCIAL_DISABLED_PAYLOAD = Object.freeze({
+  ok: true,
+  disabled: true,
+  status: 'maintenance',
+  message: 'Sosyal Merkez anlık kullanıma kapalıdır. Bildirimler paneli aktif kalır.'
+});
+
+router.get('/social/status', (_req, res) => res.json(SOCIAL_DISABLED_PAYLOAD));
+router.get('/social/chat/:scope', (_req, res) => res.json({ ...SOCIAL_DISABLED_PAYLOAD, messages: [] }));
+router.post('/social/chat/:scope', requireAuth, (_req, res) => res.status(423).json({ ...SOCIAL_DISABLED_PAYLOAD, ok: false, error: 'SOCIAL_CENTER_DISABLED' }));
+router.get('/social/dm/:peerUid', requireAuth, (_req, res) => res.json({ ...SOCIAL_DISABLED_PAYLOAD, messages: [] }));
+router.post('/social/dm/:peerUid', requireAuth, (_req, res) => res.status(423).json({ ...SOCIAL_DISABLED_PAYLOAD, ok: false, error: 'SOCIAL_CENTER_DISABLED' }));
+router.post('/social/presence', requireAuth, (req, res) => { presence.set(req.user.uid, { uid: req.user.uid, status: 'offline', disabled: true, at: Date.now() }); res.json(SOCIAL_DISABLED_PAYLOAD); });
+router.get('/social/friends', requireAuth, (_req, res) => res.json({ ...SOCIAL_DISABLED_PAYLOAD, friends: [] }));
+router.post('/social/friends/request', requireAuth, (_req, res) => res.status(423).json({ ...SOCIAL_DISABLED_PAYLOAD, ok: false, error: 'SOCIAL_CENTER_DISABLED' }));
+router.get('/chat/direct/list', requireAuth, (_req, res) => res.json({ ...SOCIAL_DISABLED_PAYLOAD, items: [] }));
+router.get('/chat/direct/search', requireAuth, (_req, res) => res.json({ ...SOCIAL_DISABLED_PAYLOAD, items: [] }));
+router.get('/friends/list', requireAuth, (_req, res) => res.json({ ...SOCIAL_DISABLED_PAYLOAD, counts: { accepted: 0, incoming: 0, outgoing: 0 }, friends: [] }));
+router.post('/friends/request', requireAuth, (_req, res) => res.status(423).json({ ...SOCIAL_DISABLED_PAYLOAD, ok: false, error: 'SOCIAL_CENTER_DISABLED' }));
+
 module.exports = router;

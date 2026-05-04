@@ -1,70 +1,119 @@
 const express = require('express');
+const crypto = require('crypto');
 const { requireAuth } = require('../core/security');
 const { initFirebaseAdmin } = require('../config/firebaseAdmin');
 const { runtimeStore } = require('../core/runtimeStore');
 const { shouldShowNotification, markNotificationShown } = require('../core/notificationService');
+
 const router = express.Router();
-const clean = (v, max = 500) => String(v || '').trim().replace(/[<>]/g, '').slice(0, max);
-function uidOf(req) { return String(req.user?.uid || '').trim(); }
-function notificationKey(uid) { return `home:notifications:${uid}`; }
-function normalizeNotification(raw = {}, index = 0) {
+const NOTIFICATION_TTL = 30 * 24 * 60 * 60 * 1000;
+
+function normalizeNotification(id, data = {}) {
   return {
-    id: clean(raw.id || raw.notificationId || `notification_${index}`, 160),
-    title: clean(raw.title || raw.type || 'Bildirim', 120),
-    message: clean(raw.message || raw.text || raw.body || '', 700),
-    type: clean(raw.type || 'system', 80),
-    read: !!raw.read,
-    at: Number(raw.at || raw.createdAt || Date.now()) || Date.now(),
-    source: clean(raw.source || 'home', 120)
+    id: data.id || id || `ntf_${crypto.randomUUID()}`,
+    uid: data.uid || data.userId || data.targetUid || '',
+    type: data.type || 'system',
+    title: data.title || data.heading || 'Bildirim',
+    message: data.message || data.text || data.body || '',
+    icon: data.icon || (data.type === 'reward' ? 'fa-gift' : data.type === 'social' ? 'fa-comments' : 'fa-bell'),
+    read: data.read === true || data.seen === true,
+    at: Number(data.at || data.createdAt || data.timestamp || Date.now()) || Date.now(),
+    source: data.source || 'runtime'
   };
 }
+function runtimeItemsFor(uid) {
+  return runtimeStore.notifications.entries()
+    .map(([id, value]) => [id, normalizeNotification(id, value)])
+    .filter(([, row]) => String(row.uid || '') === uid || String(row.targetUid || '') === uid || String(row.userId || '') === uid)
+    .map(([, row]) => row);
+}
+async function firestoreItemsFor(uid) {
+  const { db } = initFirebaseAdmin();
+  if (!db) return [];
+  const collections = ['notifications', 'userNotifications'];
+  const rows = [];
+  for (const collectionName of collections) {
+    for (const fieldName of ['uid', 'userId', 'targetUid']) {
+      try {
+        const snap = await db.collection(collectionName).where(fieldName, '==', uid).limit(100).get();
+        snap.forEach((doc) => { const data = doc.data() || {}; if (!data.cleared) rows.push(normalizeNotification(doc.id, { ...data, source: collectionName })); });
+      } catch (_) {}
+    }
+  }
+  const byId = new Map();
+  rows.forEach((row) => byId.set(row.id, row));
+  return [...byId.values()];
+}
+
 router.get('/notifications', requireAuth, async (req, res) => {
-  const uid = uidOf(req);
-  let items = runtimeStore.temporary.get(notificationKey(uid)) || [];
-  const { db } = initFirebaseAdmin();
-  if (db) {
-    try {
-      const snap = await db.collection('notifications').where('uid', '==', uid).orderBy('createdAt', 'desc').limit(50).get();
-      const persistent = [];
-      snap.forEach((doc) => persistent.push(normalizeNotification({ id: doc.id, ...doc.data() }, persistent.length)));
-      if (persistent.length) items = [...persistent, ...items].slice(0, 50);
-    } catch (_) {}
-  }
-  items = items.map(normalizeNotification).sort((a, b) => Number(b.at || 0) - Number(a.at || 0));
-  res.json({ ok:true, items, unread: items.filter((item) => !item.read).length, summary:{ total:items.length, unread:items.filter((item) => !item.read).length } });
+  const uid = req.user.uid;
+  const rows = [...runtimeItemsFor(uid), ...(await firestoreItemsFor(uid))]
+    .sort((a, b) => Number(b.at || 0) - Number(a.at || 0))
+    .slice(0, 150);
+  const unread = rows.filter((row) => !row.read).length;
+  res.json({ ok: true, items: rows, unread, summary: { total: rows.length, unread } });
 });
-router.post('/notifications/check', requireAuth, async (req,res)=>{ const { db } = initFirebaseAdmin(); const notificationId = String(req.body.notificationId || ''); res.json({ ok:true, show: await shouldShowNotification({ userId:req.user.uid, notificationId, db }) }); });
-router.post('/notifications/ack', requireAuth, async (req,res)=>{ const { db } = initFirebaseAdmin(); res.json(await markNotificationShown({ userId:req.user.uid, notificationId:String(req.body.notificationId||''), type:String(req.body.type||'generic'), db })); });
+
 router.post('/notifications/read-all', requireAuth, async (req, res) => {
-  const uid = uidOf(req);
-  const items = (runtimeStore.temporary.get(notificationKey(uid)) || []).map((item) => ({ ...item, read:true, readAt:Date.now() }));
-  runtimeStore.temporary.set(notificationKey(uid), items, 30 * 86400000);
+  const uid = req.user.uid;
+  let updated = 0;
+  for (const [key, raw] of runtimeStore.notifications.entries()) {
+    const row = normalizeNotification(key, raw);
+    if (String(row.uid || '') === uid || String(raw?.targetUid || '') === uid || String(raw?.userId || '') === uid) {
+      runtimeStore.notifications.set(key, { ...raw, read: true, seen: true, readAt: Date.now() }, NOTIFICATION_TTL);
+      updated += 1;
+    }
+  }
   const { db } = initFirebaseAdmin();
   if (db) {
-    try {
-      const snap = await db.collection('notifications').where('uid', '==', uid).limit(100).get();
-      await Promise.all(snap.docs.map((doc) => doc.ref.set({ read:true, readAt:Date.now() }, { merge:true })));
-    } catch (_) {}
+    for (const collectionName of ['notifications', 'userNotifications']) {
+      for (const fieldName of ['uid', 'userId', 'targetUid']) {
+        try {
+          const snap = await db.collection(collectionName).where(fieldName, '==', uid).limit(100).get();
+          const batch = db.batch();
+          snap.forEach((doc) => { batch.set(doc.ref, { read: true, seen: true, readAt: Date.now() }, { merge: true }); updated += 1; });
+          if (!snap.empty) await batch.commit();
+        } catch (_) {}
+      }
+    }
   }
-  res.json({ ok:true, unread:0 });
+  res.json({ ok: true, updated });
 });
-router.post('/notifications/read', requireAuth, async (req, res) => {
-  const uid = uidOf(req);
-  const id = clean(req.body?.id || req.body?.notificationId, 160);
-  const items = (runtimeStore.temporary.get(notificationKey(uid)) || []).map((item) => String(item.id) === id ? { ...item, read:true, readAt:Date.now() } : item);
-  runtimeStore.temporary.set(notificationKey(uid), items, 30 * 86400000);
-  res.json({ ok:true });
-});
+
 router.post('/notifications/clear', requireAuth, async (req, res) => {
-  const uid = uidOf(req);
-  runtimeStore.temporary.delete(notificationKey(uid));
+  const uid = req.user.uid;
+  let cleared = 0;
+  for (const [key, raw] of runtimeStore.notifications.entries()) {
+    if (String(raw?.uid || raw?.userId || raw?.targetUid || '') === uid) {
+      runtimeStore.notifications.delete(key);
+      cleared += 1;
+    }
+  }
   const { db } = initFirebaseAdmin();
   if (db) {
-    try {
-      const snap = await db.collection('notifications').where('uid', '==', uid).limit(100).get();
-      await Promise.all(snap.docs.map((doc) => doc.ref.delete()));
-    } catch (_) {}
+    for (const collectionName of ['notifications', 'userNotifications']) {
+      for (const fieldName of ['uid', 'userId', 'targetUid']) {
+        try {
+          const snap = await db.collection(collectionName).where(fieldName, '==', uid).limit(100).get();
+          const batch = db.batch();
+          snap.forEach((doc) => { batch.set(doc.ref, { cleared: true, clearedAt: Date.now(), read: true, seen: true }, { merge: true }); cleared += 1; });
+          if (!snap.empty) await batch.commit();
+        } catch (_) {}
+      }
+    }
   }
-  res.json({ ok:true, items:[], unread:0, summary:{ total:0, unread:0 } });
+  res.json({ ok: true, cleared });
 });
+
+router.post('/notifications/check', requireAuth, async (req, res) => {
+  const { db } = initFirebaseAdmin();
+  const notificationId = String(req.body.notificationId || '');
+  res.json({ ok: true, show: await shouldShowNotification({ userId: req.user.uid, notificationId, db }) });
+});
+
+router.post('/notifications/ack', requireAuth, async (req, res) => {
+  const { db } = initFirebaseAdmin();
+  res.json(await markNotificationShown({ userId: req.user.uid, notificationId: String(req.body.notificationId || ''), type: String(req.body.type || 'generic'), db }));
+});
+
 module.exports = router;

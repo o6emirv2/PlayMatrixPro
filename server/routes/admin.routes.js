@@ -24,6 +24,23 @@ function adminActor(req) { return { uid: req.user?.uid || '', email: req.user?.e
 function logAdmin(req, event, payload = {}) {
   return addAdminLog(event, { ...payload, actor: adminActor(req), path: req.originalUrl, at: now() });
 }
+
+function pushAdminRewardNotification(uid, amount, reason = 'admin-reward') {
+  if (!uid || Number(amount || 0) <= 0) return;
+  const id = `admin_reward_${uid}_${Date.now()}_${crypto.randomUUID()}`;
+  runtimeStore.notifications.set(id, {
+    id,
+    uid,
+    type: 'reward',
+    title: 'Admin Ödülü',
+    message: `${Number(amount || 0).toLocaleString('tr-TR')} MC ödül hesabına eklendi.`,
+    icon: 'fa-gift',
+    source: 'admin-panel',
+    reason,
+    read: false,
+    at: now()
+  }, 30 * 24 * 60 * 60 * 1000);
+}
 function publicUser(uid, data = {}) {
   const xp = Number(data.accountXp ?? data.xp ?? 0) || 0;
   const progression = getProgression(xp);
@@ -76,6 +93,7 @@ async function incrementBalance(uid, amount, reason, req) {
   const key = `admin-economy:${uid}:${crypto.randomUUID()}`;
   if (!db || !admin) {
     logAdmin(req, 'admin.balance.local', { uid, amount: safeAmount, reason, key });
+    pushAdminRewardNotification(uid, safeAmount, reason);
     return { ok: true, firestore: false, amount: safeAmount };
   }
   let nextBalance = 0;
@@ -90,6 +108,7 @@ async function incrementBalance(uid, amount, reason, req) {
     tx.set(auditRef, { uid, amount: safeAmount, reason, balanceAfter: nextBalance, actor: adminActor(req), type: 'admin-balance', at: now() }, { merge: true });
   });
   logAdmin(req, 'admin.balance.update', { uid, amount: safeAmount, reason, key, balanceAfter: nextBalance });
+  pushAdminRewardNotification(uid, safeAmount, reason);
   return { ok: true, firestore: true, amount: safeAmount, balance: nextBalance };
 }
 

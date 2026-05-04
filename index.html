@@ -20,8 +20,9 @@
   <meta property="og:image" content="https://playmatrix.com.tr/public/assets/images/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Montserrat:wght@800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Montserrat:wght@800;900&family=Orbitron:wght@700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="/public/avatar-frame.css" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body data-pm-page="home" data-auth="unknown">
@@ -32,14 +33,17 @@
         <img src="/public/assets/images/logo.png" alt="PlayMatrix" class="pm-brand-logo" />
         <span class="pm-brand-word">PlayMatrix</span>
       </button>
+
       <div class="pm-header-center" id="authBalanceChip" hidden>
         <span class="pm-balance-coin">MC</span>
         <strong id="headerBalance">0</strong>
       </div>
+
       <div class="pm-header-actions pm-guest-actions" id="guestActions">
         <button class="pm-auth-text" type="button" data-open-auth="login">Giriş Yap</button>
         <button class="pm-btn pm-btn-primary" type="button" data-open-auth="register">Kayıt Ol</button>
       </div>
+
       <button class="pm-user-chip" id="profileDrawerOpen" type="button" aria-label="Profil menüsünü aç" hidden>
         <span class="pm-user-name" id="headerUsername">Oyuncu</span>
         <span class="pm-user-avatar" id="headerAvatar"></span>
@@ -61,7 +65,7 @@
           <div class="pm-slide is-active" data-slide="0">
             <span class="pm-slide-tag"><i class="fa-solid fa-user-plus"></i> Kayıt Ödülü</span>
             <h1>Kayıt ol, PlayMatrix hesabın oyunlara hazır başlasın.</h1>
-            <p>Yeni hesap oluşturulduğunda 50.000 MC kayıt ödülü tek seferlik ve güvenli profil modeline işlenir.</p>
+            <p>Yeni hesap oluşturulduğunda kayıt ödülü hesabına backend kontrollü ve tek seferlik tanımlanır.</p>
             <div class="pm-slide-actions">
               <button class="pm-btn pm-btn-primary" type="button" data-open-auth="register">Kayıt Ol</button>
               <button class="pm-btn pm-btn-dark" type="button" data-scroll-target="gamesSection">Oyunları Gör</button>
@@ -70,13 +74,13 @@
           <div class="pm-slide" data-slide="1">
             <span class="pm-slide-tag"><i class="fa-solid fa-envelope-circle-check"></i> E-posta Onayı</span>
             <h2>E-postanı onayla, doğrulama ödülünü güvenli al.</h2>
-            <p>Doğrulama sonrası ödül bildirimi idempotency korumasıyla kayıt altına alınır ve profilinde görünür.</p>
+            <p>E-posta onayı sonrası ödül bildirimi tekrar etmeden, idempotency korumasıyla profil hesabına işlenir.</p>
             <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-open-modal="emailModal">E-posta İşlemleri</button></div>
           </div>
           <div class="pm-slide" data-slide="2">
             <span class="pm-slide-tag"><i class="fa-solid fa-chart-line"></i> Aktif Oyuncu Ödülü</span>
-            <h2>Aktif kal, oyuncu ödülünü ve liderliğini takip et.</h2>
-            <p>Aktiflik, oyun içi katılım ve canlı profil modelindeki doğrulanmış verilerle senkron gösterilir.</p>
+            <h2>Aktif kal, aylık aktif oyuncu ödülünü takip et.</h2>
+            <p>Aktiflik, oyun içi katılım ve profil modelindeki doğrulanmış verilerle izlenir; AnaSayfa’da senkron gösterilir.</p>
             <div class="pm-slide-actions"><button class="pm-btn pm-btn-primary" type="button" data-scroll-target="leaderboardSection">Liderliği Gör</button></div>
           </div>
           <div class="pm-slider-dots" id="heroDots" aria-hidden="true"></div>
@@ -90,11 +94,9 @@
         <button type="button" class="pm-yellow-ticket" data-open-modal="promoModal"><span><i class="fa-solid fa-ticket"></i></span><strong>Promosyon</strong></button>
         <button type="button" class="pm-yellow-ticket" data-open-modal="supportModal"><span><i class="fa-solid fa-headset"></i></span><strong>Destek</strong></button>
       </section>
-
       <section class="pm-section pm-games-section" id="gamesSection">
         <div class="pm-section-head pm-games-head">
           <div>
-            <span class="pm-kicker">Giriş Gerekli</span>
             <h2>OYUNLAR</h2>
             <p class="pm-section-subtitle">Crash, Satranç, Pişti ve klasik PlayMatrix oyunları tek güvenli giriş modeliyle açılır.</p>
           </div>
@@ -103,10 +105,7 @@
       </section>
 
       <section class="pm-section" id="leaderboardSection">
-        <div class="pm-section-head">
-          <div><span class="pm-kicker">Canlı Profil Modeli</span><h2>Liderlik</h2></div>
-          <div class="pm-tabs"><button class="is-active" data-leader-tab="level" type="button">Seviye</button><button data-leader-tab="activity" type="button">Aktiflik</button></div>
-        </div>
+        <div class="pm-section-head"><div><span class="pm-kicker">Canlı Profil Modeli</span><h2>Liderlik</h2></div><div class="pm-tabs"><button class="is-active" data-leader-tab="level" type="button">Seviye</button><button data-leader-tab="activity" type="button">Aktiflik</button></div></div>
         <div class="pm-leader-list" id="leaderboardList" aria-live="polite"></div>
       </section>
 
@@ -149,52 +148,45 @@
         <h2 id="drawerUsername">Oyuncu</h2>
         <p id="drawerEmail">Oturum bekleniyor</p>
       </div>
-      <button class="pm-btn pm-btn-primary pm-drawer-bonus" type="button" data-open-modal="wheelModal"><i class="fa-solid fa-gift"></i> Bonus Talep</button>
-      <div class="pm-level-card">
-        <div><span>Hesap Seviyesi</span><strong id="drawerLevel">Seviye 1</strong></div>
-        <div><span>Sonraki Hedef</span><strong id="drawerNext">Seviye 2</strong></div>
-        <div class="pm-progress"><span id="drawerProgressFill"></span></div>
-        <small id="drawerProgressText">0.0%</small>
-      </div>
-      <div class="pm-drawer-menu">
-        <button type="button" data-open-modal="accountModal"><i class="fa-solid fa-list-check"></i>Profilim</button>
-        <button type="button" data-open-modal="notificationsModal"><i class="fa-solid fa-bell"></i>Bildirimler</button>
-        <button type="button" data-open-modal="socialModal"><i class="fa-solid fa-people-group"></i>Sosyal Merkez</button>
-        <button type="button" data-open-modal="wheelModal"><i class="fa-solid fa-dharmachakra"></i>Günlük Çark</button>
-        <button type="button" data-open-modal="promoModal"><i class="fa-solid fa-ticket"></i>Promosyon Kodu</button>
-        <button type="button" data-open-modal="betHistoryModal"><i class="fa-solid fa-receipt"></i>Bahis Geçmişi</button>
-        <button type="button" data-open-modal="sessionHistoryModal"><i class="fa-solid fa-clock-rotate-left"></i>Oturum Geçmişi</button>
-        <button type="button" data-open-modal="accountStatsModal"><i class="fa-solid fa-chart-simple"></i>Hesap İstatistikleri</button>
-        <button type="button" data-logout class="is-danger"><i class="fa-solid fa-power-off"></i>Güvenli Çıkış</button>
+      <div class="pm-drawer-menu" aria-label="Profil işlemleri">
+        <button type="button" data-open-modal="accountModal"><i class="fa-solid fa-list-check"></i><span>Profilim</span></button>
+        <button type="button" data-open-modal="notificationsModal"><i class="fa-solid fa-bell"></i><span>Bildirimler</span><em id="drawerUnreadBadge" hidden>0</em></button>
+        <button type="button" data-open-modal="socialModal"><i class="fa-solid fa-people-group"></i><span>Sosyal Merkez</span></button>
+        <button type="button" data-open-modal="wheelModal"><i class="fa-solid fa-dharmachakra"></i><span>Günlük Çark</span></button>
+        <button type="button" data-open-modal="promoModal"><i class="fa-solid fa-ticket"></i><span>Promosyon Kodu</span></button>
+        <button type="button" data-open-modal="betHistoryModal"><i class="fa-solid fa-receipt"></i><span>Bahis Geçmişi</span></button>
+        <button type="button" data-open-modal="sessionHistoryModal"><i class="fa-solid fa-newspaper"></i><span>Oturum Geçmişi</span></button>
+        <button type="button" data-open-modal="accountStatsModal"><i class="fa-solid fa-chart-simple"></i><span>Hesap İstatistikleri</span></button>
+        <button type="button" data-logout class="is-danger"><i class="fa-solid fa-power-off"></i><span>Güvenli Çıkış</span></button>
       </div>
     </div>
   </aside>
 
   <section class="pm-modal" id="authModal" aria-hidden="true"><div class="pm-modal-panel pm-auth-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="authModal"><i class="fa-solid fa-xmark"></i></button><div id="authView"></div></div></section>
-  <section class="pm-modal" id="accountModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="accountModal"><i class="fa-solid fa-xmark"></i></button><h2>Profilim</h2><div id="accountBody" class="pm-modal-body"></div></div></section>
-  <section class="pm-modal" id="accountStatsModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="accountStatsModal"><i class="fa-solid fa-xmark"></i></button><h2>Hesap İstatistikleri</h2><div id="accountStatsBody" class="pm-modal-body"></div></div></section>
-  <section class="pm-modal" id="playerStatsModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="playerStatsModal"><i class="fa-solid fa-xmark"></i></button><h2>Oyuncu İstatistikleri</h2><div id="playerStatsBody" class="pm-modal-body"></div></div></section>
-  <section class="pm-modal" id="betHistoryModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="betHistoryModal"><i class="fa-solid fa-xmark"></i></button><h2>Bahis Geçmişi</h2><div id="betHistoryBody" class="pm-modal-body"></div></div></section>
-  <section class="pm-modal" id="sessionHistoryModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="sessionHistoryModal"><i class="fa-solid fa-xmark"></i></button><h2>Oturum Geçmişi</h2><div id="sessionHistoryBody" class="pm-modal-body"></div></div></section>
-  <section class="pm-modal" id="wheelModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="wheelModal"><i class="fa-solid fa-xmark"></i></button><h2>Günlük Çark</h2><div class="pm-wheel-visual" id="wheelVisual"><span>MC</span></div><p class="pm-muted">Her gece 00:00 Türkiye saatinde yenilenir.</p><button class="pm-btn pm-btn-primary pm-full" id="spinWheelBtn" type="button">Çarkı Çevir</button><div id="wheelResult" class="pm-result"></div></div></section>
-  <section class="pm-modal" id="promoModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="promoModal"><i class="fa-solid fa-xmark"></i></button><h2>Promosyon Kodu</h2><label class="pm-field"><span>Kod</span><input id="promoCodeInput" placeholder="PROMO KODUNUZU GİRİN" autocomplete="off" /></label><button class="pm-btn pm-btn-primary pm-full" id="claimPromoBtn" type="button">Kodu Kullan</button><div id="promoResult" class="pm-result"></div></div></section>
+  <section class="pm-modal" id="accountModal" aria-hidden="true"><div class="pm-modal-panel pm-account-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="accountModal"><i class="fa-solid fa-xmark"></i></button><h2>Profilim</h2><div id="accountBody" class="pm-modal-body"></div></div></section>
+  <section class="pm-modal" id="wheelModal" aria-hidden="true"><div class="pm-modal-panel pm-wheel-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="wheelModal"><i class="fa-solid fa-xmark"></i></button><h2>Günlük Çark</h2><div class="pm-real-wheel-wrap"><div class="pm-wheel-pointer"></div><div class="pm-real-wheel" id="dailyWheelVisual" aria-hidden="true"><span>10K</span><span>20K</span><span>25K</span><span>45K</span><span>65K</span><span>90K</span><span>120K</span><span>1M</span></div></div><p class="pm-muted">Her gece 00:00 Türkiye saatinde yenilenir. Sonuç sunucu tarafından doğrulanır.</p><button class="pm-btn pm-btn-primary pm-full" id="spinWheelBtn" type="button">Çarkı Çevir</button><div id="wheelResult" class="pm-result"></div></div></section>
+  <section class="pm-modal" id="promoModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="promoModal"><i class="fa-solid fa-xmark"></i></button><h2>Promosyon Kodu</h2><label class="pm-field pm-icon-field"><span>Promo Kod Sorgulama</span><i class="fa-solid fa-cart-shopping"></i><input id="promoCodeInput" placeholder="Promosyon kodunuzu girin" autocomplete="off" /></label><button class="pm-btn pm-btn-primary pm-full" id="claimPromoBtn" type="button">Kodu Kullan</button><div id="promoResult" class="pm-result"></div></div></section>
   <section class="pm-modal" id="inviteModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="inviteModal"><i class="fa-solid fa-xmark"></i></button><h2>Davet Et ve Kazan</h2><p class="pm-muted">Arkadaşını PlayMatrix’e davet etmek için bağlantını paylaş.</p><div class="pm-copy-box" id="inviteLink">https://playmatrix.com.tr/?ref=playmatrix</div><button class="pm-btn pm-btn-primary pm-full" id="copyInviteBtn" type="button">Bağlantıyı Kopyala</button></div></section>
   <section class="pm-modal" id="supportModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="supportModal"><i class="fa-solid fa-xmark"></i></button><h2>Canlı Destek</h2><label class="pm-field"><span>Konu</span><input id="supportSubject" placeholder="Kısa konu" /></label><label class="pm-field"><span>Mesaj</span><textarea id="supportMessage" maxlength="1000" placeholder="Mesajınızı yazın"></textarea></label><button class="pm-btn pm-btn-primary pm-full" id="sendSupportBtn" type="button">Gönder</button><div id="supportResult" class="pm-result"></div></div></section>
   <section class="pm-modal" id="emailModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="emailModal"><i class="fa-solid fa-xmark"></i></button><h2>E-posta Güncelle</h2><label class="pm-field"><span>Yeni E-posta</span><input id="emailUpdateInput" type="email" placeholder="ornek@mail.com" /></label><button class="pm-btn pm-btn-primary pm-full" id="sendEmailUpdateBtn" type="button">Doğrulama Gönder</button><div id="emailResult" class="pm-result"></div></div></section>
-  <section class="pm-modal" id="notificationsModal" aria-hidden="true"><div class="pm-modal-panel pm-empty-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="notificationsModal"><i class="fa-solid fa-xmark"></i></button><h2>Bildirimler</h2><div class="pm-notification-actions"><button class="pm-btn pm-btn-light pm-full" id="clearNotificationsBtn" type="button">Tüm bildirimleri sil</button><button class="pm-btn pm-btn-light pm-full" id="readNotificationsBtn" type="button">Tüm bildirimleri okunmuş olarak işaretle</button></div><div id="notificationsBody" class="pm-empty-state"><i class="fa-solid fa-message-xmark"></i><p>Henüz bir kayıt bulunamadı.</p></div></div></section>
+  <section class="pm-modal" id="notificationsModal" aria-hidden="true"><div class="pm-modal-panel pm-empty-panel pm-notifications-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="notificationsModal"><i class="fa-solid fa-xmark"></i></button><h2>Bildirimler</h2><div class="pm-notification-actions"><button class="pm-notification-action" id="clearNotificationsBtn" type="button">Tüm bildirimleri sil</button><button class="pm-notification-action" id="markNotificationsReadBtn" type="button">Tüm bildirimleri okunmuş olarak işaretle</button></div><div id="notificationsBody" class="pm-empty-state"><i class="fa-solid fa-message-xmark"></i><p>Henüz bir kayıt bulunamadı.</p></div></div></section>
+  <section class="pm-modal" id="betHistoryModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="betHistoryModal"><i class="fa-solid fa-xmark"></i></button><h2>Bahis Geçmişi</h2><p class="pm-muted">Sunucu in-memory kayıtları gösterilir; sunucu restart/yeniden başlama sonrası sıfırlanır.</p><div id="betHistoryBody" class="pm-modal-body"></div></div></section>
+  <section class="pm-modal" id="sessionHistoryModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="sessionHistoryModal"><i class="fa-solid fa-xmark"></i></button><h2>Oturum Geçmişi</h2><p class="pm-muted">Sunucu in-memory oturum kayıtları gösterilir; restart sonrası sıfırlanır.</p><div id="sessionHistoryBody" class="pm-modal-body"></div></div></section>
+  <section class="pm-modal" id="accountStatsModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="accountStatsModal"><i class="fa-solid fa-xmark"></i></button><h2>Hesap İstatistikleri</h2><p class="pm-muted">Kalıcı Firebase profil ve oyun istatistiklerinden okunur.</p><div id="accountStatsBody" class="pm-modal-body"></div></div></section>
+  <section class="pm-modal" id="playerStatsModal" aria-hidden="true"><div class="pm-modal-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="playerStatsModal"><i class="fa-solid fa-xmark"></i></button><h2>Oyuncu İstatistikleri</h2><div id="playerStatsBody" class="pm-modal-body"></div></div></section>
   <section class="pm-modal" id="avatarModal" aria-hidden="true"><div class="pm-modal-panel pm-picker-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="avatarModal"><i class="fa-solid fa-xmark"></i></button><h2>Avatarınızı Seçin</h2><div class="pm-picker-filters" id="avatarFilters"></div><div class="pm-picker-grid" id="avatarGrid"></div></div></section>
   <section class="pm-modal" id="frameModal" aria-hidden="true"><div class="pm-modal-panel pm-picker-panel" role="dialog" aria-modal="true"><button class="pm-close" type="button" data-close-modal="frameModal"><i class="fa-solid fa-xmark"></i></button><h2>Çerçevenizi Seçin</h2><div class="pm-picker-filters" id="frameFilters"><button class="is-active" data-frame-filter="all" type="button">Tümü</button><button data-frame-filter="open" type="button">Açık</button><button data-frame-filter="locked" type="button">Kilitli</button></div><div class="pm-frame-grid" id="frameGrid"></div></div></section>
 
   <section class="pm-modal pm-social-modal" id="socialModal" aria-hidden="true">
-    <div class="pm-social-shell" role="dialog" aria-modal="true">
-      <header class="pm-social-header"><button class="pm-social-back" type="button" data-close-modal="socialModal" aria-label="Ana sayfa"><i class="fa-solid fa-chevron-left"></i><span>AnaSayfa</span></button><div><h2>Sosyal Merkez</h2><span>Şimdilik anlık kullanıma kapalı</span></div><button class="pm-close" type="button" data-close-modal="socialModal"><i class="fa-solid fa-xmark"></i></button></header>
-      <div class="pm-social-tabs"><button class="is-active" type="button">Yerel Sohbet TR</button><button type="button">DM Kutusu</button><button type="button">Mesaj Ara</button><button type="button">İstek Listesi</button><button type="button">Arkadaş Ekleme</button><button type="button">Oyun Daveti</button></div>
-      <div class="pm-social-policy-card"><strong>Yerel sohbet saklama politikası</strong><p>Global 7 gün ve DM 14 gün saklama politikası görünür kalır; anlık mesajlaşma geçici olarak kapalıdır.</p><div><span>Global 7 Gün</span><span>DM 14 Gün</span><span>Bakım Modu</span></div></div>
-      <div class="pm-social-content"><div class="pm-empty-mini"><strong>Sosyal Merkez geçici olarak kapalı</strong><p>Bu alan profesyonel bakım modundadır. Sohbet, DM, arkadaşlık ve oyun daveti yeniden açıldığında aynı panelden kullanılacaktır.</p></div></div>
+    <div class="pm-social-shell pm-social-closed" role="dialog" aria-modal="true">
+      <header class="pm-social-header"><button class="pm-social-back" type="button" id="socialHomeBtn" aria-label="Ana sayfa"><i class="fa-solid fa-chevron-left"></i><span>AnaSayfa</span></button><div><h2 id="socialTitle">Sosyal Merkez</h2><span id="socialSubtitle">Anlık kullanım kapalı</span></div><button class="pm-close" type="button" data-close-modal="socialModal"><i class="fa-solid fa-xmark"></i></button></header>
+      <div class="pm-social-content" id="socialContent"><div class="pm-empty-mini pm-maintenance-state"><i class="fa-solid fa-shield-halved"></i><strong>Sosyal Merkez şu an kapalı</strong><p>Anlık sohbet, DM, arkadaşlık ve oyun daveti modülleri bakım/aktif değil durumundadır. Mevcut bildirimler Bildirimler panelinden takip edilir.</p></div></div>
+      <form class="pm-chat-form" id="chatForm" hidden><input id="chatInput" maxlength="280" placeholder="Mesaj yaz..." autocomplete="off" /><button class="pm-send" type="submit"><i class="fa-solid fa-paper-plane"></i></button><small id="chatCounter">0/280</small></form>
     </div>
   </section>
 
   <div class="pm-toast-stack" id="toastStack" aria-live="polite"></div>
+
   <script src="/public/playmatrix-static-runtime.js"></script>
   <script src="/public/playmatrix-api.js"></script>
   <script type="module" src="/script.js"></script>
