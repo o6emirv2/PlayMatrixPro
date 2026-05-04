@@ -8,7 +8,7 @@ const { Server } = require('socket.io');
 const env = require('./server/config/env');
 const { corsOptions } = require('./server/config/cors');
 const firebase = require('./server/config/firebaseAdmin');
-const { apiLimiter } = require('./server/core/security');
+const { apiLimiter, requireAuth } = require('./server/core/security');
 const { routeData } = require('./server/core/smartDataRouter');
 const { runtimeStore } = require('./server/core/runtimeStore');
 const { globalChat, localChat, dm, presence } = require('./server/social/socialRuntimeStore');
@@ -170,6 +170,28 @@ app.get('/api/home/summary', async (req, res) => {
       }
     }
   });
+});
+
+
+
+app.post('/api/home/session-touch', requireAuth, (req, res) => {
+  const uid = String(req.user.uid || '');
+  const action = String(req.body?.action || 'activity').replace(/[^a-z0-9_-]/gi, '').slice(0, 40) || 'activity';
+  const item = { id:`session_${Date.now()}_${Math.random().toString(36).slice(2)}`, uid, title: action === 'logout' ? 'Güvenli Çıkış' : 'Oturum Aktivitesi', action, description: action === 'logout' ? 'Kullanıcı güvenli çıkış yaptı.' : 'AnaSayfa oturumu aktif hale geldi.', at: Date.now(), source:'home', memoryOnly:true };
+  runtimeStore.temporary.push(`home:sessions:${uid}`, item, 24 * 3600000);
+  res.json({ ok:true, item });
+});
+
+app.get('/api/home/session-history', requireAuth, (req, res) => {
+  const uid = String(req.user.uid || '');
+  const items = runtimeStore.temporary.get(`home:sessions:${uid}`) || [];
+  res.json({ ok:true, memoryOnly:true, resetPolicy:'Sunucu restart sonrası sıfırlanır.', items: items.slice(-50).reverse() });
+});
+
+app.get('/api/home/bet-history', requireAuth, (req, res) => {
+  const uid = String(req.user.uid || '');
+  const items = runtimeStore.temporary.get(`home:bets:${uid}`) || [];
+  res.json({ ok:true, memoryOnly:true, resetPolicy:'Sunucu restart sonrası sıfırlanır.', items: items.slice(-50).reverse() });
 });
 
 app.use('/api', require('./server/routes/auth.routes'));
