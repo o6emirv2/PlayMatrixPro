@@ -155,9 +155,33 @@ function renderHeroDots() {
 function showHero(index) { const slides = qsa('.pm-slide'); if (!slides.length) return; state.heroIndex = (index + slides.length) % slides.length; slides.forEach((s,i)=>s.classList.toggle('is-active', i === state.heroIndex)); renderHeroDots(); }
 function startHero() { renderHeroDots(); setInterval(() => showHero(state.heroIndex + 1), 6500); }
 
+function gameCard(game, compact = false) {
+  const palette = {
+    crash: ['#ff9d00', '#ff3d4d'],
+    chess: ['#1957ff', '#22d3ee'],
+    pisti: ['#8038ff', '#ff4fd8'],
+    pattern: ['#17a94f', '#79e35d'],
+    space: ['#0047ff', '#6de7ff'],
+    snake: ['#11a84a', '#02e391']
+  }[game.key] || ['#2f66ff', '#8b5cf6'];
+  return `<article class="pm-home-game-card ${compact ? 'is-compact' : ''}" style="--card-a:${palette[0]};--card-b:${palette[1]}">
+    <div>
+      <div class="pm-game-big-icon"><i class="fa-solid ${game.icon}"></i></div>
+      <h3>${escapeHtml(game.title)}</h3>
+      <p>${escapeHtml(game.category)} · ${escapeHtml(game.desc)}</p>
+    </div>
+    <button class="pm-game-play" data-play-game="${game.key}" type="button">Giriş Gerekli · Oyna</button>
+  </article>`;
+}
 function renderGames() {
-  const grid = $('gameGrid'); if (!grid) return;
-  grid.innerHTML = GAMES.map(game => `<article class="pm-game-card" style="--accent:${game.accent}"><div><div class="pm-game-icon"><i class="fa-solid ${game.icon}"></i></div><h3>${game.title}</h3><p>${game.desc}</p></div><div class="pm-game-card-footer"><span class="pm-lock-badge">Giriş Gerekli</span><button class="pm-btn pm-btn-soft" data-play-game="${game.key}" type="button">Oyna</button></div></article>`).join('');
+  const newRow = $('newGamesRow');
+  const quickRow = $('quickGamesRow');
+  const grid = $('gameGrid');
+  const online = GAMES.filter(g => g.category === 'Online');
+  const quick = GAMES.filter(g => g.category !== 'Online');
+  if (newRow) newRow.innerHTML = online.map(g => gameCard(g)).join('');
+  if (quickRow) quickRow.innerHTML = quick.map(g => gameCard(g, true)).join('');
+  if (grid) grid.innerHTML = GAMES.map(g => gameCard(g)).join('');
 }
 function renderStats() {
   const grid = $('statsGrid'); if (!grid) return;
@@ -325,7 +349,18 @@ function renderSocial() {
   qsa('[data-social-view]').forEach(btn => btn.classList.toggle('is-active', btn.dataset.socialView === state.socialView));
   const titles = { chat:'#Yerel Sohbet (TR)', dm:'DM Kutusu', search:'Mesaj Ara', requests:'İstek Listesi', add:'Arkadaş Ekleme', invites:'Oyun Daveti' };
   setText('socialTitle', titles[state.socialView] || '#Yerel Sohbet (TR)');
-  if (state.socialView !== 'chat') { host.innerHTML = `<div class="pm-empty-mini"><div><strong>${escapeHtml(titles[state.socialView])}</strong><p>Bu alan geçici in-memory sosyal merkez standardına bağlıdır. Aktif kayıt yok.</p></div></div>`; $('chatForm').style.display = 'none'; return; }
+  if (state.socialView !== 'chat') {
+    const copy = {
+      dm:'Direkt mesaj kutusu, arkadaş seçimi sonrası aktif konuşmaları gösterir.',
+      search:'Yerel ve DM mesajlarında aktif in-memory kayıtlar içinde arama yapılır.',
+      requests:'Gelen ve gönderilen arkadaşlık istekleri burada listelenir.',
+      add:'Kullanıcı adı veya profil bilgisiyle arkadaş ekleme akışı burada çalışır.',
+      invites:'Crash, Satranç ve Pişti oyun davetleri bu panelde görünür.'
+    };
+    host.innerHTML = `<div class="pm-empty-mini"><div><strong>${escapeHtml(titles[state.socialView])}</strong><p>${escapeHtml(copy[state.socialView] || 'Aktif kayıt yok.')}</p><button class="pm-btn pm-btn-primary" type="button" data-scroll-target="gamesSection">Oyunlara Git</button></div></div>`;
+    const form = $('chatForm'); if (form) form.style.display = 'none';
+    return;
+  }
   $('chatForm').style.display = '';
   if (!state.lobbyMessages.length) { host.innerHTML = `<div class="pm-empty-mini"><div><strong>Lobi şu an sakin</strong><p>İlk mesajı göndererek akışı sen başlatabilirsin.</p></div></div>`; return; }
   host.innerHTML = state.lobbyMessages.map(m => `<div class="pm-social-message ${m.uid === state.profile?.uid ? 'is-me' : ''}"><strong>${escapeHtml(m.username || 'Oyuncu')}</strong><p>${escapeHtml(m.text || m.message || '')}</p></div>`).join('');
@@ -356,7 +391,7 @@ function installEvents() {
   document.addEventListener('click', (event) => {
     const target = event.target.closest('button,a'); if (!target) return;
     if (target.dataset.scrollTarget) { event.preventDefault(); scrollToId(target.dataset.scrollTarget); return; }
-    if (target.dataset.openModal) { event.preventDefault(); openModal(target.dataset.openModal); return; }
+    if (target.dataset.openModal) { event.preventDefault(); if (target.closest('.pm-drawer-panel')) closeDrawer(); openModal(target.dataset.openModal); return; }
     if (target.dataset.closeModal) { event.preventDefault(); closeModal(target.dataset.closeModal); return; }
     if (target.dataset.openAuth) { event.preventDefault(); openAuth(target.dataset.openAuth); return; }
     if (target.dataset.closeDrawer !== undefined) { event.preventDefault(); closeDrawer(); return; }
@@ -369,6 +404,8 @@ function installEvents() {
     if (target.dataset.avatarSrc) { selectAvatar(target.dataset.avatarSrc); return; }
     if (target.dataset.frameFilter) { state.frameFilter = target.dataset.frameFilter; qsa('[data-frame-filter]').forEach(b => b.classList.toggle('is-active', b.dataset.frameFilter === state.frameFilter)); renderFramePicker(); return; }
     if (target.dataset.frame) { selectFrame(Number(target.dataset.frame)); return; }
+    if (target.dataset.rowScroll) { const row = target.dataset.rowScroll === 'newGames' ? $('newGamesRow') : $('quickGamesRow'); if (row) row.scrollBy({ left: Number(target.dataset.dir || 1) * Math.max(280, row.clientWidth * .75), behavior:'smooth' }); return; }
+    if (target.dataset.accordion) { const panel = $('footer-' + target.dataset.accordion); if (panel) panel.classList.toggle('is-open'); target.classList.toggle('is-open'); return; }
     if (target.dataset.socialView) { state.socialView = target.dataset.socialView; renderSocial(); return; }
   });
   $('brandButton')?.addEventListener('click', () => scrollToId('heroSection'));
