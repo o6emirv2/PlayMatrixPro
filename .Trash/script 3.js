@@ -471,50 +471,34 @@
     const user = state.user;
     const avatar = avatarUrlFor(user || {});
     const frame = user ? selectedFrameFor(user) : 0;
-    renderAvatar('topAvatarSlot', { avatar, frame, label: user?.username || 'Misafir' });
+    renderAvatar('topAvatarSlot', { avatar, frame: 0, label: user?.username || 'Misafir' });
+    renderAvatar('profileAvatarSlot', { avatar, frame, label: user?.username || 'Misafir' });
     renderAvatar('drawerAvatarSlot', { avatar, frame, label: user?.username || 'Misafir' });
-    if ($('topBalance')) $('topBalance').textContent = formatNumber(user?.balance || 0);
-    if ($('drawerUsername')) $('drawerUsername').textContent = user?.username || 'Misafir';
-    if ($('drawerMeta')) $('drawerMeta').textContent = user ? `Lv. ${user.accountLevel} · ${formatNumber(user.balance)} MC · ${formatNumber(user.xp)} XP` : 'Oturum bekleniyor';
-    const pct = Math.max(0, Math.min(100, Number(user?.progressPercent || 0)));
-    if ($('drawerProgressText')) $('drawerProgressText').textContent = `%${pct.toFixed(1)}`;
-    if ($('drawerProgressFill')) $('drawerProgressFill').style.width = `${pct}%`;
+    $('topBalance').textContent = formatNumber(user?.balance || 0);
+    $('drawerUsername').textContent = user?.username || 'Misafir';
+    $('drawerMeta').textContent = user ? `Lv. ${user.accountLevel} · ${formatNumber(user.balance)} MC` : 'Oturum bekleniyor';
+    $('accountSummary').textContent = user ? `Bakiye: ${formatNumber(user.balance)} MC · Seviye: ${user.accountLevel} · XP: ${formatNumber(user.xp)} · İlerleme: %${user.progressPercent.toFixed(1)}` : 'Giriş yapınca avatar, çerçeve, bakiye, seviye ve profil bilgileri burada görünür.';
+    renderStats();
   }
 
-  function accountStatRows(user = state.user) {
-    const u = normalizeUser(user || {});
-    const total = u.gameStats?.total || {};
-    return [
-      ['Hesap Seviyesi', u.accountLevel || 0],
-      ['Hesap XP', formatNumber(u.xp || 0)],
-      ['MC Bakiyesi', `${formatNumber(u.balance || 0)} MC`],
-      ['Aylık Aktiflik', formatNumber(u.monthlyActiveScore || 0)],
-      ['Seviye İlerlemesi', `%${Number(u.progressPercent || 0).toFixed(1)}`],
-      ['Toplam Oyun', formatNumber(first(total.rounds, u.raw?.totalRounds, 0))],
-      ['Galibiyet', formatNumber(first(total.wins, u.raw?.totalWins, 0))],
-      ['E-posta', u.emailVerified ? 'Doğrulandı' : 'Beklemede']
+  function renderStats() {
+    const grid = $('statsGrid');
+    if (!grid) return;
+    const u = state.user;
+    const rows = [
+      ['Hesap Seviyesi', u?.accountLevel || 0],
+      ['Hesap XP', formatNumber(u?.xp || 0)],
+      ['MC Bakiyesi', `${formatNumber(u?.balance || 0)} MC`],
+      ['Aylık Aktiflik', formatNumber(u?.monthlyActiveScore || 0)],
+      ['Seviye İlerlemesi', `%${Number(u?.progressPercent || 0).toFixed(1)}`],
+      ['E-posta', u?.emailVerified ? 'Doğrulandı' : 'Beklemede']
     ];
-  }
-
-  function openAccountStats() {
-    if (!state.user) { openAuth('login'); return; }
-    const user = normalizeUser(state.user);
-    renderAvatar('accountStatsAvatar', { avatar: user.avatar, frame: selectedFrameFor(user), label: user.username });
-    if ($('accountStatsSub')) $('accountStatsSub').textContent = `${formatNumber(user.balance)} MC · Lv. ${user.accountLevel} · ${formatNumber(user.xp)} XP`;
-    const grid = $('accountStatsGrid');
-    if (grid) {
-      grid.replaceChildren(...accountStatRows(user).map(([label, value]) => {
-        const card = document.createElement('article');
-        card.className = 'pm-playerStatsCard';
-        const strong = document.createElement('strong');
-        strong.textContent = value;
-        const span = document.createElement('span');
-        span.textContent = label;
-        card.append(strong, span);
-        return card;
-      }));
-    }
-    openLayer('accountStatsModal');
+    grid.replaceChildren(...rows.map(([label, value]) => {
+      const card = document.createElement('article');
+      card.className = 'pm-statCard';
+      card.innerHTML = `<strong>${value}</strong><span>${label}</span>`;
+      return card;
+    }));
   }
 
   function renderGames() {
@@ -523,12 +507,7 @@
     grid.replaceChildren(...games.map((game) => {
       const card = document.createElement('article');
       card.className = 'pm-gameCard';
-      card.tabIndex = 0;
       card.dataset.gameId = game.id;
-      card.dataset.gameRoute = game.route;
-      card.dataset.gameAuth = String(game.auth);
-      card.setAttribute('role', 'button');
-      card.setAttribute('aria-label', `${game.title} oyununu aç`);
       card.innerHTML = `
         <div>
           <div class="pm-gameCard__top"><span class="pm-gameCard__icon" aria-hidden="true">${iconSvg(game.icon)}</span><span class="pm-statusPill">${game.auth ? 'Giriş Gerekir' : 'Hazır'}</span></div>
@@ -640,153 +619,14 @@
     if (!state.user) { window.location.href = `mailto:playmatrixdestek@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`; return; }
     try {
       status.textContent = 'Destek talebi gönderiliyor...';
-      const { payload } = await fetchJson('/api/support/message', { method: 'POST', body: { subject, text: message, message, source: 'home', category: 'AnaSayfa' } });
-      status.textContent = `Destek kaydı oluşturuldu: ${payload?.message?.id || payload?.id || 'open'}`;
+      const { payload } = await fetchJson('/api/support/receipt', { method: 'POST', body: { subject, message, source: 'home' } });
+      status.textContent = `Destek kaydı oluşturuldu: ${payload.id || 'open'}`;
       status.className = 'pm-formMessage is-ok';
       showToast('Destek talebi alındı.', 'success');
     } catch (error) {
       status.textContent = 'Destek talebi gönderilemedi.';
       status.className = 'pm-formMessage is-error';
       reportClientError('support.send', error);
-    }
-  }
-
-  async function openPromo() {
-    if (!state.user) { openAuth('login'); return; }
-    const status = $('promoStatus');
-    if (status) status.textContent = 'Aktif promosyon kodun varsa güvenli şekilde kullanabilirsin.';
-    openLayer('promoModal');
-  }
-
-  async function openWheel() {
-    if (!state.user) { openAuth('login'); return; }
-    openLayer('wheelModal');
-    const status = $('wheelStatus');
-    if (status) status.textContent = 'Çark durumu kontrol ediliyor...';
-    try {
-      const { payload } = await fetchJson('/api/wheel/config', { method: 'GET' });
-      if (status) status.textContent = payload?.available === false ? 'Bugünkü ücretsiz çark hakkı kullanılmış.' : 'Ücretsiz çark hakkı hazır.';
-    } catch (error) {
-      if (status) status.textContent = 'Çark durumu alınamadı.';
-      reportClientError('wheel.config', error);
-    }
-  }
-
-  async function spinWheel() {
-    if (!state.user) { openAuth('login'); return; }
-    const status = $('wheelStatus');
-    if (status) status.textContent = 'Çark çevriliyor...';
-    try {
-      const { payload } = await fetchJson('/api/wheel/spin', { method: 'POST', body: { source: 'home' } });
-      const amount = first(payload?.reward?.amount, payload?.amount, 0);
-      if (status) status.textContent = amount ? `Ödül tanımlandı: +${formatNumber(amount)} MC` : 'Çark sonucu alındı.';
-      await loadCurrentUser().catch(() => null);
-      showToast('Çark işlemi tamamlandı.', 'success');
-    } catch (error) {
-      if (status) status.textContent = 'Çark çevrilemedi.';
-      reportClientError('wheel.spin', error);
-    }
-  }
-
-  function socialPreviewUsers() {
-    const levelItems = state.leaderboard?.level?.items || [];
-    const activityItems = state.leaderboard?.activity?.items || [];
-    const merged = [...levelItems, ...activityItems].map(normalizeUser);
-    const seen = new Set();
-    const users = [];
-    for (const item of merged) {
-      const key = item.uid || item.username;
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      users.push(item);
-    }
-    if (state.user) users.unshift(normalizeUser(state.user));
-    return users.slice(0, 12);
-  }
-
-  function renderSocialShell(messages = []) {
-    const users = socialPreviewUsers();
-    const stories = $('socialStories');
-    if (stories) {
-      stories.replaceChildren(...users.slice(0, 10).map((user) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'pm-storyItem';
-        btn.appendChild(createAvatarNode({ avatar: user.avatar, frame: selectedFrameFor(user), label: user.username }));
-        const span = document.createElement('span');
-        span.textContent = user.username;
-        btn.appendChild(span);
-        btn.addEventListener('click', () => openPlayerStats(user));
-        return btn;
-      }));
-    }
-    const list = $('socialList');
-    if (list) {
-      const rows = [
-        { id: 'local', title: 'Yerel TR Lobisi', sub: 'Tüm çevrimiçi oyuncular', avatar: DEFAULT_REMOTE_AVATAR },
-        ...users.slice(0, 8).map((u) => ({ id: u.uid || u.username, title: u.username, sub: `${formatNumber(u.balance)} MC · Lv. ${u.accountLevel}`, avatar: u.avatar, frame: selectedFrameFor(u), user: u }))
-      ];
-      list.replaceChildren(...rows.map((row, index) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = `pm-socialRow${index === 0 ? ' is-active' : ''}`;
-        button.appendChild(createAvatarNode({ avatar: row.avatar, frame: row.frame || 0, label: row.title }));
-        const text = document.createElement('span');
-        text.innerHTML = `<strong>${safeText(row.title)}</strong><small>${safeText(row.sub)}</small>`;
-        const camera = document.createElement('span');
-        camera.textContent = row.user ? '›' : '•';
-        button.append(text, camera);
-        button.addEventListener('click', () => row.user ? openPlayerStats(row.user) : loadSocialMessages());
-        return button;
-      }));
-    }
-    const msgBox = $('socialMessages');
-    if (msgBox) {
-      const normalized = messages.length ? messages : [
-        { uid: 'system', username: 'PlayMatrix', text: 'Yerel TR lobisine hoş geldin. Mesaj göndermek için oturum gerekir.', at: Date.now() }
-      ];
-      msgBox.replaceChildren(...normalized.slice(-80).map((msg) => {
-        const bubble = document.createElement('div');
-        const isSelf = state.user && msg.uid === state.user.uid;
-        bubble.className = `pm-chatBubble${isSelf ? ' is-self' : ''}`;
-        const author = safeText(first(msg.username, isSelf ? state.user?.username : 'Oyuncu'), 'Oyuncu');
-        bubble.innerHTML = `<small>${author}</small><span>${safeText(msg.text || msg.message || '')}</span>`;
-        return bubble;
-      }));
-      msgBox.scrollTop = msgBox.scrollHeight;
-    }
-    renderAvatar('socialRoomAvatar', { avatar: DEFAULT_REMOTE_AVATAR, frame: 0, label: 'Yerel TR Lobisi' });
-  }
-
-  async function loadSocialMessages() {
-    try {
-      const { payload } = await fetchJson('/api/social/chat/tr', { method: 'GET' }, [401, 404]);
-      renderSocialShell(payload?.messages || []);
-    } catch (error) {
-      reportClientError('social.load', error);
-      renderSocialShell([]);
-    }
-  }
-
-  async function openSocialCenter() {
-    if (!state.user) { openAuth('login'); return; }
-    openLayer('socialModal');
-    await loadSocialMessages();
-  }
-
-  async function sendSocialMessage(event) {
-    event.preventDefault();
-    if (!state.user) { openAuth('login'); return; }
-    const input = $('socialMessageInput');
-    const text = input?.value.trim() || '';
-    if (!text) return;
-    input.value = '';
-    try {
-      await fetchJson('/api/social/chat/tr', { method: 'POST', body: { text } });
-      await loadSocialMessages();
-    } catch (error) {
-      reportClientError('social.send', error);
-      showToast('Mesaj gönderilemedi.', 'error');
     }
   }
 
@@ -861,13 +701,11 @@
 
   function navigateTo(target) {
     if (!target) return;
+    if (target === 'menu') { openLayer('menuDrawer'); return; }
     if (target === 'account') { state.user ? openLayer('accountDrawer') : openAuth('login'); return; }
     if (target === 'login') { openAuth('login'); return; }
     if (target === 'register') { openAuth('register'); return; }
     if (target === 'support') { openLayer('supportModal'); return; }
-    if (target === 'social') { openSocialCenter(); return; }
-    if (target === 'promo') { openPromo(); return; }
-    if (target === 'account-stats') { openAccountStats(); return; }
     if (target.startsWith('#')) {
       const node = document.querySelector(target);
       if (node) {
@@ -887,7 +725,7 @@
     });
     $$('#pmBottomBar .pm-bottomBar__item').forEach((item) => {
       const stateKey = state.auth === 'authenticated' ? 'userTarget' : 'guestTarget';
-      const active = item.dataset[stateKey] === target;
+      const active = item.dataset[stateKey] === target || (target === '#anasayfa' && item.dataset[stateKey] === 'menu');
       item.classList.toggle('is-active', active);
       if (active) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
@@ -937,14 +775,14 @@
     $('pmLoginButton')?.addEventListener('click', () => openAuth('login'));
     $('pmRegisterButton')?.addEventListener('click', () => openAuth('register'));
     $('accountChip')?.addEventListener('click', () => openLayer('accountDrawer'));
+    $('openMenuBtn')?.addEventListener('click', () => openLayer('menuDrawer'));
     $('authForm')?.addEventListener('submit', submitAuth);
     $('forgotPasswordBtn')?.addEventListener('click', () => { closeLayer(); openLayer('forgotModal'); });
     $('sendResetBtn')?.addEventListener('click', sendPasswordReset);
     $('sendSupportBtn')?.addEventListener('click', sendSupport);
     $('claimPromoBtn')?.addEventListener('click', claimPromo);
-    $('spinWheelBtn')?.addEventListener('click', spinWheel);
-    $('socialComposer')?.addEventListener('submit', sendSocialMessage);
-    $('refreshSocialBtn')?.addEventListener('click', loadSocialMessages);
+    $('openAvatarBtn')?.addEventListener('click', () => { if (!state.user) return openAuth('login'); renderAvatarPicker(); openLayer('avatarModal'); });
+    $('openFrameBtn')?.addEventListener('click', () => { if (!state.user) return openAuth('login'); renderFramePicker(); openLayer('frameModal'); });
     $('globalOverlay')?.addEventListener('click', closeLayer);
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeLayer(); });
     document.addEventListener('gesturestart', (event) => event.preventDefault());
@@ -967,12 +805,9 @@
         if (value === 'login') openAuth('login');
         if (value === 'support') openLayer('supportModal');
         if (value === 'account') navigateTo('account');
-        if (value === 'account-stats') openAccountStats();
-        if (value === 'promo') openPromo();
-        if (value === 'wheel') openWheel();
-        if (value === 'social') openSocialCenter();
-        if (value === 'avatar') { if (!state.user) return openAuth('login'); renderAvatarPicker(); openLayer('avatarModal'); }
-        if (value === 'frame') { if (!state.user) return openAuth('login'); renderFramePicker(); openLayer('frameModal'); }
+        if (value === 'account-stats') openPlayerStats(state.user || {});
+        if (value === 'avatar') { renderAvatarPicker(); openLayer('avatarModal'); }
+        if (value === 'frame') { renderFramePicker(); openLayer('frameModal'); }
         if (value === 'logout') logout();
         return;
       }
@@ -985,15 +820,6 @@
         window.location.href = route;
       }
     });
-    document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      const game = event.target.closest?.('[data-game-route]');
-      if (!game) return;
-      event.preventDefault();
-      const route = game.dataset.gameRoute;
-      if (game.dataset.gameAuth === 'true' && !state.user) { openAuth('login'); return; }
-      window.location.href = route;
-    });
     $('pmBottomBar')?.addEventListener('click', (event) => {
       const item = event.target.closest('.pm-bottomBar__item');
       if (!item) return;
@@ -1003,7 +829,7 @@
     $('primaryNav')?.addEventListener('click', (event) => {
       const item = event.target.closest('.pm-primaryNav__item');
       if (!item) return;
-      if (item.dataset.navTarget) navigateTo(item.dataset.navTarget);
+      navigateTo(item.dataset.navTarget);
     });
     $$('[data-leaderboard-tab]').forEach((btn) => btn.addEventListener('click', () => {
       state.leaderboardTab = btn.dataset.leaderboardTab;
@@ -1014,13 +840,6 @@
       });
       renderLeaderboard();
     }));
-    $$('[data-social-tab]').forEach((btn) => btn.addEventListener('click', () => {
-      state.socialTab = btn.dataset.socialTab || 'local';
-      $$('[data-social-tab]').forEach((node) => node.classList.toggle('is-active', node === btn));
-      if (state.socialTab === 'local') loadSocialMessages();
-      else renderSocialShell([]);
-    }));
-    $('socialSearchInput')?.addEventListener('input', () => renderSocialShell([]));
     $('avatarGrid')?.addEventListener('click', (event) => {
       const card = event.target.closest('.pm-pickerCard[data-avatar]');
       if (!card) return;
