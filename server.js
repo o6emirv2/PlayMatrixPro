@@ -145,6 +145,29 @@ async function captureClientError(req, res) {
     severity: payload.severity || 'error'
   };
   runtimeStore.errors.set(row.id, row, 24*3600000);
+  const clientLogCode = normalizedGame === 'chess'
+    ? 'CHESS_CLIENT_ERROR'
+    : normalizedGame === 'crash'
+      ? 'CRASH_CLIENT_ERROR'
+      : 'HOME_CLIENT_ERROR';
+  addAdminLog('client.runtime.error', {
+    ...row,
+    level: row.severity,
+    source: row.area,
+    category: row.scope,
+    code: clientLogCode,
+    message: row.error,
+    safeContext: sanitizeRuntimeLogPayload({
+      game: row.game,
+      scope: row.scope,
+      path: row.path,
+      source: row.source,
+      line: row.line,
+      endpoint: row.endpoint,
+      status: row.status,
+      userAgent: row.userAgent
+    })
+  });
   console.error('[client:runtime:error]', JSON.stringify({ game: row.game, scope: row.scope, message: row.error, path: String(row.path || '').slice(0, 180), source: String(row.source || '').slice(0, 180), line: row.line || null }));
   res.status(202).json({ ok:true, stored:'runtime' });
 }

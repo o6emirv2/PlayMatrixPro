@@ -642,3 +642,13 @@
 #myAvatarHost [data-frame-index="18"],#oppAvatarHost [data-frame-index="18"],#myAvatarHost [data-frame-asset-index="18"],#oppAvatarHost [data-frame-asset-index="18"]{--pm-avatar-scale:.88!important;--pm-frame-scale:1.18!important;--pm-frame-shift-x:0px!important;--pm-frame-shift-y:0px!important;}
 .pm-game-topbar-avatar-host [class*="frame"],.pm-game-topbar-avatar-host .pm-frame-image,.pm-game-topbar-avatar-host .pm-avatar-shell__frame{display:none!important;}
 @media (max-width:560px){.player-info{grid-template-columns:70px minmax(0,1fr) 26px!important;}#myAvatarHost,#oppAvatarHost,#myAvatarHost > [data-pm-avatar="true"],#oppAvatarHost > [data-pm-avatar="true"],#myAvatarHost > .pm-avatar,#oppAvatarHost > .pm-avatar{inline-size:62px!important;block-size:62px!important;min-inline-size:62px!important;min-block-size:62px!important;max-inline-size:62px!important;max-block-size:62px!important;}}
+
+
+.p-name{
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  max-width:100%!important;
+  word-break:break-word!important;
+}
+#myAvatarHost [data-frame-index="100"],#oppAvatarHost [data-frame-index="100"],#myAvatarHost [data-frame-asset-index="100"],#oppAvatarHost [data-frame-asset-index="100"]{--pm-avatar-scale:.88!important;--pm-frame-scale:1.18!important;--pm-frame-shift-x:0px!important;--pm-frame-shift-y:0px!important;}

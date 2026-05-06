@@ -72,12 +72,12 @@ async function handleHostInviteAcceptedRedirect(payload = {}) {
     if (!roomId) return false;
     if (gameType.includes('chess') || gameType.includes('satran')) {
       try { localStorage.setItem('activeChessRoom', roomId); } catch (_) {}
-      window.location.href = '/Online Oyunlar/Satranc.html';
+      window.location.href = '/games/chess';
       return true;
     }
     if (gameType.includes('pisti') || gameType.includes('pişti')) {
       try { localStorage.setItem('activePistiRoom', roomId); } catch (_) {}
-      window.location.href = '/Online Oyunlar/Pisti.html';
+      window.location.href = '/games/pisti';
       return true;
     }
   } catch (_) {}
@@ -258,6 +258,8 @@ const elStudioIntro = document.getElementById('studioIntro');
     let chessSocket = null;
     const avatarRenderCache = new Map();
     let extensionPromptKey = '';
+    let boardLayoutColor = '';
+    let boardClickBound = false;
     const PIECE_UNICODE = Object.freeze({ K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' });
     const PIECE_IMGS = Object.freeze(Object.fromEntries(Object.entries(PIECE_UNICODE).map(([key, glyph]) => {
       const fg = key === key.toUpperCase() ? '#f8fafc' : '#0f172a';
@@ -594,13 +596,12 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       return Math.max(0, Math.min(100, value));
     }
 
-    const CHESS_EXPECTED_CLIENT_ERRORS = new Set(['LOAD FAILED','FAILED TO FETCH','NETWORKERROR','ABORTERROR','SOCKET_TIMEOUT','SOCKET_OFFLINE','STATE_VERSION_MISMATCH','ROOM_NOT_FOUND','ROOM_CLOSED','ROOM_FINISHED','NOT_YOUR_TURN','ROOM_NOT_PLAYING']);
+    const CHESS_EXPECTED_CLIENT_ERRORS = new Set(['STATE_VERSION_MISMATCH','ROOM_NOT_FOUND','ROOM_CLOSED','ROOM_FINISHED','NOT_YOUR_TURN','ROOM_NOT_PLAYING']);
     const chessIssueDedupe = new Map();
     function shouldReportChessIssue(scope, payload = {}) {
       const message = String(payload.message || payload.error || '').trim();
       const upper = message.toUpperCase();
       if (CHESS_EXPECTED_CLIENT_ERRORS.has(upper)) return false;
-      if (/load failed|failed to fetch|networkerror|abort/i.test(message)) return false;
       const source = String(payload.source || '').toLowerCase();
       if (source && !source.includes('/games/chess') && !source.includes('satranc') && !source.includes('/api/chess')) return false;
       const key = `${scope}:${upper}:${source}:${payload.line || ''}`;
@@ -969,15 +970,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       }
       const lvl = Math.max(0, Math.min(100, Math.floor(Number(rawLevel) || 0)));
       if (lvl <= 0) return 0;
-      if (lvl <= 15) return 1;
-      if (lvl <= 30) return 2;
-      if (lvl <= 40) return 3;
-      if (lvl <= 50) return 4;
-      if (lvl <= 60) return 5;
-      if (lvl <= 80) return 6;
-      if (lvl <= 85) return 7;
-      if (lvl <= 90) return 8;
-      return Math.min(18, Math.max(9, lvl - 82));
+      return lvl;
     }
 
     function applyFramedAvatar(avatarId, frameId, avatarUrl, selectedFrameLevel, explicitFrameUrl = '') {
@@ -988,7 +981,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       const explicitIndexMatch = String(explicitFrameUrl || '').match(/frame-(\d+)\.png/i);
       const explicitIndexRaw = explicitIndexMatch ? Math.trunc(Number(explicitIndexMatch[1]) || 0) : 0;
       const exactFrameIndex = explicitIndexRaw > 0
-        ? (explicitIndexRaw <= 18 ? explicitIndexRaw : resolveFrameIndex(explicitIndexRaw))
+        ? (explicitIndexRaw <= 100 ? explicitIndexRaw : resolveFrameIndex(explicitIndexRaw))
         : null;
       const resolvedFrameIndex = exactFrameIndex || resolveFrameIndex(frameLevel);
       const signature = JSON.stringify({ avatar: safeAvatar, frameLevel, frame: resolvedFrameIndex });
@@ -1127,50 +1120,69 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       }
     }
 
+    function ensureBoardShell(boardEl) {
+      if (!boardEl) return [];
+      if (!boardClickBound) {
+        boardEl.addEventListener('click', (event) => {
+          const square = event.target?.closest?.('.sq[data-sq]');
+          if (square && boardEl.contains(square)) handleSquareClick(square.dataset.sq);
+        });
+        boardClickBound = true;
+      }
+      const needsRebuild = boardLayoutColor !== myColor || boardEl.children.length !== 64;
+      if (!needsRebuild) return Array.from(boardEl.children);
+      boardEl.replaceChildren();
+      boardLayoutColor = myColor;
+      const fragment = document.createDocumentFragment();
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const sqDiv = document.createElement('div');
+          const rank = myColor === 'w' ? 8 - r : r + 1;
+          const fileStr = 'abcdefgh';
+          const file = myColor === 'w' ? fileStr[c] : fileStr[7 - c];
+          sqDiv.dataset.sq = file + rank;
+          fragment.appendChild(sqDiv);
+        }
+      }
+      boardEl.appendChild(fragment);
+      return Array.from(boardEl.children);
+    }
+
     function drawBoard() {
       const boardEl = document.getElementById("chessboard");
-      boardEl.innerHTML = "";
-
+      if (!boardEl) return;
       let board = gameLogic.board();
       if (myColor === 'b') {
         board = board.slice().reverse();
         board = board.map(row => row.slice().reverse());
       }
-
+      const squares = ensureBoardShell(boardEl);
+      const lastMove = Array.isArray(currentRoomState?.moves) ? currentRoomState.moves[currentRoomState.moves.length - 1] : null;
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
-          const sqDiv = document.createElement("div");
-
-          let rank = myColor === 'w' ? 8 - r : r + 1;
-          let fileStr = "abcdefgh";
-          let file = myColor === 'w' ? fileStr[c] : fileStr[7 - c];
-          let sqName = file + rank;
-
+          const sqDiv = squares[(r * 8) + c];
+          if (!sqDiv) continue;
+          const sqName = sqDiv.dataset.sq;
           sqDiv.className = `sq ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
-          sqDiv.dataset.sq = sqName;
-
           if (selectedSq === sqName) sqDiv.classList.add('highlight');
-          const lastMove = Array.isArray(currentRoomState?.moves) ? currentRoomState.moves[currentRoomState.moves.length - 1] : null;
           if (lastMove && (lastMove.from === sqName || lastMove.to === sqName)) sqDiv.classList.add('last-move');
-
           const isMoveObj = validMovesForSelected.find(m => m.to === sqName);
           if (isMoveObj) {
-            if(board[r][c] !== null) sqDiv.classList.add('valid-capture');
+            if (board[r][c] !== null) sqDiv.classList.add('valid-capture');
             else sqDiv.classList.add('valid-move');
           }
-
           const piece = board[r][c];
-          if (piece) {
-            const char = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
+          const char = piece ? (piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase()) : '';
+          if (sqDiv.dataset.piece === char && sqDiv.childElementCount <= (char ? 1 : 0)) continue;
+          sqDiv.dataset.piece = char;
+          sqDiv.replaceChildren();
+          if (char) {
             const img = document.createElement("img");
             img.src = PIECE_IMGS[char];
             img.alt = PIECE_UNICODE[char] || char;
             img.className = "piece";
             sqDiv.appendChild(img);
           }
-
-          sqDiv.addEventListener('click', () => handleSquareClick(sqName));
-          boardEl.appendChild(sqDiv);
         }
       }
     }

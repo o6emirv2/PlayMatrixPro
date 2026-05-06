@@ -17,40 +17,6 @@ function reportHomeIssue(scope, error, extra = {}) {
   } catch (_) {}
 }
 
-function currentUser() {
-  return window.__PM_RUNTIME?.auth?.currentUser || null;
-}
-
-function openAuthForGame(gameName = 'oyun') {
-  if (typeof window.openPlayMatrixSheet === 'function') {
-    window.openPlayMatrixSheet('auth', 'Hesabına giriş yap', `${gameName} için önce hesabına giriş yapmalısın.`);
-    return true;
-  }
-  const loginButton = document.getElementById('loginBtn');
-  if (loginButton) {
-    loginButton.click();
-    return true;
-  }
-  return false;
-}
-
-document.addEventListener('click', (event) => {
-  const link = event.target.closest?.('a[href]');
-  if (!link) return;
-  const href = link.getAttribute('href') || '';
-  const normalized = href.replace(/\/$/, '');
-  const mapped = Object.values(PM_GAME_ROUTES).find((route) => route === normalized);
-  if (!mapped) return;
-  if (link.dataset.noNormalize !== '1') link.setAttribute('href', mapped);
-  const card = link.closest('.game-card');
-  const requiresAuth = link.dataset.access === 'auth' || card?.dataset.access === 'auth' || card?.querySelector('.mini-tag')?.textContent?.toLowerCase?.().includes('giriş gerekir');
-  if (requiresAuth && !currentUser()) {
-    event.preventDefault();
-    event.stopPropagation();
-    const gameName = card?.querySelector('.game-title')?.textContent?.trim() || 'Bu oyun';
-    openAuthForGame(gameName);
-  }
-}, true);
 
 bootHomeApplication().catch((error) => {
   console.error('[PlayMatrix] Home application boot failed', error);

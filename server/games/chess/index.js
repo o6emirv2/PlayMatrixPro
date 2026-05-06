@@ -16,7 +16,6 @@ const INITIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const FREE_TIME_MS = 10 * 60 * 1000;
 const RECONNECT_GRACE_MS = Number(process.env.CHESS_DISCONNECT_GRACE_MS || 90000);
 const QUEUE_TTL_MS = Number(process.env.MATCH_QUEUE_TTL_MS || 120000);
-const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 const ROOM_PRIMARY_MS = 60 * 60 * 1000;
 const ROOM_EXTENSION_MS = 30 * 60 * 1000;
 const ROOM_IDLE_EMPTY_MS = 5 * 60 * 1000;
@@ -24,7 +23,7 @@ const ROOM_EXTENSION_RESPONSE_MS = 60 * 1000;
 const FREE_DAILY_WIN_LIMIT = 10;
 const FREE_WIN_REWARD_MC = 5000;
 const BET_XP_PER_1000_MC = 100;
-const BOT_PROFILE = Object.freeze({ uidPrefix: 'bot_', name: 'PlayMatrix', username: 'PlayMatrix', avatar: '/public/assets/images/logo.png', selectedFrame: 100, frameUrl: '/public/assets/frames/frame-18.png' });
+const BOT_PROFILE = Object.freeze({ uidPrefix: 'bot_', name: 'PlayMatrix', username: 'PlayMatrix', avatar: '/public/assets/images/logo.png', selectedFrame: 100, frameUrl: '/public/assets/frames/frame-100.png' });
 const BOT_MOVE_DELAY_MS = Math.max(3000, Math.trunc(Number(process.env.CHESS_BOT_MOVE_DELAY_MS || 3000) || 3000));
 const MIN_BET = 1000;
 const MAX_BET = 10000;
@@ -555,22 +554,48 @@ async function awardFreeWinReward({ uid, roomId }) {
   let preflight = null;
   await db.runTransaction(async (tx) => {
     const claim = await tx.get(claimRef);
-    if (claim.exists) { preflight = claim.data().result; return; }
-    const counter = await tx.get(counterRef);
-    const used = Math.max(0, Number((counter.exists ? counter.data().used : 0) || 0));
-    if (used >= FREE_DAILY_WIN_LIMIT) {
-      preflight = { ok: true, rewarded: false, reason: 'DAILY_LIMIT', amount: 0, used, limit: FREE_DAILY_WIN_LIMIT, dateKey };
-      tx.set(claimRef, { key: claimRef.id, type: 'chess-free-win', uid, roomId, dateKey, createdAt: now(), result: preflight }, { merge: false });
+    if (claim.exists) {
+      const stored = claim.data() || {};
+      preflight = stored.result || { ok: true, pending: stored.status === 'pending', reason: stored.status || 'CLAIM_EXISTS' };
       return;
     }
-    preflight = { ok: true, proceedCredit: true, usedBefore: used };
-    tx.set(counterRef, { uid, dateKey, used: used + 1, updatedAt: now() }, { merge: true });
+    const counter = await tx.get(counterRef);
+    const data = counter.exists ? counter.data() : {};
+    const used = Math.max(0, Number(data.used || 0));
+    const reserved = Math.max(0, Number(data.reserved || 0));
+    if (used >= FREE_DAILY_WIN_LIMIT || used + reserved >= FREE_DAILY_WIN_LIMIT) {
+      preflight = { ok: true, rewarded: false, reason: 'DAILY_LIMIT', amount: 0, used, limit: FREE_DAILY_WIN_LIMIT, dateKey };
+      tx.set(claimRef, { key: claimRef.id, type: 'chess-free-win', uid, roomId, dateKey, status: 'limited', createdAt: now(), result: preflight }, { merge: false });
+      return;
+    }
+    preflight = { ok: true, proceedCredit: true, usedBefore: used, reservedBefore: reserved };
+    tx.set(counterRef, { uid, dateKey, used, reserved: reserved + 1, updatedAt: now() }, { merge: true });
+    tx.set(claimRef, { key: claimRef.id, type: 'chess-free-win', uid, roomId, dateKey, status: 'pending', createdAt: now() }, { merge: false });
   });
   if (preflight && !preflight.proceedCredit) return preflight;
   const credit = await creditBalance({ uid, amount, reason: 'chess-free-win-reward', idempotencyKey: `chess:free-win-credit:${dateKey}:${roomId}:${uid}`, metadata: { roomId, dateKey } }).catch((error) => ({ ok: false, error: error.message }));
-  const out = { ok: !!credit.ok, rewarded: !!credit.ok, amount: credit.ok ? amount : 0, balance: credit.balance, used: Number(preflight?.usedBefore || 0) + (credit.ok ? 1 : 0), limit: FREE_DAILY_WIN_LIMIT, dateKey };
-  await claimRef.set({ key: claimRef.id, type: 'chess-free-win', uid, roomId, dateKey, createdAt: now(), result: out }, { merge: true }).catch(() => null);
-  return out;
+  let out = null;
+  await db.runTransaction(async (tx) => {
+    const [claim, counter] = await Promise.all([tx.get(claimRef), tx.get(counterRef)]);
+    const stored = claim.exists ? claim.data() : {};
+    if (stored?.result && stored.status !== 'pending') { out = stored.result; return; }
+    const data = counter.exists ? counter.data() : {};
+    const used = Math.max(0, Number(data.used || preflight?.usedBefore || 0));
+    const reserved = Math.max(0, Number(data.reserved || 0));
+    out = {
+      ok: !!credit.ok,
+      rewarded: !!credit.ok,
+      reason: credit.ok ? 'REWARDED' : 'CREDIT_FAILED',
+      amount: credit.ok ? amount : 0,
+      balance: credit.balance,
+      used: used + (credit.ok ? 1 : 0),
+      limit: FREE_DAILY_WIN_LIMIT,
+      dateKey
+    };
+    tx.set(counterRef, { uid, dateKey, used: out.used, reserved: Math.max(0, reserved - 1), updatedAt: now() }, { merge: true });
+    tx.set(claimRef, { key: claimRef.id, type: 'chess-free-win', uid, roomId, dateKey, status: 'final', finalizedAt: now(), result: out }, { merge: true });
+  });
+  return out || { ok: false, rewarded: false, reason: 'REWARD_FINALIZE_FAILED', amount: 0, used: Number(preflight?.usedBefore || 0), limit: FREE_DAILY_WIN_LIMIT, dateKey };
 }
 
 async function settleRoom(r, reason = '') {
@@ -831,7 +856,7 @@ async function makeBotMoveIfNeeded(r) {
 router.get('/lobby', requireAuth, asyncRoute(async (req, res) => {
   const viewerUid = uidOf(req);
   for (const r of rooms.values()) syncClock(r);
-  const visible = [...rooms.values()].filter((r) => r.status !== 'finished' && r.mode !== 'private').map((r) => publicRoom(r, viewerUid));
+  const visible = [...rooms.values()].filter((r) => r.status !== 'finished' && r.mode !== 'private' && r.mode !== 'bot').map((r) => publicRoom(r, viewerUid));
   res.json({ ok: true, rooms: visible });
 }));
 router.get('/profile', requireAuth, asyncRoute(async (req, res) => {

@@ -7,7 +7,16 @@ const FIREBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-a
 const FIREBASE_SDK_TIMEOUT_MS = 7000;
 const PM_SESSION_TOKEN_KEY = 'pm_session_token';
 function readServerSessionToken() {
-  try { return window.sessionStorage?.getItem(PM_SESSION_TOKEN_KEY) || window.localStorage?.getItem(PM_SESSION_TOKEN_KEY) || ''; } catch (_) { return ''; }
+  try {
+    const token = window.sessionStorage?.getItem(PM_SESSION_TOKEN_KEY) || '';
+    if (token) return token;
+    const legacy = window.localStorage?.getItem(PM_SESSION_TOKEN_KEY) || '';
+    if (legacy) {
+      window.sessionStorage?.setItem(PM_SESSION_TOKEN_KEY, legacy);
+      window.localStorage?.removeItem(PM_SESSION_TOKEN_KEY);
+    }
+    return legacy;
+  } catch (_) { return ''; }
 }
 
 let firebaseSdkPromise = null;

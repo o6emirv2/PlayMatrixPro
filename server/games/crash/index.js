@@ -55,7 +55,8 @@ const state = {
   roundStartPromise: null,
   io: null,
   timer: null,
-  autoTimers: new Map()
+  autoTimers: new Map(),
+  subscribers: new Set()
 };
 
 function makeHttpError(message, statusCode = 400) {
@@ -325,7 +326,7 @@ async function awardCrashXp(bet, options = {}) {
         wins: Number(crash.wins || 0) + (outcomeKey === 'win' ? 1 : 0),
         losses: Number(crash.losses || 0) + (outcomeKey === 'loss' ? 1 : 0),
         totalBet: Number(crash.totalBet || 0) + Number(bet.amount || 0),
-        totalCashout: Number(crash.totalCashout || 0) + Number(bet.payout || 0),
+        totalCashout: Number(crash.totalCashout || 0) + Number(bet.winAmount ?? bet.payout ?? 0),
         bestMultiplier: Math.max(Number(crash.bestMultiplier || 0), Number(options.cashoutMult || 0))
       };
       patchCrash.winRatePct = patchCrash.rounds ? Math.round((patchCrash.wins / patchCrash.rounds) * 1000) / 10 : 0;
@@ -362,7 +363,7 @@ async function awardCrashXp(bet, options = {}) {
           wins: Number(crash.wins || 0) + (outcomeKey === 'win' ? 1 : 0),
           losses: Number(crash.losses || 0) + (outcomeKey === 'loss' ? 1 : 0),
           totalBet: Number(crash.totalBet || 0) + Number(bet.amount || 0),
-          totalCashout: Number(crash.totalCashout || 0) + Number(bet.payout || 0),
+          totalCashout: Number(crash.totalCashout || 0) + Number(bet.winAmount ?? bet.payout ?? 0),
           bestMultiplier: Math.max(Number(crash.bestMultiplier || 0), Number(options.cashoutMult || 0))
         };
         patchCrash.winRatePct = patchCrash.rounds ? Math.round((patchCrash.wins / patchCrash.rounds) * 1000) / 10 : 0;
@@ -466,8 +467,11 @@ function emitState(options = {}) {
   const ts = now();
   if (!force && state.phase === 'FLYING' && ts - lastStateEmitAt < STATE_EMIT_MIN_MS) return;
   lastStateEmitAt = ts;
-  for (const socket of state.io.sockets.sockets.values()) {
-    if (!socket.data?.crashSubscribed) continue;
+  for (const socket of state.subscribers) {
+    if (!socket?.connected || !socket.data?.crashSubscribed) {
+      state.subscribers.delete(socket);
+      continue;
+    }
     socket.emit('crash:update', snapshot({ viewerUid: socket.data?.crashUid || '' }));
   }
 }
@@ -710,10 +714,12 @@ function installSocket(io) {
         return;
       }
       socket.data.crashSubscribed = true;
+      state.subscribers.add(socket);
       socket.join?.('crash');
       socket.emit('crash:update', snapshot({ viewerUid: socket.data?.crashUid || '' }));
     });
-    socket.on('crash:unsubscribe', () => { socket.data.crashSubscribed = false; socket.leave?.('crash'); });
+    socket.on('crash:unsubscribe', () => { socket.data.crashSubscribed = false; state.subscribers.delete(socket); socket.leave?.('crash'); });
+    socket.on('disconnect', () => { state.subscribers.delete(socket); });
   });
 }
 

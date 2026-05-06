@@ -827,9 +827,9 @@ main,section,article,aside,nav,header,footer{min-width:0}
 
 .hero-slider-track{display:flex; gap:14px; will-change:transform; transform:translate3d(0,0,0); transition:transform .72s cubic-bezier(.22,.8,.2,1), opacity .28s ease;}
 
-.hero-slider-track,.hero-slide,.game-card,.lb-item,.btn,.ghost-btn,.mobile-tab,.nav-link{backface-visibility:hidden; transform:translateZ(0);}
+.hero-slide,.game-card,.lb-item,.btn,.ghost-btn,.mobile-tab,.nav-link{backface-visibility:hidden;}
 
-.hero-slider-track,.hero-slide,.game-card,.lb-item{will-change:transform, opacity;}
+.hero-slider-track{will-change:transform;}
 
 .hero-slider-viewport,.hero-slider-dots,.hero-slider-dot,.hero-slide,.hero-slide-content{pointer-events:auto;}
 
@@ -2661,7 +2661,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 
 .sheet-shell.is-social .sheet-panel,
 .sheet-shell.is-social .sheet-content,
-.sheet-shell.is-social .ps-social-layout,
+.sheet-shell.is-social .pm-social-layout,
 .sheet-shell.is-social .ps-main-panel,
 .sheet-shell.is-social #psChatStream {
   overscroll-behavior: contain;
@@ -6076,4 +6076,20 @@ body.modal-open, body.sheet-open { overflow: hidden; }
   .user-trigger{width:40px!important;min-width:40px!important;max-width:40px!important;height:40px!important;}
   #topbarAvatarShell,#headerAvatarShell{inline-size:32px!important;block-size:32px!important;}
   .dropdown{width:min(324px,calc(100vw - 16px))!important;max-width:min(324px,calc(100vw - 16px))!important;}
+}
+
+
+@media (max-width:860px){
+  .sheet-shell.is-social .pm-social-layout{
+    grid-template-columns:54px minmax(0,1fr)!important;
+    min-height:520px!important;
+    height:calc(78vh - 2px)!important;
+    border-radius:22px!important;
+  }
+}
+@media (max-width:560px){
+  .sheet-shell.is-social .pm-social-layout{
+    grid-template-columns:50px minmax(0,1fr)!important;
+    height:calc(76vh - 2px)!important;
+  }
 }
