@@ -18,23 +18,6 @@
     measurementId: 'G-HEDD2B0T9H'
   });
 
-
-  const GAME_ROUTES = Object.freeze({
-    crash: '/games/crash/index.html',
-    chess: '/games/chess/index.html',
-    satranc: '/games/chess/index.html',
-    pisti: '/games/pisti/index.html',
-    pattern: '/games/pattern-master/index.html',
-    patternmaster: '/games/pattern-master/index.html',
-    space: '/games/space-pro/index.html',
-    spacepro: '/games/space-pro/index.html',
-    snake: '/games/snake-pro/index.html',
-    snakepro: '/games/snake-pro/index.html'
-  });
-
-  window.__PLAYMATRIX_ROUTES__ = GAME_ROUTES;
-  window.__PLAYMATRIX_API_BASE__ = window.__PLAYMATRIX_API_BASE__ || RENDER_API_BASE;
-
   const frameRules = [
     { min: 1, max: 15, frame: 1 },
     { min: 16, max: 30, frame: 2 },
@@ -1052,70 +1035,9 @@
     window.addEventListener('unhandledrejection', (event) => reportClientError('window.unhandledrejection', event.reason));
   }
 
-
-  function installLegacyCompatibility() {
-    window.__PM_RUNTIME = window.__PM_RUNTIME || {};
-    window.__PM_RUNTIME.apiBase = state.apiBase || RENDER_API_BASE;
-    window.__PM_RUNTIME.auth = window.__PM_RUNTIME.auth || {};
-    Object.defineProperty(window.__PM_RUNTIME.auth, 'currentUser', {
-      configurable: true,
-      get() {
-        return state.user || null;
-      }
-    });
-
-    window.openPlayMatrixSheet = (sheet, title = '', message = '') => {
-      const key = String(sheet || '').trim().toLowerCase();
-      if (key === 'auth' || key === 'login') { openAuth('login'); return true; }
-      if (key === 'register') { openAuth('register'); return true; }
-      if (key === 'forgot') { openLayer('forgotModal'); return true; }
-      if (key === 'profile' || key === 'account') { state.user ? openLayer('accountDrawer') : openAuth('login'); return true; }
-      if (key === 'stats' || key === 'account-stats' || key === 'istatistiklerim') { openAccountStats(); return true; }
-      if (key === 'avatar') { if (!state.user) openAuth('login'); else { renderAvatarPicker(); openLayer('avatarModal'); } return true; }
-      if (key === 'frame') { if (!state.user) openAuth('login'); else { renderFramePicker(); openLayer('frameModal'); } return true; }
-      if (key === 'wheel') { openWheel(); return true; }
-      if (key === 'promo' || key === 'bonus') { openPromo(); return true; }
-      if (key === 'support') { openLayer('supportModal'); return true; }
-      if (key === 'social') { openSocialCenter(); return true; }
-      if (message) showToast(message, title || 'PlayMatrix');
-      return false;
-    };
-
-    window.showPlayerStats = (player) => {
-      if (player && typeof player === 'object') { openPlayerStats(player); return true; }
-      const uid = String(player || '').trim();
-      const tabs = state.leaderboard || {};
-      const candidates = [
-        ...(Array.isArray(tabs.level) ? tabs.level : []),
-        ...(Array.isArray(tabs.activity) ? tabs.activity : []),
-        ...(Array.isArray(tabs.monthly) ? tabs.monthly : [])
-      ];
-      const match = candidates.find((item) => String(item.uid || item.id || item.userId || '') === uid);
-      if (match) { openPlayerStats(match); return true; }
-      showToast('Oyuncu istatistiği bulunamadı.', 'Liderlik');
-      return false;
-    };
-
-    window.PlayMatrixHome = Object.freeze({
-      openAuth,
-      openAccountStats,
-      openSocialCenter,
-      openPromo,
-      openWheel,
-      openSupport: () => openLayer('supportModal'),
-      openAvatar: () => { if (!state.user) openAuth('login'); else { renderAvatarPicker(); openLayer('avatarModal'); } },
-      openFrame: () => { if (!state.user) openAuth('login'); else { renderFramePicker(); openLayer('frameModal'); } },
-      navigateTo,
-      refreshUser: loadCurrentUser,
-      refreshLeaderboard: loadLeaderboard,
-      getState: () => ({ auth: state.auth, user: state.user, leaderboardTab: state.leaderboardTab })
-    });
-  }
-
   function boot() {
     document.body.dataset.authMode = 'login';
     state.apiBase = normalizeBase(getMetaContent('playmatrix-api-url')) || RENDER_API_BASE;
-    installLegacyCompatibility();
     renderGames();
     renderUserShell();
     installEvents();

@@ -292,31 +292,3 @@ body[data-auth-mode="register"] .pm-authModalPanel [data-login-only] { display: 
 }
 .pm-storyItem > .pm-avatarCore { width: 66px; height: 66px; }
 .pm-socialRow > .pm-avatarCore { width: 54px; height: 54px; }
-
-
-.pm-primaryNav::after,
-.pm-primaryNav::before { content: none; }
-.pm-quickCard,
-.pm-bottomBar__item,
-.pm-auth__btn,
-.pm-gameCard,
-.pm-leaderItem,
-.pm-drawerList button,
-.pm-goldButton,
-.pm-linkButton,
-.pm-tab {
-  touch-action: manipulation;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-}
-.pm-modal,
-.pm-drawer,
-.pm-socialModal {
-  overscroll-behavior: contain;
-}
-.pm-socialPanel,
-.pm-modal__panel,
-.pm-drawer__panel {
-  max-width: min(100%, 720px);
-}
