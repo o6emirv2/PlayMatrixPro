@@ -1,204 +1,830 @@
 (() => {
   'use strict';
 
-  const AUTH_KEY = 'pm-home-auth-state';
+  const SESSION_KEY = 'pm_session_token';
+  const API_BASE_KEY = 'pm_api_base';
+  const FIREBASE_IMPORT_TIMEOUT_MS = 7000;
+  const API_TIMEOUT_MS = 5500;
+  const RENDER_API_BASE = 'https://emirhan-siye.onrender.com';
+  const FALLBACK_AVATAR = './public/assets/avatars/system/fallback.svg';
+  const DEFAULT_REMOTE_AVATAR = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfGyJQYvPP6iCLIpSd0v2JMQxgxA3dUEjyLmW4F82zYQ&s=10';
+  const PUBLIC_FIREBASE_CONFIG = Object.freeze({
+    apiKey: 'AIzaSyANhKrb7zuSzXouFq03Q_oWQJCQUglCNhE',
+    authDomain: 'playmatrixpro-b18b7.firebaseapp.com',
+    projectId: 'playmatrixpro-b18b7',
+    storageBucket: 'playmatrixpro-b18b7.firebasestorage.app',
+    messagingSenderId: '401147567674',
+    appId: '1:401147567674:web:37f609d8527e61a72c5f03',
+    measurementId: 'G-HEDD2B0T9H'
+  });
+
+  const frameRules = [
+    { min: 1, max: 15, frame: 1 },
+    { min: 16, max: 30, frame: 2 },
+    { min: 31, max: 40, frame: 3 },
+    { min: 41, max: 50, frame: 4 },
+    { min: 51, max: 60, frame: 5 },
+    { min: 61, max: 80, frame: 6 },
+    { min: 81, max: 85, frame: 7 },
+    { min: 86, max: 90, frame: 8 },
+    { min: 91, max: 91, frame: 9 },
+    { min: 92, max: 92, frame: 10 },
+    { min: 93, max: 93, frame: 11 },
+    { min: 94, max: 94, frame: 12 },
+    { min: 95, max: 95, frame: 13 },
+    { min: 96, max: 96, frame: 14 },
+    { min: 97, max: 97, frame: 15 },
+    { min: 98, max: 98, frame: 16 },
+    { min: 99, max: 99, frame: 17 },
+    { min: 100, max: 100, frame: 18 }
+  ];
+
+  const frameProfiles = {
+    0: { fit: '100%', scale: '0%' },
+    1: { fit: '82%', scale: '128%' },
+    2: { fit: '82%', scale: '132%' },
+    3: { fit: '78%', scale: '138%' },
+    4: { fit: '82%', scale: '132%' },
+    5: { fit: '82%', scale: '132%' },
+    6: { fit: '80%', scale: '136%' },
+    7: { fit: '78%', scale: '138%' },
+    8: { fit: '80%', scale: '136%' },
+    9: { fit: '82%', scale: '134%' },
+    10: { fit: '82%', scale: '132%' },
+    11: { fit: '78%', scale: '140%' },
+    12: { fit: '80%', scale: '136%' },
+    13: { fit: '80%', scale: '136%' },
+    14: { fit: '78%', scale: '140%' },
+    15: { fit: '76%', scale: '142%' },
+    16: { fit: '78%', scale: '140%' },
+    17: { fit: '76%', scale: '142%' },
+    18: { fit: '74%', scale: '150%' }
+  };
+
+  const games = [
+    { id: 'crash', title: 'Crash', route: '/games/crash', description: 'Refleks ve zamanlama odaklı multiplier deneyimi.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'], icon: 'trend', auth: true },
+    { id: 'chess', title: 'Satranç', route: '/games/chess', description: 'Bahissiz, bahisli ve bot modlarını destekleyen strateji oyunu.', tags: ['PvP', 'Strateji', 'Arena'], icon: 'chess', auth: true },
+    { id: 'pisti', title: 'Pişti', route: '/games/pisti', description: 'Klasik kart oyunu deneyimi.', tags: ['Kart', 'Klasik', 'Çok Oyunculu'], icon: 'cards', auth: true },
+    { id: 'pattern', title: 'Pattern Master', route: '/games/pattern-master', description: 'Hafıza ve örüntü takibi üzerine klasik oyun.', tags: ['Klasik', 'Zeka', 'Skor'], icon: 'grid', auth: true },
+    { id: 'space', title: 'Space Pro', route: '/games/space-pro', description: 'Uzay temalı refleks ve kaçınma oyunu.', tags: ['Klasik', 'Refleks', 'Uzay'], icon: 'rocket', auth: true },
+    { id: 'snake', title: 'Snake Pro', route: '/games/snake-pro', description: 'Modernleştirilmiş yılan oyunu.', tags: ['Klasik', 'Mobil', 'Skor'], icon: 'snake', auth: true }
+  ];
+
+  const state = {
+    auth: 'guest',
+    user: null,
+    token: readSessionToken(),
+    apiBase: '',
+    firebase: null,
+    authMode: 'login',
+    activeLayer: null,
+    leaderboardTab: 'level',
+    leaderboard: null,
+    selectedAvatar: '',
+    selectedFrame: 0
+  };
+
   const $ = (id) => document.getElementById(id);
+  const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || 0));
+  const formatNumber = (value) => new Intl.NumberFormat('tr-TR').format(Math.max(0, Number(value) || 0));
+  const normalizeBase = (value) => String(value || '').trim().replace(/\/+$/, '').replace(/\/api$/i, '');
+  const safeText = (value, fallback = '') => String(value ?? fallback).replace(/[<>]/g, '').trim();
+  const first = (...values) => values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
 
-  function dispatchHomeAction(action, detail = {}) {
-    window.dispatchEvent(new CustomEvent('playmatrix:home-action', {
-      detail: { action, ...detail }
-    }));
+  function getMetaContent(name) {
+    return document.querySelector(`meta[name="${name}"]`)?.content || '';
   }
 
-  function dispatchAuthAction(action) {
-    window.dispatchEvent(new CustomEvent('playmatrix:home-auth-action', {
-      detail: { action }
-    }));
-    dispatchHomeAction(action);
+  function getApiCandidates() {
+    const list = [];
+    const push = (value) => {
+      const base = normalizeBase(value);
+      if (base && !list.includes(base)) list.push(base);
+    };
+    push(window.__PM_RUNTIME?.apiBase);
+    push(window.__PLAYMATRIX_API_URL__);
+    push(getMetaContent('playmatrix-api-url'));
+    try { push(localStorage.getItem(API_BASE_KEY)); } catch (_) {}
+    push(window.location.origin);
+    push(RENDER_API_BASE);
+    return list;
   }
 
-  function getStoredAuthState() {
+  function readSessionToken() {
+    try { return sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(SESSION_KEY) || ''; } catch (_) { return ''; }
+  }
+
+  function storeSessionToken(token) {
+    const value = String(token || '').trim();
+    if (!value) return;
+    state.token = value;
+    try { sessionStorage.setItem(SESSION_KEY, value); localStorage.setItem(SESSION_KEY, value); } catch (_) {}
+  }
+
+  function clearSessionToken() {
+    state.token = '';
+    try { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(SESSION_KEY); } catch (_) {}
+  }
+
+  function withTimeout(promise, timeoutMs, code) {
+    let timer = 0;
+    const timeout = new Promise((_, reject) => {
+      timer = window.setTimeout(() => reject(Object.assign(new Error(code), { code })), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+  }
+
+  async function fetchJson(path, options = {}, allowedStatuses = []) {
+    const candidates = state.apiBase ? [state.apiBase, ...getApiCandidates().filter((x) => x !== state.apiBase)] : getApiCandidates();
+    let lastError = null;
+    for (const base of candidates) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), options.timeoutMs || API_TIMEOUT_MS);
+      const headers = { Accept: 'application/json', ...(options.headers || {}) };
+      if (state.token) headers['x-session-token'] = state.token;
+      if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+      try {
+        const response = await fetch(`${base}${path}`, {
+          ...options,
+          headers,
+          credentials: 'include',
+          signal: controller.signal,
+          body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok || allowedStatuses.includes(response.status)) {
+          state.apiBase = base;
+          try { localStorage.setItem(API_BASE_KEY, base); } catch (_) {}
+          return { status: response.status, payload };
+        }
+        lastError = Object.assign(new Error(payload?.error || `HTTP_${response.status}`), { status: response.status, payload });
+      } catch (error) {
+        lastError = error;
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
+    throw lastError || new Error('API_UNAVAILABLE');
+  }
+
+  function resolveFrameByLevel(level = 1) {
+    const accountLevel = Math.max(1, Math.min(100, Math.floor(Number(level) || 1)));
+    return frameRules.find((rule) => accountLevel >= rule.min && accountLevel <= rule.max)?.frame || 1;
+  }
+
+  function resolveFrameUnlockLevel(frameIndex = 0) {
+    const rule = frameRules.find((item) => item.frame === Number(frameIndex));
+    return rule ? rule.min : 0;
+  }
+
+  function userLevel(user = state.user) {
+    return Math.max(1, Math.min(100, Math.floor(Number(first(user?.accountLevel, user?.level, user?.progression?.level, 1)) || 1)));
+  }
+
+  function selectedFrameFor(user = state.user) {
+    const explicit = Math.floor(Number(first(user?.selectedFrame, user?.frame, 0)) || 0);
+    if (explicit > 0) return explicit <= 18 ? explicit : resolveFrameByLevel(explicit);
+    return resolveFrameByLevel(userLevel(user));
+  }
+
+  function avatarUrlFor(user = state.user) {
+    return safeText(first(user?.avatar, user?.photoURL, user?.photoUrl, DEFAULT_REMOTE_AVATAR), DEFAULT_REMOTE_AVATAR);
+  }
+
+  function createAvatarNode({ avatar = DEFAULT_REMOTE_AVATAR, frame = 0, label = 'Oyuncu' } = {}) {
+    const core = document.createElement('span');
+    const frameIndex = Math.max(0, Math.min(18, Math.floor(Number(frame) || 0)));
+    const profile = frameProfiles[frameIndex] || frameProfiles[1];
+    core.className = 'pm-avatarCore';
+    core.dataset.frame = String(frameIndex);
+    core.style.setProperty('--avatar-fit', profile.fit);
+    core.style.setProperty('--frame-scale', profile.scale);
+
+    const image = document.createElement('img');
+    image.className = 'pm-avatarCore__img';
+    image.src = avatar || DEFAULT_REMOTE_AVATAR;
+    image.alt = label;
+    image.decoding = 'async';
+    image.loading = 'lazy';
+    image.referrerPolicy = 'no-referrer';
+    image.draggable = false;
+    image.onerror = () => { image.src = FALLBACK_AVATAR; };
+    core.appendChild(image);
+
+    if (frameIndex > 0) {
+      const frameImg = document.createElement('img');
+      frameImg.className = 'pm-avatarCore__frame';
+      frameImg.src = `./public/assets/frames/frame-${frameIndex}.png`;
+      frameImg.alt = '';
+      frameImg.decoding = 'async';
+      frameImg.loading = 'lazy';
+      frameImg.draggable = false;
+      frameImg.setAttribute('aria-hidden', 'true');
+      core.appendChild(frameImg);
+    }
+    return core;
+  }
+
+  function renderAvatar(slotId, options = {}) {
+    const slot = $(slotId);
+    if (!slot) return;
+    slot.replaceChildren(createAvatarNode(options));
+  }
+
+  function iconSvg(name) {
+    const map = {
+      trend: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17 9 12l4 4 7-9"/><path d="M14 7h6v6"/></svg>',
+      chess: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 3h8v3h-2v3.2c1.8.8 3 2.4 3 4.3 0 1.2-.5 2.4-1.35 3.25H18V21H6v-4.25h2.35A4.64 4.64 0 0 1 7 13.5c0-1.9 1.2-3.5 3-4.3V6H8V3Z"/></svg>',
+      cards: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="12" height="16" rx="2"/><path d="M5 7 3.6 18.3A2 2 0 0 0 5.58 20.5H15"/><path d="M11 8h4M11 12h4"/></svg>',
+      grid: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"/></svg>',
+      rocket: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.9 14.9 9.1 11.1C10.8 6.5 14.2 3.6 20.5 3.5c-.1 6.3-3 9.7-7.6 11.4ZM7.6 12.2l4.2 4.2-2.1 2.1-2.8-.7-.7-2.8 1.4-2.8ZM6.2 18.4 5 22l3.6-1.2-2.4-2.4Z"/></svg>',
+      snake: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14c0-3 2-5 5-5h4a3 3 0 0 0 0-6H9"/><path d="M20 10c0 3-2 5-5 5h-4a3 3 0 0 0 0 6h4"/><path d="M16 3h.01M8 21h.01"/></svg>'
+    };
+    return map[name] || map.grid;
+  }
+
+  function showToast(message, tone = 'info') {
+    const host = $('toastHost');
+    if (!host) return;
+    const toast = document.createElement('div');
+    toast.className = `pm-toast pm-toast--${tone}`;
+    toast.textContent = message;
+    host.appendChild(toast);
+    window.setTimeout(() => toast.remove(), 4200);
+  }
+
+  function reportClientError(scope, error, context = {}) {
+    const payload = {
+      game: 'home',
+      scope,
+      message: safeText(error?.message || error || 'Bilinmeyen hata', 180),
+      path: location.pathname,
+      source: 'home.final.script',
+      context
+    };
+    fetchJson('/api/client/error', { method: 'POST', body: payload, timeoutMs: 2200 }, [401, 404, 405]).catch(() => null);
+  }
+
+  function lockLayers(lock) {
+    document.body.classList.toggle('pm-layer-open', !!lock);
+    $('globalOverlay').hidden = !lock;
+    $('globalOverlay').classList.toggle('is-visible', !!lock);
+  }
+
+  function closeLayer() {
+    $$('.pm-drawer.is-open, .pm-modal.is-open').forEach((node) => {
+      node.classList.remove('is-open');
+      node.setAttribute('aria-hidden', 'true');
+    });
+    state.activeLayer = null;
+    lockLayers(false);
+  }
+
+  function openLayer(id) {
+    const node = $(id);
+    if (!node) return;
+    closeLayer();
+    state.activeLayer = id;
+    node.classList.add('is-open');
+    node.setAttribute('aria-hidden', 'false');
+    lockLayers(true);
+    window.setTimeout(() => node.querySelector('input, textarea, button')?.focus?.({ preventScroll: true }), 60);
+  }
+
+  function setAuthMode(mode) {
+    state.authMode = mode === 'register' ? 'register' : 'login';
+    document.body.dataset.authMode = state.authMode;
+    $('authTitle').textContent = state.authMode === 'register' ? 'Kayıt Ol' : 'Giriş Yapın';
+    $('authSubmitBtn').textContent = state.authMode === 'register' ? 'Kayıt Ol' : 'Devam Et';
+    $$('[data-auth-mode]').forEach((btn) => btn.classList.toggle('is-active', btn.dataset.authMode === state.authMode));
+    const msg = $('authMessage');
+    if (msg) { msg.textContent = ''; msg.className = 'pm-formMessage'; }
+  }
+
+  function openAuth(mode = 'login') {
+    setAuthMode(mode);
+    openLayer('authModal');
+  }
+
+  function authHeaders(extra = {}) {
+    return { ...extra, ...(state.token ? { 'x-session-token': state.token } : {}) };
+  }
+
+  async function ensureFirebase() {
+    if (state.firebase) return state.firebase;
+    const [appModule, authModule] = await withTimeout(Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js')
+    ]), FIREBASE_IMPORT_TIMEOUT_MS, 'FIREBASE_IMPORT_TIMEOUT');
+    const app = appModule.getApps().length ? appModule.getApp() : appModule.initializeApp(PUBLIC_FIREBASE_CONFIG);
+    const auth = authModule.getAuth(app);
+    state.firebase = { appModule, authModule, app, auth };
+    authModule.onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        await bootstrapSession(user).catch((error) => reportClientError('auth.bootstrap', error));
+        await loadCurrentUser().catch((error) => reportClientError('auth.user_load', error));
+      } else if (!readSessionToken()) {
+        setAuthState('guest', null);
+      }
+    });
+    return state.firebase;
+  }
+
+  async function bootstrapSession(firebaseUser) {
+    const { authModule } = await ensureFirebase();
+    const idToken = await authModule.getIdToken(firebaseUser, true);
+    const { payload } = await fetchJson('/api/auth/session/create', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${idToken}` },
+      body: {}
+    });
+    const token = payload?.sessionToken || payload?.session?.token || '';
+    if (token) storeSessionToken(token);
+    if (payload?.user) setAuthState('authenticated', payload.user);
+    return payload;
+  }
+
+  async function submitAuth(event) {
+    event.preventDefault();
+    const message = $('authMessage');
+    message.textContent = 'İşlem hazırlanıyor...';
+    message.className = 'pm-formMessage';
+    const identifier = $('authIdentifier').value.trim();
+    const password = $('authPassword').value;
     try {
-      const value = window.localStorage.getItem(AUTH_KEY);
-      return value === 'authenticated' ? 'authenticated' : 'guest';
-    } catch (_) {
-      return document.body.dataset.authState === 'authenticated' ? 'authenticated' : 'guest';
+      const { auth, authModule } = await ensureFirebase();
+      if (state.authMode === 'login') {
+        if (!identifier || !password) throw new Error('E-posta/kullanıcı adı ve şifre zorunlu.');
+        const resolved = await fetchJson('/api/auth/resolve-login', { method: 'POST', body: { identifier } }, [404]);
+        if (resolved.status === 404 || resolved.payload?.ok === false) throw new Error('Kullanıcı bulunamadı.');
+        const email = resolved.payload.email || identifier;
+        const credential = await authModule.signInWithEmailAndPassword(auth, email, password);
+        await bootstrapSession(credential.user);
+        message.textContent = 'Giriş başarılı.';
+        message.className = 'pm-formMessage is-ok';
+        closeLayer();
+        showToast('Oturum açıldı.', 'success');
+        return;
+      }
+      const fullName = $('authFullName').value.trim();
+      const username = $('authUsername').value.trim();
+      if (!fullName || !username || !identifier || !password) throw new Error('Kayıt için tüm alanları doldur.');
+      if (!identifier.includes('@')) throw new Error('Kayıt için geçerli e-posta adresi gir.');
+      const credential = await authModule.createUserWithEmailAndPassword(auth, identifier, password);
+      await authModule.sendEmailVerification(credential.user).catch(() => null);
+      await bootstrapSession(credential.user);
+      const avatar = avatarUrlFor();
+      await fetchJson('/api/profile/update', { method: 'POST', body: { fullName, username, avatar, selectedFrame: 1 } });
+      await loadCurrentUser();
+      message.textContent = 'Hesap oluşturuldu.';
+      message.className = 'pm-formMessage is-ok';
+      closeLayer();
+      showToast('Kayıt tamamlandı. Doğrulama e-postası gönderildi.', 'success');
+    } catch (error) {
+      message.textContent = normalizeAuthError(error);
+      message.className = 'pm-formMessage is-error';
+      reportClientError('auth.submit', error);
     }
   }
 
-  function setAuthState(nextState) {
-    const state = nextState === 'authenticated' || nextState === 'user' || nextState === true ? 'authenticated' : 'guest';
-    document.body.dataset.authState = state;
-    try { window.localStorage.setItem(AUTH_KEY, state); } catch (_) {}
-
-    document.querySelectorAll('.pm-bottomBar__item').forEach((item) => {
-      const label = state === 'authenticated' ? item.dataset.userLabel : item.dataset.guestLabel;
-      const labelNode = item.querySelector('.pm-bottomBar__text');
-      if (label && labelNode) labelNode.textContent = label;
-    });
+  function normalizeAuthError(error) {
+    const raw = String(error?.code || error?.message || error || '').toLowerCase();
+    if (raw.includes('invalid-credential') || raw.includes('wrong-password')) return 'Giriş bilgileri doğrulanamadı.';
+    if (raw.includes('email-already-in-use')) return 'Bu e-posta adresi zaten kullanılıyor.';
+    if (raw.includes('weak-password')) return 'Şifre en az 6 karakter olmalı.';
+    if (raw.includes('invalid-email')) return 'Geçerli bir e-posta adresi gir.';
+    if (raw.includes('network')) return 'Ağ bağlantısı kurulamadı. Tekrar dene.';
+    return error?.message || 'İşlem tamamlanamadı.';
   }
 
-  function installHeaderActions() {
-    $('pmLoginButton')?.addEventListener('click', () => dispatchAuthAction('login'));
-    $('pmRegisterButton')?.addEventListener('click', () => dispatchAuthAction('register'));
+  async function sendPasswordReset() {
+    const msg = $('forgotMessage');
+    const email = $('forgotEmail').value.trim();
+    try {
+      if (!email || !email.includes('@')) throw new Error('Geçerli e-posta adresi gir.');
+      const { auth, authModule } = await ensureFirebase();
+      await authModule.sendPasswordResetEmail(auth, email);
+      msg.textContent = 'Şifre sıfırlama bağlantısı gönderildi.';
+      msg.className = 'pm-formMessage is-ok';
+    } catch (error) {
+      msg.textContent = normalizeAuthError(error);
+      msg.className = 'pm-formMessage is-error';
+    }
+  }
+
+  function setAuthState(next, user = null) {
+    const auth = next === 'authenticated' || next === true || user ? 'authenticated' : 'guest';
+    state.auth = auth;
+    state.user = auth === 'authenticated' ? normalizeUser(user || state.user || {}) : null;
+    document.body.dataset.authState = auth;
+    $('guestHeaderActions').hidden = auth === 'authenticated';
+    $('accountChip').hidden = auth !== 'authenticated';
+    $$('[data-guest-label]').forEach((item) => {
+      const label = auth === 'authenticated' ? item.dataset.userLabel : item.dataset.guestLabel;
+      const node = item.querySelector('.pm-bottomBar__text');
+      if (label && node) node.textContent = label;
+    });
+    renderUserShell();
+  }
+
+  function normalizeUser(raw = {}) {
+    const p = raw.profile || raw.user || raw;
+    return {
+      uid: safeText(p.uid || ''),
+      username: safeText(first(p.username, p.displayName, p.fullName, p.email?.split('@')[0], 'Oyuncu'), 'Oyuncu'),
+      email: safeText(p.email || ''),
+      avatar: avatarUrlFor(p),
+      selectedFrame: selectedFrameFor(p),
+      accountLevel: userLevel(p),
+      xp: Math.max(0, Number(first(p.accountXp, p.xp, p.progression?.xp, 0)) || 0),
+      balance: Math.max(0, Number(first(p.balance, p.mc, 0)) || 0),
+      monthlyActiveScore: Math.max(0, Number(p.monthlyActiveScore || 0) || 0),
+      progressPercent: Math.max(0, Math.min(100, Number(first(p.progressPercent, p.accountLevelProgressPct, p.progression?.progressPercent, 0)) || 0)),
+      gameStats: p.gameStats || {},
+      emailVerified: !!(p.emailVerified || p.email_verified),
+      raw: p
+    };
+  }
+
+  async function loadCurrentUser() {
+    if (!state.token) {
+      setAuthState('guest', null);
+      return null;
+    }
+    try {
+      const { payload } = await fetchJson('/api/me', { method: 'GET' }, [401]);
+      if (payload?.ok && payload.user) {
+        setAuthState('authenticated', payload.user);
+        return state.user;
+      }
+      setAuthState('guest', null);
+      clearSessionToken();
+      return null;
+    } catch (error) {
+      reportClientError('home.player_stats', error);
+      return null;
+    }
+  }
+
+  function renderUserShell() {
+    const user = state.user;
+    const avatar = avatarUrlFor(user || {});
+    const frame = user ? selectedFrameFor(user) : 0;
+    renderAvatar('topAvatarSlot', { avatar, frame: 0, label: user?.username || 'Misafir' });
+    renderAvatar('profileAvatarSlot', { avatar, frame, label: user?.username || 'Misafir' });
+    renderAvatar('drawerAvatarSlot', { avatar, frame, label: user?.username || 'Misafir' });
+    $('topBalance').textContent = formatNumber(user?.balance || 0);
+    $('drawerUsername').textContent = user?.username || 'Misafir';
+    $('drawerMeta').textContent = user ? `Lv. ${user.accountLevel} · ${formatNumber(user.balance)} MC` : 'Oturum bekleniyor';
+    $('accountSummary').textContent = user ? `Bakiye: ${formatNumber(user.balance)} MC · Seviye: ${user.accountLevel} · XP: ${formatNumber(user.xp)} · İlerleme: %${user.progressPercent.toFixed(1)}` : 'Giriş yapınca avatar, çerçeve, bakiye, seviye ve profil bilgileri burada görünür.';
+    renderStats();
+  }
+
+  function renderStats() {
+    const grid = $('statsGrid');
+    if (!grid) return;
+    const u = state.user;
+    const rows = [
+      ['Hesap Seviyesi', u?.accountLevel || 0],
+      ['Hesap XP', formatNumber(u?.xp || 0)],
+      ['MC Bakiyesi', `${formatNumber(u?.balance || 0)} MC`],
+      ['Aylık Aktiflik', formatNumber(u?.monthlyActiveScore || 0)],
+      ['Seviye İlerlemesi', `%${Number(u?.progressPercent || 0).toFixed(1)}`],
+      ['E-posta', u?.emailVerified ? 'Doğrulandı' : 'Beklemede']
+    ];
+    grid.replaceChildren(...rows.map(([label, value]) => {
+      const card = document.createElement('article');
+      card.className = 'pm-statCard';
+      card.innerHTML = `<strong>${value}</strong><span>${label}</span>`;
+      return card;
+    }));
+  }
+
+  function renderGames() {
+    const grid = $('gameGrid');
+    if (!grid) return;
+    grid.replaceChildren(...games.map((game) => {
+      const card = document.createElement('article');
+      card.className = 'pm-gameCard';
+      card.dataset.gameId = game.id;
+      card.innerHTML = `
+        <div>
+          <div class="pm-gameCard__top"><span class="pm-gameCard__icon" aria-hidden="true">${iconSvg(game.icon)}</span><span class="pm-statusPill">${game.auth ? 'Giriş Gerekir' : 'Hazır'}</span></div>
+          <h3>${game.title}</h3>
+          <p>${game.description}</p>
+          <div class="pm-gameCard__tags">${game.tags.map((tag) => `<span>${tag}</span>`).join('')}</div>
+        </div>
+        <div class="pm-gameCard__footer"><span class="pm-statusPill">Online</span><button class="pm-gameCard__cta" type="button" data-game-route="${game.route}" data-game-auth="${game.auth}">Oyunu Aç</button></div>
+      `;
+      return card;
+    }));
+  }
+
+  async function loadLeaderboard() {
+    const list = $('leaderboardList');
+    if (list) list.innerHTML = '<div class="pm-stateLine">Liderlik verileri yükleniyor...</div>';
+    try {
+      const { payload } = await fetchJson('/api/leaderboard', { method: 'GET' });
+      state.leaderboard = payload?.tabs || null;
+      renderLeaderboard();
+    } catch (error) {
+      reportClientError('leaderboard.load', error);
+      if (list) list.innerHTML = '<div class="pm-stateLine">Liderlik verisi alınamadı. Daha sonra tekrar dene.</div>';
+    }
+  }
+
+  function renderLeaderboard() {
+    const list = $('leaderboardList');
+    if (!list) return;
+    const tab = state.leaderboardTab;
+    const items = state.leaderboard?.[tab]?.items || [];
+    if (!items.length) {
+      list.innerHTML = '<div class="pm-stateLine">Henüz liderlik verisi yok.</div>';
+      return;
+    }
+    list.replaceChildren(...items.slice(0, 8).map((item, index) => {
+      const user = normalizeUser(item);
+      const row = document.createElement('article');
+      row.className = 'pm-leaderItem';
+      const metric = tab === 'activity' ? formatNumber(item.monthlyActiveScore || user.monthlyActiveScore || 0) : `Lv. ${user.accountLevel}`;
+      row.innerHTML = `<span class="pm-rank">#${index + 1}</span><span class="pm-avatarSlot pm-avatarSlot--leader"></span><span><strong>${user.username}</strong><small>${formatNumber(user.balance)} MC · ${formatNumber(user.xp)} XP</small></span><span class="pm-statusPill">${metric}</span>`;
+      row.querySelector('.pm-avatarSlot').appendChild(createAvatarNode({ avatar: user.avatar, frame: selectedFrameFor(user), label: user.username }));
+      return row;
+    }));
+  }
+
+  async function claimPromo() {
+    const input = $('promoCodeInput');
+    const status = $('promoStatus');
+    const code = input.value.trim();
+    if (!state.user) { openAuth('login'); return; }
+    if (!code) { status.textContent = 'Kod alanı boş bırakılamaz.'; return; }
+    status.textContent = 'Kod kontrol ediliyor...';
+    try {
+      const { payload } = await fetchJson('/api/promo/claim', { method: 'POST', body: { code } });
+      status.textContent = `Kod aktif edildi: +${formatNumber(payload.amount || 0)} MC`;
+      if (payload.user || payload.profile) setAuthState('authenticated', payload.user || payload.profile);
+      else await loadCurrentUser();
+      showToast('Promosyon kodu aktif edildi.', 'success');
+    } catch (error) {
+      status.textContent = 'Kod aktif edilemedi.';
+      reportClientError('promo.claim', error, { codeLength: code.length });
+    }
+  }
+
+  async function sendSupport() {
+    const status = $('supportStatus');
+    const subject = $('supportSubject').value.trim() || 'Destek Talebi';
+    const message = $('supportMessage').value.trim();
+    if (!message) { status.textContent = 'Mesaj alanı boş bırakılamaz.'; status.className = 'pm-formMessage is-error'; return; }
+    if (!state.user) { window.location.href = `mailto:playmatrixdestek@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`; return; }
+    try {
+      status.textContent = 'Destek talebi gönderiliyor...';
+      const { payload } = await fetchJson('/api/support/receipt', { method: 'POST', body: { subject, message, source: 'home' } });
+      status.textContent = `Destek kaydı oluşturuldu: ${payload.id || 'open'}`;
+      status.className = 'pm-formMessage is-ok';
+      showToast('Destek talebi alındı.', 'success');
+    } catch (error) {
+      status.textContent = 'Destek talebi gönderilemedi.';
+      status.className = 'pm-formMessage is-error';
+      reportClientError('support.send', error);
+    }
+  }
+
+  function avatarRegistry() {
+    const fromRegistry = window.PMAvatarRegistry?.avatars || [];
+    return [DEFAULT_REMOTE_AVATAR, ...fromRegistry].filter((value, index, array) => value && array.indexOf(value) === index).slice(0, 36);
+  }
+
+  function renderAvatarPicker() {
+    const grid = $('avatarGrid');
+    if (!grid) return;
+    const current = avatarUrlFor(state.user || {});
+    grid.replaceChildren(...avatarRegistry().map((avatar, index) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = `pm-pickerCard${avatar === current ? ' is-active' : ''}`;
+      card.dataset.avatar = avatar;
+      card.appendChild(createAvatarNode({ avatar, frame: 0, label: `Avatar ${index + 1}` }));
+      const label = document.createElement('strong');
+      label.textContent = index === 0 ? 'Standart' : `Avatar ${index + 1}`;
+      card.appendChild(label);
+      return card;
+    }));
+  }
+
+  function renderFramePicker() {
+    const grid = $('frameGrid');
+    if (!grid) return;
+    const level = userLevel();
+    const current = selectedFrameFor(state.user || {});
+    const cards = [{ frame: 0, label: 'Çerçevesiz', min: 0 }, ...frameRules.map((rule) => ({ frame: rule.frame, min: rule.min, label: rule.min === rule.max ? `Seviye ${rule.min}` : `Seviye ${rule.min}-${rule.max}` }))];
+    grid.replaceChildren(...cards.map((item) => {
+      const locked = item.min > level;
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = `pm-pickerCard${item.frame === current ? ' is-active' : ''}${locked ? ' is-locked' : ''}`;
+      card.dataset.frame = String(item.frame);
+      card.disabled = locked;
+      card.appendChild(createAvatarNode({ avatar: avatarUrlFor(state.user || {}), frame: item.frame, label: item.label }));
+      const title = document.createElement('strong');
+      title.textContent = item.label;
+      const small = document.createElement('small');
+      small.textContent = locked ? 'Kilitli' : item.frame === current ? 'Kullanımda' : 'Seç';
+      card.append(title, small);
+      return card;
+    }));
+  }
+
+  async function saveProfilePatch(patch) {
+    if (!state.user) { openAuth('login'); return; }
+    try {
+      const { payload } = await fetchJson('/api/profile/update', { method: 'POST', body: patch });
+      setAuthState('authenticated', payload.user || payload.profile || payload.data || state.user);
+      showToast('Profil güncellendi.', 'success');
+      closeLayer();
+    } catch (error) {
+      reportClientError('profile.update', error);
+      showToast('Profil güncellenemedi.', 'error');
+    }
+  }
+
+  async function logout() {
+    try { await fetchJson('/api/auth/session/logout', { method: 'POST', body: { sessionToken: state.token } }, [401, 404]); } catch (_) {}
+    try {
+      if (state.firebase?.auth) await state.firebase.authModule.signOut(state.firebase.auth);
+    } catch (_) {}
+    clearSessionToken();
+    setAuthState('guest', null);
+    closeLayer();
+    showToast('Oturum kapatıldı.', 'info');
+  }
+
+  function navigateTo(target) {
+    if (!target) return;
+    if (target === 'menu') { openLayer('menuDrawer'); return; }
+    if (target === 'account') { state.user ? openLayer('accountDrawer') : openAuth('login'); return; }
+    if (target === 'login') { openAuth('login'); return; }
+    if (target === 'register') { openAuth('register'); return; }
+    if (target === 'support') { openLayer('supportModal'); return; }
+    if (target.startsWith('#')) {
+      const node = document.querySelector(target);
+      if (node) {
+        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setActiveNav(target);
+        closeLayer();
+      }
+    }
+  }
+
+  function setActiveNav(target) {
+    $$('#primaryNav .pm-primaryNav__item').forEach((item) => {
+      const active = item.dataset.navTarget === target || (target === '#anasayfa' && item.dataset.navTarget === '#anasayfa');
+      item.classList.toggle('is-active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
+    $$('#pmBottomBar .pm-bottomBar__item').forEach((item) => {
+      const stateKey = state.auth === 'authenticated' ? 'userTarget' : 'guestTarget';
+      const active = item.dataset[stateKey] === target || (target === '#anasayfa' && item.dataset[stateKey] === 'menu');
+      item.classList.toggle('is-active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
   }
 
   function installHeroSlider() {
     const viewport = $('pmHeroViewport');
     const track = $('pmHeroTrack');
-    const slides = Array.from(document.querySelectorAll('.pm-heroSlide'));
-    const dots = Array.from(document.querySelectorAll('.pm-hero__dot'));
-    if (!viewport || !track || slides.length === 0 || dots.length === 0) return;
-
-    const total = slides.length;
+    const slides = $$('.pm-heroSlide');
+    const dots = $$('.pm-hero__dot');
+    if (!viewport || !track || !slides.length || !dots.length) return;
     let current = 0;
-    let autoplay = 0;
+    let timer = 0;
     let startX = 0;
     let deltaX = 0;
     let dragging = false;
-
     const render = () => {
       track.style.transform = `translate3d(-${current * 100}%,0,0)`;
-      slides.forEach((slide, index) => {
-        const active = index === current;
-        slide.classList.toggle('is-active', active);
-        slide.setAttribute('aria-hidden', String(!active));
-      });
+      slides.forEach((slide, index) => slide.classList.toggle('is-active', index === current));
       dots.forEach((dot, index) => {
         const active = index === current;
         dot.classList.toggle('is-active', active);
         dot.setAttribute('aria-selected', String(active));
       });
     };
-
-    const goTo = (index) => {
-      current = (index + total) % total;
-      render();
-    };
-    const next = () => goTo(current + 1);
-    const prev = () => goTo(current - 1);
-    const stop = () => {
-      if (autoplay) window.clearInterval(autoplay);
-      autoplay = 0;
-    };
-    const start = () => {
-      stop();
-      autoplay = window.setInterval(next, 5000);
-    };
-
-    dots.forEach((dot, index) => {
-      dot.addEventListener('click', () => {
-        goTo(index);
-        start();
-      });
-    });
-
-    const begin = (clientX) => {
-      dragging = true;
-      startX = clientX;
-      deltaX = 0;
-      stop();
-    };
-    const move = (clientX) => {
-      if (!dragging) return;
-      deltaX = clientX - startX;
-    };
-    const end = () => {
-      if (!dragging) return;
-      if (Math.abs(deltaX) > 42) deltaX < 0 ? next() : prev();
-      dragging = false;
-      startX = 0;
-      deltaX = 0;
-      start();
-    };
-
-    viewport.addEventListener('touchstart', (event) => begin(event.touches[0].clientX), { passive: true });
-    viewport.addEventListener('touchmove', (event) => move(event.touches[0].clientX), { passive: true });
+    const go = (index) => { current = (index + slides.length) % slides.length; render(); };
+    const stop = () => { if (timer) clearInterval(timer); timer = 0; };
+    const start = () => { stop(); timer = setInterval(() => go(current + 1), 5000); };
+    dots.forEach((dot) => dot.addEventListener('click', () => { go(Number(dot.dataset.slideTo || 0)); start(); }));
+    const begin = (x) => { dragging = true; startX = x; deltaX = 0; stop(); };
+    const move = (x) => { if (dragging) deltaX = x - startX; };
+    const end = () => { if (!dragging) return; if (Math.abs(deltaX) > 42) go(current + (deltaX < 0 ? 1 : -1)); dragging = false; start(); };
+    viewport.addEventListener('touchstart', (e) => begin(e.touches[0].clientX), { passive: true });
+    viewport.addEventListener('touchmove', (e) => move(e.touches[0].clientX), { passive: true });
     viewport.addEventListener('touchend', end, { passive: true });
     viewport.addEventListener('touchcancel', end, { passive: true });
-    viewport.addEventListener('mousedown', (event) => begin(event.clientX));
-    window.addEventListener('mousemove', (event) => move(event.clientX));
-    window.addEventListener('mouseup', end);
+    viewport.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') begin(e.clientX); });
+    window.addEventListener('pointermove', (e) => move(e.clientX));
+    window.addEventListener('pointerup', end);
     viewport.addEventListener('mouseenter', stop);
     viewport.addEventListener('mouseleave', start);
-
-    window.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowRight') {
-        next();
-        start();
-      }
-      if (event.key === 'ArrowLeft') {
-        prev();
-        start();
-      }
-    });
-
-    render();
-    start();
+    render(); start();
   }
 
-  function installBottomBar() {
-    const bar = $('pmBottomBar');
-    if (!bar) return;
-
-    bar.addEventListener('click', (event) => {
+  function installEvents() {
+    $('pmLoginButton')?.addEventListener('click', () => openAuth('login'));
+    $('pmRegisterButton')?.addEventListener('click', () => openAuth('register'));
+    $('accountChip')?.addEventListener('click', () => openLayer('accountDrawer'));
+    $('openMenuBtn')?.addEventListener('click', () => openLayer('menuDrawer'));
+    $('authForm')?.addEventListener('submit', submitAuth);
+    $('forgotPasswordBtn')?.addEventListener('click', () => { closeLayer(); openLayer('forgotModal'); });
+    $('sendResetBtn')?.addEventListener('click', sendPasswordReset);
+    $('sendSupportBtn')?.addEventListener('click', sendSupport);
+    $('claimPromoBtn')?.addEventListener('click', claimPromo);
+    $('openAvatarBtn')?.addEventListener('click', () => { if (!state.user) return openAuth('login'); renderAvatarPicker(); openLayer('avatarModal'); });
+    $('openFrameBtn')?.addEventListener('click', () => { if (!state.user) return openAuth('login'); renderFramePicker(); openLayer('frameModal'); });
+    $('globalOverlay')?.addEventListener('click', closeLayer);
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeLayer(); });
+    document.addEventListener('click', (event) => {
+      const close = event.target.closest('[data-close-layer]');
+      if (close) { closeLayer(); return; }
+      const backAuth = event.target.closest('[data-back-auth]');
+      if (backAuth) { closeLayer(); openAuth('login'); return; }
+      const mode = event.target.closest('[data-auth-mode]');
+      if (mode) { setAuthMode(mode.dataset.authMode); return; }
+      const nav = event.target.closest('[data-nav-target]');
+      if (nav) { event.preventDefault(); navigateTo(nav.dataset.navTarget); return; }
+      const action = event.target.closest('[data-action]');
+      if (action) {
+        event.preventDefault();
+        const value = action.dataset.action;
+        if (value === 'register') openAuth('register');
+        if (value === 'login') openAuth('login');
+        if (value === 'support') openLayer('supportModal');
+        if (value === 'account') navigateTo('account');
+        if (value === 'avatar') { renderAvatarPicker(); openLayer('avatarModal'); }
+        if (value === 'frame') { renderFramePicker(); openLayer('frameModal'); }
+        if (value === 'logout') logout();
+        return;
+      }
+      const quick = event.target.closest('.pm-quickCard[data-link-key="support"]');
+      if (quick) { event.preventDefault(); openLayer('supportModal'); return; }
+      const game = event.target.closest('[data-game-route]');
+      if (game) {
+        const route = game.dataset.gameRoute;
+        if (game.dataset.gameAuth === 'true' && !state.user) { openAuth('login'); return; }
+        window.location.href = route;
+      }
+    });
+    $('pmBottomBar')?.addEventListener('click', (event) => {
       const item = event.target.closest('.pm-bottomBar__item');
       if (!item) return;
-
-      const state = document.body.dataset.authState === 'authenticated' ? 'authenticated' : 'guest';
-      const target = state === 'authenticated' ? item.dataset.userTarget : item.dataset.guestTarget;
-
-      bar.querySelectorAll('.pm-bottomBar__item').forEach((node) => {
-        const active = node === item;
+      const target = state.auth === 'authenticated' ? item.dataset.userTarget : item.dataset.guestTarget;
+      navigateTo(target);
+    });
+    $('primaryNav')?.addEventListener('click', (event) => {
+      const item = event.target.closest('.pm-primaryNav__item');
+      if (!item) return;
+      navigateTo(item.dataset.navTarget);
+    });
+    $$('[data-leaderboard-tab]').forEach((btn) => btn.addEventListener('click', () => {
+      state.leaderboardTab = btn.dataset.leaderboardTab;
+      $$('[data-leaderboard-tab]').forEach((node) => {
+        const active = node === btn;
         node.classList.toggle('is-active', active);
-        if (active) node.setAttribute('aria-current', 'page');
-        else node.removeAttribute('aria-current');
+        node.setAttribute('aria-selected', String(active));
       });
-
-      if (target === 'login') {
-        dispatchAuthAction('login');
-        return;
-      }
-      if (target === 'register') {
-        dispatchAuthAction('register');
-        return;
-      }
-      if (target === 'support') {
-        window.location.href = 'mailto:playmatrixdestek@gmail.com?subject=PlayMatrix%20Destek%20Talebi';
-        return;
-      }
-      if (target === 'menu') {
-        dispatchHomeAction('menu');
-        return;
-      }
-      if (target && target.startsWith('#')) {
-        const section = document.querySelector(target);
-        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        else dispatchHomeAction('navigate', { target });
-      }
+      renderLeaderboard();
+    }));
+    $('avatarGrid')?.addEventListener('click', (event) => {
+      const card = event.target.closest('.pm-pickerCard[data-avatar]');
+      if (!card) return;
+      saveProfilePatch({ avatar: card.dataset.avatar, selectedFrame: selectedFrameFor(state.user || {}) });
     });
-  }
-
-  function installPublicApi() {
-    window.PlayMatrixHome = Object.assign(window.PlayMatrixHome || {}, {
-      setAuthState,
-      getAuthState: () => document.body.dataset.authState || 'guest'
+    $('frameGrid')?.addEventListener('click', (event) => {
+      const card = event.target.closest('.pm-pickerCard[data-frame]');
+      if (!card || card.disabled) return;
+      saveProfilePatch({ selectedFrame: Number(card.dataset.frame || 0), avatar: avatarUrlFor(state.user || {}) });
     });
-    window.addEventListener('playmatrix:set-auth-state', (event) => setAuthState(event.detail?.state));
+    window.addEventListener('error', (event) => reportClientError('window.error', event.error || event.message));
+    window.addEventListener('unhandledrejection', (event) => reportClientError('window.unhandledrejection', event.reason));
   }
 
   function boot() {
-    setAuthState(getStoredAuthState());
-    installHeaderActions();
+    document.body.dataset.authMode = 'login';
+    state.apiBase = normalizeBase(getMetaContent('playmatrix-api-url')) || RENDER_API_BASE;
+    renderGames();
+    renderUserShell();
+    installEvents();
     installHeroSlider();
-    installBottomBar();
-    installPublicApi();
+    loadLeaderboard();
+    ensureFirebase().catch(() => null);
+    loadCurrentUser();
     document.body.dataset.boot = 'ready';
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot, { once: true });
-  } else {
-    boot();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
 })();

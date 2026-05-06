@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=0.90, maximum-scale=0.90, minimum-scale=0.90, user-scalable=no, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#07080b" />
+  <meta name="description" content="PlayMatrix ana sayfa üst bar, hero slider, hızlı bağlantılar ve sabit alt bar tasarımı." />
+  <title>PlayMatrix</title>
+  <link rel="canonical" href="https://playmatrix.com.tr/" />
+  <link rel="icon" href="./favicon.ico" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <link rel="preload" href="./public/assets/images/hero-01-signup-50k.png" as="image" />
+  <link rel="stylesheet" href="./style.css?v=pm-gold-ui-41" />
+  <script src="./script.js?v=pm-gold-ui-41" defer></script>
+</head>
+<body data-page="home" data-auth-state="guest">
+  <header class="pm-header" role="banner">
+    <div class="pm-header__inner">
+      <div class="pm-header__top">
+        <a class="pm-wordmark" href="./" aria-label="PlayMatrix AnaSayfa">
+          <span class="pm-wordmark__accent">Play</span><span class="pm-wordmark__main">Matrix</span>
+        </a>
+
+        <div class="pm-auth" aria-label="Hesap işlemleri">
+          <button class="pm-auth__btn pm-auth__btn--dark" id="pmLoginButton" type="button">Giriş Yap</button>
+          <button class="pm-auth__btn pm-auth__btn--gold" id="pmRegisterButton" type="button">Kayıt Ol</button>
+        </div>
+      </div>
+
+      <nav class="pm-primaryNav" aria-label="Ana menü">
+        <a class="pm-primaryNav__item is-active" href="./" aria-current="page">
+          <span class="pm-primaryNav__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M12 3.25 3.65 10.1a1.2 1.2 0 0 0-.45.94v8.1A1.86 1.86 0 0 0 5.06 21h13.88a1.86 1.86 0 0 0 1.86-1.86v-8.1a1.2 1.2 0 0 0-.45-.94L12 3.25Z"/></svg>
+          </span>
+          <span>AnaSayfa</span>
+        </a>
+
+        <a class="pm-primaryNav__item" href="#oyunlar">
+          <span class="pm-primaryNav__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M7.2 9h9.6A4.2 4.2 0 0 1 21 13.2v1.25A3.05 3.05 0 0 1 17.95 17.5h-.98l-1.54-2.05H8.57L7.03 17.5h-.98A3.05 3.05 0 0 1 3 14.45V13.2A4.2 4.2 0 0 1 7.2 9Z"/><path d="M8.25 13h2.5M9.5 11.75v2.5M15.85 12.2h.02M17.75 13.85h.02"/></svg>
+          </span>
+          <span>Oyunlar</span>
+        </a>
+
+        <a class="pm-primaryNav__item" href="#liderlik">
+          <span class="pm-primaryNav__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M17.2 3.2h3.05a.95.95 0 0 1 .95.95V6.1a5.15 5.15 0 0 1-4 5.02V12a5.2 5.2 0 0 1-3.65 4.96v2.09h2.25a1.28 1.28 0 0 1 0 2.55H8.2a1.28 1.28 0 0 1 0-2.55h2.25v-2.09A5.2 5.2 0 0 1 6.8 12v-.88a5.15 5.15 0 0 1-4-5.02V4.15a.95.95 0 0 1 .95-.95H6.8v-.5A1.7 1.7 0 0 1 8.5 1h7a1.7 1.7 0 0 1 1.7 1.7v.5Zm0 5.35a2.55 2.55 0 0 0 1.45-2.3v-.5H17.2v2.8Zm-10.4 0v-2.8H5.35v.5a2.55 2.55 0 0 0 1.45 2.3Z"/></svg>
+          </span>
+          <span>Liderlik</span>
+        </a>
+
+        <a class="pm-primaryNav__item" href="#promolar">
+          <span class="pm-primaryNav__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M20.2 7.15h-2.06c.25-.46.38-.97.38-1.5A3.55 3.55 0 0 0 14.98 2.1c-1.17 0-2.02.5-2.98 1.78C11.04 2.6 10.2 2.1 9.02 2.1a3.55 3.55 0 0 0-3.54 3.55c0 .53.13 1.04.38 1.5H3.8a1.9 1.9 0 0 0-1.9 1.9v2.35c0 .68.55 1.23 1.23 1.23h.7v7.42A1.95 1.95 0 0 0 5.78 22h12.44a1.95 1.95 0 0 0 1.95-1.95v-7.42h.7c.68 0 1.23-.55 1.23-1.23V9.05a1.9 1.9 0 0 0-1.9-1.9ZM13.18 6.3c.56-.97 1.03-1.72 1.8-1.72a1.07 1.07 0 0 1 1.07 1.07c0 .63-.45 1.14-1.13 1.37-.37.12-.82.18-1.32.18h-.42v-.9ZM9.02 4.58c.77 0 1.24.75 1.8 1.72v.9h-.42c-.5 0-.95-.06-1.32-.18-.68-.23-1.13-.74-1.13-1.37a1.07 1.07 0 0 1 1.07-1.07ZM10.75 20H6.35v-7.37h4.4V20Zm0-9.45H4.35V9.5h6.4v1.05ZM17.65 20h-4.4v-7.37h4.4V20Zm2-9.45h-6.4V9.5h6.4v1.05Z"/></svg>
+          </span>
+          <span>Promolar</span>
+        </a>
+
+        <a class="pm-primaryNav__item" href="#sosyal-merkez">
+          <span class="pm-primaryNav__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M12 12.15a4.15 4.15 0 1 0-4.15-4.15A4.15 4.15 0 0 0 12 12.15ZM4.05 21a1 1 0 0 1-1-1 6.95 6.95 0 0 1 13.9 0 1 1 0 0 1-1 1H4.05Zm14.15-8.5a3.2 3.2 0 1 0-1.23-6.15 5.9 5.9 0 0 1 .14 7.05 3.2 3.2 0 0 0 1.09.2ZM18 21a1 1 0 0 0 1-1 5.55 5.55 0 0 0-3.4-5.12A7 7 0 0 1 20.95 21H18Z"/></svg>
+          </span>
+          <span>Sosyal</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="pm-shell" id="app" tabindex="-1">
+    <section class="pm-hero" aria-label="Öne çıkan kampanyalar">
+      <div class="pm-hero__viewport" id="pmHeroViewport">
+        <div class="pm-hero__track" id="pmHeroTrack">
+          <article class="pm-heroSlide is-active" data-slide-index="0" aria-roledescription="slide" aria-label="1 / 3">
+            <img class="pm-heroSlide__image" src="./public/assets/images/hero-01-signup-50k.png" alt="PlayMatrix 50.000 MC kayıt ödülü kampanya afişi" loading="eager" decoding="async" />
+          </article>
+          <article class="pm-heroSlide" data-slide-index="1" aria-roledescription="slide" aria-label="2 / 3">
+            <img class="pm-heroSlide__image" src="./public/assets/images/hero-02-email-100k.png" alt="PlayMatrix 100.000 MC e-posta doğrulama ödülü kampanya afişi" loading="lazy" decoding="async" />
+          </article>
+          <article class="pm-heroSlide" data-slide-index="2" aria-roledescription="slide" aria-label="3 / 3">
+            <img class="pm-heroSlide__image" src="./public/assets/images/hero-03-activity-top5.png" alt="PlayMatrix aylık en aktif 5 oyuncuya aktivite ödülü kampanya afişi" loading="lazy" decoding="async" />
+          </article>
+        </div>
+      </div>
+      <div class="pm-hero__dots" id="pmHeroDots" role="tablist" aria-label="Kampanya slaytları">
+        <button class="pm-hero__dot is-active" type="button" role="tab" aria-selected="true" aria-label="1. slayta git" data-slide-to="0"></button>
+        <button class="pm-hero__dot" type="button" role="tab" aria-selected="false" aria-label="2. slayta git" data-slide-to="1"></button>
+        <button class="pm-hero__dot" type="button" role="tab" aria-selected="false" aria-label="3. slayta git" data-slide-to="2"></button>
+      </div>
+    </section>
+
+    <section class="pm-quickLinks" id="sosyal-baglantilar" aria-label="Hızlı bağlantılar">
+      <a class="pm-quickCard" href="mailto:playmatrixdestek@gmail.com?subject=PlayMatrix%20Destek%20Talebi">
+        <span class="pm-quickCard__medal" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 14.4v-2.05a6.8 6.8 0 0 1 13.6 0v2.05"/><path d="M7.1 13.4h-.75A2.35 2.35 0 0 0 4 15.75v.6a2.35 2.35 0 0 0 2.35 2.35h.75a1.3 1.3 0 0 0 1.3-1.3v-2.7a1.3 1.3 0 0 0-1.3-1.3Z"/><path d="M16.9 13.4h.75A2.35 2.35 0 0 1 20 15.75v.6a2.35 2.35 0 0 1-2.35 2.35h-.75a1.3 1.3 0 0 1-1.3-1.3v-2.7a1.3 1.3 0 0 1 1.3-1.3Z"/><path d="M13.5 20.2h1.2a3.2 3.2 0 0 0 3.2-3.2"/></svg>
+        </span>
+        <span class="pm-quickCard__label">Destek<br>Talebi</span>
+      </a>
+
+      <a class="pm-quickCard" href="https://www.instagram.com/playmatrix_games" target="_blank" rel="noopener noreferrer">
+        <span class="pm-quickCard__medal" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="5"/><circle cx="12" cy="12" r="3.35"/><path d="M16.9 7.1h.01"/></svg>
+        </span>
+        <span class="pm-quickCard__label">Instagram</span>
+      </a>
+
+      <a class="pm-quickCard" href="https://t.me/playmatrixresmi" target="_blank" rel="noopener noreferrer">
+        <span class="pm-quickCard__medal" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.74 4.37a1.4 1.4 0 0 0-1.45-.23L3.72 10.63a1.26 1.26 0 0 0 .12 2.4l4.11 1.24 1.62 5.1a1.32 1.32 0 0 0 2.12.62l2.35-2.04 4.04 2.95a1.37 1.37 0 0 0 2.14-.82L22 5.75a1.4 1.4 0 0 0-.26-1.38Zm-3.2 3.63-7.7 6.84-.28 2.95-1.02-3.2 9-6.59Z"/></svg>
+        </span>
+        <span class="pm-quickCard__label">Telegram</span>
+      </a>
+
+      <a class="pm-quickCard" href="https://www.tiktok.com/@playmatrixresmi" target="_blank" rel="noopener noreferrer">
+        <span class="pm-quickCard__medal" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.05 3c.34 2.34 1.65 3.74 3.95 3.9v3.1a7.5 7.5 0 0 1-3.84-1.14v5.82A5.78 5.78 0 1 1 10.38 8.9c.32 0 .64.03.95.08v3.22a2.62 2.62 0 1 0 1.85 2.5V3h2.87Z"/></svg>
+        </span>
+        <span class="pm-quickCard__label">TikTok</span>
+      </a>
+    </section>
+  </main>
+
+  <nav class="pm-bottomBar" id="pmBottomBar" aria-label="Alt gezinme">
+    <div class="pm-bottomBar__inner">
+      <button class="pm-bottomBar__item is-active" type="button" data-guest-label="Menü" data-user-label="Menü" data-guest-target="menu" data-user-target="menu" aria-current="page">
+        <span class="pm-bottomBar__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
+        <span class="pm-bottomBar__text">Menü</span>
+      </button>
+      <button class="pm-bottomBar__item" type="button" data-guest-label="Oyunlar" data-user-label="İstatistikler" data-guest-target="#oyunlar" data-user-target="#istatistikler">
+        <span class="pm-bottomBar__icon pm-bottomBar__icon--guest" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v2H6V6Zm5 0h2v2h-2V6Zm5 0h2v2h-2V6Zm-10 5h2v2H6v-2Zm5 0h2v2h-2v-2Zm5 0h2v2h-2v-2Zm-10 5h2v2H6v-2Zm5 0h2v2h-2v-2Zm5 0h2v2h-2v-2Z"/></svg></span>
+        <span class="pm-bottomBar__icon pm-bottomBar__icon--user" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M7 15V9"/><path d="M12 15V5"/><path d="M17 15v-3"/></svg></span>
+        <span class="pm-bottomBar__text">Oyunlar</span>
+      </button>
+      <button class="pm-bottomBar__item" type="button" data-guest-label="Liderlik" data-user-label="Liderlik" data-guest-target="#liderlik" data-user-target="#liderlik">
+        <span class="pm-bottomBar__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.2 3.2h3.05a.95.95 0 0 1 .95.95V6.1a5.15 5.15 0 0 1-4 5.02V12a5.2 5.2 0 0 1-3.65 4.96v2.09h2.25a1.28 1.28 0 0 1 0 2.55H8.2a1.28 1.28 0 0 1 0-2.55h2.25v-2.09A5.2 5.2 0 0 1 6.8 12v-.88a5.15 5.15 0 0 1-4-5.02V4.15a.95.95 0 0 1 .95-.95H6.8v-.5A1.7 1.7 0 0 1 8.5 1h7a1.7 1.7 0 0 1 1.7 1.7v.5Z"/></svg></span>
+        <span class="pm-bottomBar__text">Liderlik</span>
+      </button>
+      <button class="pm-bottomBar__item" type="button" data-guest-label="Giriş Yap" data-user-label="Sosyal Merkez" data-guest-target="login" data-user-target="#sosyal-merkez">
+        <span class="pm-bottomBar__icon pm-bottomBar__icon--guest" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17.5H6.5A2.5 2.5 0 0 1 4 15V6.5A2.5 2.5 0 0 1 6.5 4h8A2.5 2.5 0 0 1 17 6.5V10"/><path d="M13 14h7"/><path d="m17 11 3 3-3 3"/></svg></span>
+        <span class="pm-bottomBar__icon pm-bottomBar__icon--user" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12.15a4.15 4.15 0 1 0-4.15-4.15A4.15 4.15 0 0 0 12 12.15ZM4.05 21a1 1 0 0 1-1-1 6.95 6.95 0 0 1 13.9 0 1 1 0 0 1-1 1H4.05Z"/></svg></span>
+        <span class="pm-bottomBar__text">Giriş Yap</span>
+      </button>
+      <button class="pm-bottomBar__item" type="button" data-guest-label="Kayıt Ol" data-user-label="Hesabım" data-guest-target="register" data-user-target="#hesabim">
+        <span class="pm-bottomBar__icon pm-bottomBar__icon--guest" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+        <span class="pm-bottomBar__icon pm-bottomBar__icon--user" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></span>
+        <span class="pm-bottomBar__text">Kayıt Ol</span>
+      </button>
+      <button class="pm-bottomBar__item pm-bottomBar__item--support" type="button" data-guest-label="Destek Talebi" data-user-label="Destek Talebi" data-guest-target="support" data-user-target="support">
+        <span class="pm-bottomBar__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 14.4v-2.05a6.8 6.8 0 0 1 13.6 0v2.05"/><path d="M7.1 13.4h-.75A2.35 2.35 0 0 0 4 15.75v.6a2.35 2.35 0 0 0 2.35 2.35h.75a1.3 1.3 0 0 0 1.3-1.3v-2.7a1.3 1.3 0 0 0-1.3-1.3Z"/><path d="M16.9 13.4h.75A2.35 2.35 0 0 1 20 15.75v.6a2.35 2.35 0 0 1-2.35 2.35h-.75a1.3 1.3 0 0 1-1.3-1.3v-2.7a1.3 1.3 0 0 1 1.3-1.3Z"/></svg></span>
+        <span class="pm-bottomBar__text">Destek Talebi</span>
+      </button>
+    </div>
+  </nav>
+</body>
+</html>

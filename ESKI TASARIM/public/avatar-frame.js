@@ -1,0 +1,311 @@
+'use strict';
+
+(() => {
+  const FALLBACK_AVATAR = '/public/assets/avatars/system/fallback.svg';
+  const FRAME_ASSET_COUNT = 18;
+  const FRAME_LEVEL_TO_ASSET = Object.freeze([
+    { min: 1, max: 15, asset: 1 },
+    { min: 16, max: 30, asset: 2 },
+    { min: 31, max: 40, asset: 3 },
+    { min: 41, max: 50, asset: 4 },
+    { min: 51, max: 60, asset: 5 },
+    { min: 61, max: 80, asset: 6 },
+    { min: 81, max: 85, asset: 7 },
+    { min: 86, max: 90, asset: 8 },
+    { min: 91, max: 91, asset: 9 },
+    { min: 92, max: 92, asset: 10 },
+    { min: 93, max: 93, asset: 11 },
+    { min: 94, max: 94, asset: 12 },
+    { min: 95, max: 95, asset: 13 },
+    { min: 96, max: 96, asset: 14 },
+    { min: 97, max: 97, asset: 15 },
+    { min: 98, max: 98, asset: 16 },
+    { min: 99, max: 99, asset: 17 },
+    { min: 100, max: 100, asset: 18 }
+  ].map(Object.freeze));
+
+  const DEFAULT_FRAME_PROFILE = Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' });
+  const FRAME_VISUAL_PROFILES = Object.freeze({
+    1: Object.freeze({ scale: 1.34, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
+    2: Object.freeze({ scale: 1.34, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
+    3: Object.freeze({ scale: 1.35, avatar: 0.82, shiftX: '0px', shiftY: '0px' }),
+    4: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    5: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    6: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
+    7: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    8: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    9: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    10: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    11: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
+    12: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    13: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
+    14: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    15: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
+    16: Object.freeze({ scale: 1.28, avatar: 0.84, shiftX: '0px', shiftY: '0px' }),
+    17: Object.freeze({ scale: 1.24, avatar: 0.86, shiftX: '0px', shiftY: '0px' }),
+    18: Object.freeze({ scale: 1.46, avatar: 0.78, shiftX: '0px', shiftY: '4px' })
+  });
+
+  function normalizeAssetPath(value = '') {
+    const raw = String(value || '').trim().replace(/[\u0000-\u001F\u007F]/g, '');
+    if (!raw) return '';
+    if (/^(https?:)?\/\//i.test(raw)) {
+      try {
+        const parsed = new URL(raw, window.location.origin);
+        if (parsed.protocol !== 'https:') return '';
+        return parsed.href;
+      } catch (_) { return ''; }
+    }
+    if (raw.startsWith('/')) return raw.replace(/\/+/g, '/');
+    if (/^(assets\/|\.\/assets\/|public\/|\.\/public\/)/i.test(raw)) return `/${raw.replace(/^\.?\//, '')}`.replace(/\/+/g, '/');
+    return '';
+  }
+
+  function getAvatarRegistry() {
+    const registry = window.PMAvatarRegistry && typeof window.PMAvatarRegistry === 'object' ? window.PMAvatarRegistry : {};
+    const fallback = normalizeAssetPath(registry.fallback || FALLBACK_AVATAR) || FALLBACK_AVATAR;
+    const avatarSet = new Set();
+    if (Array.isArray(registry.avatars)) {
+      registry.avatars.forEach((entry) => {
+        const normalized = normalizeAssetPath(entry);
+        if (normalized) avatarSet.add(normalized);
+      });
+    }
+    avatarSet.add(fallback);
+    return { fallback, avatarSet };
+  }
+
+  function isRegisteredAvatarUrl(value = '') {
+    const normalized = normalizeAssetPath(value);
+    if (!normalized) return false;
+    const { avatarSet } = getAvatarRegistry();
+    return avatarSet.has(normalized);
+  }
+
+  function safeAvatarUrl(value = '') {
+    const normalized = normalizeAssetPath(value);
+    const { fallback, avatarSet } = getAvatarRegistry();
+    if (!normalized) return fallback;
+    return avatarSet.has(normalized) ? normalized : fallback;
+  }
+
+  function escapeAttr(value = '') {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function normalizeLevel(level = 0) {
+    const value = Math.floor(Number(level) || 0);
+    return Math.max(0, Math.min(100, value));
+  }
+
+  function normalizeFrameIndex(frameIndex = 0) {
+    const value = Math.floor(Number(frameIndex) || 0);
+    return Math.max(0, Math.min(FRAME_ASSET_COUNT, value));
+  }
+
+  function getFrameRange(level = 0) {
+    const lvl = normalizeLevel(level);
+    if (lvl <= 0) return null;
+    return FRAME_LEVEL_TO_ASSET.find((item) => lvl >= item.min && lvl <= item.max) || FRAME_LEVEL_TO_ASSET[FRAME_LEVEL_TO_ASSET.length - 1];
+  }
+
+  function getFrameRangeByAssetIndex(assetIndex = 0) {
+    const idx = normalizeFrameIndex(assetIndex);
+    if (idx <= 0) return null;
+    return FRAME_LEVEL_TO_ASSET.find((item) => item.asset === idx) || null;
+  }
+
+  function getFrameAssetIndex(level = 0) {
+    const matchedRange = getFrameRange(level);
+    return matchedRange ? matchedRange.asset : 0;
+  }
+
+  function getFrameUnlockLevel(value = 0) {
+    const range = getFrameRange(value);
+    return range ? range.min : 0;
+  }
+
+  function getFrameLabel(level = 0) {
+    const range = getFrameRange(level);
+    if (!range) return 'Çerçevesiz';
+    return range.min === range.max ? `Seviye ${range.min}` : `Seviye ${range.min}-${range.max}`;
+  }
+
+  function resolveFrameIndex(level = 0, exactFrameIndex = null) {
+    const numericExact = Math.floor(Number(exactFrameIndex) || 0);
+    if (numericExact > 0 && numericExact <= FRAME_ASSET_COUNT) return normalizeFrameIndex(numericExact);
+    if (numericExact > FRAME_ASSET_COUNT) return getFrameAssetIndex(numericExact);
+    return getFrameAssetIndex(level);
+  }
+
+  function isRegisteredFrameAssetIndex(frameIndex = 0) {
+    const normalized = normalizeFrameIndex(frameIndex);
+    return normalized >= 1 && normalized <= FRAME_ASSET_COUNT;
+  }
+
+  function getFrameProfile(frameIndex = 0) {
+    const normalized = normalizeFrameIndex(frameIndex);
+    if (normalized <= 0) return { scale: 1, avatar: 1, shiftX: '0px', shiftY: '0px' };
+    return FRAME_VISUAL_PROFILES[normalized] || DEFAULT_FRAME_PROFILE;
+  }
+
+  function isFrameUnlocked(frameLevel = 0, accountLevel = 1) {
+    const selected = normalizeLevel(frameLevel);
+    if (selected <= 0) return true;
+    const unlockLevel = getFrameUnlockLevel(selected);
+    return unlockLevel <= normalizeLevel(accountLevel);
+  }
+
+  function getSafeSelectedFrame(frameLevel = 0, accountLevel = 1) {
+    const selected = normalizeLevel(frameLevel);
+    if (selected <= 0) return 0;
+    return isFrameUnlocked(selected, accountLevel) ? selected : 0;
+  }
+
+  function createImage({ src, className = '', alt = '', hidden = false, fallback = '', ariaHidden = false } = {}) {
+    const img = document.createElement('img');
+    img.src = src || FALLBACK_AVATAR;
+    img.alt = alt || '';
+    if (className) img.className = className;
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
+    img.draggable = false;
+    if (fallback) img.dataset.fallback = fallback;
+    if (ariaHidden) img.setAttribute('aria-hidden', 'true');
+    if (hidden) img.hidden = true;
+    return img;
+  }
+
+  function buildHTML({ avatarUrl = '', level = 0, exactFrameIndex = null, sizePx = 45, extraClass = '', imageClass = 'pm-avatar-img', wrapperClass = 'pm-avatar', alt = 'Oyuncu', sizeTag = '' } = {}) {
+    const normalizedLevel = normalizeLevel(level);
+    const frameIndex = resolveFrameIndex(normalizedLevel, exactFrameIndex);
+    const safeAvatar = safeAvatarUrl(avatarUrl);
+    const classes = [wrapperClass, frameIndex > 0 ? 'has-frame' : '', extraClass].filter(Boolean).join(' ');
+    const normalizedSize = Math.max(18, Number(sizePx) || 45);
+    const sizeAttr = sizeTag ? ` data-pm-avatar-size="${escapeAttr(sizeTag)}"` : '';
+    const frameHtml = frameIndex > 0
+      ? `<img src="/public/assets/frames/frame-${frameIndex}.png" class="pm-frame-image pm-avatar-shell__frame frame-${frameIndex}" alt="" aria-hidden="true" loading="lazy" decoding="async" draggable="false" data-frame-index="${frameIndex}" data-frame-level="${normalizedLevel}" data-fallback="/public/assets/frames/frame-${frameIndex}.png">`
+      : '';
+    return `<div class="${escapeAttr(classes)}" data-pm-avatar="true" data-avatar-registered="${isRegisteredAvatarUrl(avatarUrl) ? 'true' : 'false'}" data-frame-registered="${frameIndex === 0 || isRegisteredFrameAssetIndex(frameIndex) ? 'true' : 'false'}" data-frame-index="${frameIndex}" data-frame-level="${normalizedLevel}" data-frame-asset-index="${frameIndex}" data-pm-avatar-size-px="${normalizedSize}"${sizeAttr}><img src="${escapeAttr(safeAvatar)}" alt="${escapeAttr(alt || 'Oyuncu')}" class="${escapeAttr(imageClass)}" loading="lazy" decoding="async" referrerpolicy="no-referrer" draggable="false" data-fallback="${escapeAttr(FALLBACK_AVATAR)}">${frameHtml}</div>`;
+  }
+
+  function applyNodeProfile(node, { avatarUrl = '', level = 0, exactFrameIndex = null, sizePx = 45 } = {}) {
+    if (!node) return node;
+    const normalizedLevel = normalizeLevel(level);
+    const frameIndex = resolveFrameIndex(normalizedLevel, exactFrameIndex);
+    const profile = getFrameProfile(frameIndex);
+    const normalizedSize = Math.max(18, Number(sizePx) || 45);
+    node.dataset.avatarRegistered = isRegisteredAvatarUrl(avatarUrl) ? 'true' : 'false';
+    node.dataset.frameRegistered = frameIndex === 0 || isRegisteredFrameAssetIndex(frameIndex) ? 'true' : 'false';
+    node.dataset.frameIndex = String(frameIndex);
+    node.dataset.frameLevel = String(normalizedLevel);
+    node.dataset.frameAssetIndex = String(frameIndex);
+    node.dataset.pmAvatarSizePx = String(normalizedSize);
+    node.classList.toggle('has-frame', frameIndex > 0);
+    node.style.width = `${normalizedSize}px`;
+    node.style.height = `${normalizedSize}px`;
+    node.style.setProperty('--pm-avatar-fit', String(profile.avatar));
+    node.style.setProperty('--pm-avatar-scale', String(profile.avatar));
+    node.style.setProperty('--pm-frame-scale', String(profile.scale));
+    node.style.setProperty('--pm-frame-shift-x', profile.shiftX || '0px');
+    node.style.setProperty('--pm-frame-shift-y', profile.shiftY || '0px');
+    const frame = node.querySelector('.pm-avatar-shell__frame');
+    if (frame) {
+      frame.dataset.frameIndex = String(frameIndex);
+      frame.dataset.frameLevel = String(normalizedLevel);
+      frame.dataset.fallback = `/public/assets/frames/frame-${frameIndex}.png`;
+      frame.src = frameIndex > 0 ? `/public/assets/frames/frame-${frameIndex}.png` : '';
+      frame.style.setProperty('--pm-frame-scale', String(profile.scale));
+      frame.style.setProperty('--pm-frame-shift-x', profile.shiftX || '0px');
+      frame.style.setProperty('--pm-frame-shift-y', profile.shiftY || '0px');
+    }
+    return node;
+  }
+
+  function createNode(options = {}) {
+    const { avatarUrl = '', level = 0, exactFrameIndex = null, sizePx = 45, extraClass = '', imageClass = 'pm-avatar-img', wrapperClass = 'pm-avatar', alt = 'Oyuncu', sizeTag = '' } = options || {};
+    const normalizedLevel = normalizeLevel(level);
+    const frameIndex = resolveFrameIndex(normalizedLevel, exactFrameIndex);
+    const node = document.createElement('div');
+    node.className = [wrapperClass, frameIndex > 0 ? 'has-frame' : '', extraClass].filter(Boolean).join(' ');
+    node.dataset.pmAvatar = 'true';
+    if (sizeTag) node.dataset.pmAvatarSize = String(sizeTag);
+    const avatar = createImage({ src: safeAvatarUrl(avatarUrl), className: imageClass, alt: alt || 'Oyuncu', fallback: FALLBACK_AVATAR });
+    node.appendChild(avatar);
+    if (frameIndex > 0) {
+      const frame = createImage({ src: `/public/assets/frames/frame-${frameIndex}.png`, className: `pm-frame-image pm-avatar-shell__frame frame-${frameIndex}`, alt: '', fallback: `/public/assets/frames/frame-${frameIndex}.png`, ariaHidden: true });
+      node.appendChild(frame);
+    }
+    applyNodeProfile(node, { ...options, level: normalizedLevel, sizePx });
+    return node;
+  }
+
+  document.addEventListener('error', (event) => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement)) return;
+    const fallback = img.dataset.fallback || '';
+    if (!fallback) return;
+    if (img.dataset.fallbackApplied === 'true') {
+      if (img.classList.contains('pm-avatar-shell__frame')) img.hidden = true;
+      return;
+    }
+    img.dataset.fallbackApplied = 'true';
+    img.src = fallback;
+  }, true);
+
+  function mount(target, options = {}) {
+    const host = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!host) return null;
+    const key = JSON.stringify({
+      avatarUrl: options.avatarUrl || '',
+      level: normalizeLevel(options.level || 0),
+      exactFrameIndex: options.exactFrameIndex ?? null,
+      sizePx: Math.max(18, Number(options.sizePx) || 45),
+      extraClass: options.extraClass || '',
+      imageClass: options.imageClass || 'pm-avatar-img',
+      wrapperClass: options.wrapperClass || 'pm-avatar',
+      sizeTag: options.sizeTag || ''
+    });
+    if (host.dataset.pmAvatarMountKey === key && host.firstElementChild) return host.firstElementChild;
+    const node = createNode(options);
+    host.replaceChildren(node);
+    host.dataset.pmAvatarMountKey = key;
+    return node;
+  }
+
+  function getFrameRanges() {
+    return FRAME_LEVEL_TO_ASSET.map((item) => Object.freeze({ ...item }));
+  }
+
+  window.PMAvatar = Object.freeze({
+    FALLBACK_AVATAR,
+    FRAME_ASSET_COUNT,
+    FRAME_LEVEL_TO_ASSET,
+    FRAME_VISUAL_PROFILES,
+    normalizeLevel,
+    normalizeFrameIndex,
+    getFrameRange,
+    getFrameRanges,
+    getFrameRangeByAssetIndex,
+    getFrameUnlockLevel,
+    getFrameLabel,
+    getFrameAssetIndex,
+    resolveFrameIndex,
+    getFrameProfile,
+    isFrameUnlocked,
+    getSafeSelectedFrame,
+    isRegisteredAvatarUrl,
+    safeAvatarUrl,
+    isRegisteredFrameAssetIndex,
+    buildHTML,
+    applyNodeProfile,
+    createNode,
+    renderAvatarNode: createNode,
+    mount
+  });
+})();
