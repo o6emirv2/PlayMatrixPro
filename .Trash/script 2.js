@@ -62,12 +62,12 @@
   };
 
   const games = [
-    { id: 'crash', title: 'Crash', route: '/games/crash/index.html', description: 'Refleks ve zamanlama odaklı multiplier deneyimi.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'], icon: 'trend', auth: true },
-    { id: 'chess', title: 'Satranç', route: '/games/chess/index.html', description: 'Bahissiz, bahisli ve bot modlarını destekleyen strateji oyunu.', tags: ['PvP', 'Strateji', 'Arena'], icon: 'chess', auth: true },
-    { id: 'pisti', title: 'Pişti', route: '/games/pisti/index.html', description: 'Klasik kart oyunu deneyimi.', tags: ['Kart', 'Klasik', 'Çok Oyunculu'], icon: 'cards', auth: true },
-    { id: 'pattern', title: 'Pattern Master', route: '/games/pattern-master/index.html', description: 'Hafıza ve örüntü takibi üzerine klasik oyun.', tags: ['Klasik', 'Zeka', 'Skor'], icon: 'grid', auth: true },
-    { id: 'space', title: 'Space Pro', route: '/games/space-pro/index.html', description: 'Uzay temalı refleks ve kaçınma oyunu.', tags: ['Klasik', 'Refleks', 'Uzay'], icon: 'rocket', auth: true },
-    { id: 'snake', title: 'Snake Pro', route: '/games/snake-pro/index.html', description: 'Modernleştirilmiş yılan oyunu.', tags: ['Klasik', 'Mobil', 'Skor'], icon: 'snake', auth: true }
+    { id: 'crash', title: 'Crash', route: '/games/crash', description: 'Refleks ve zamanlama odaklı multiplier deneyimi.', tags: ['Canlı Oyun', 'Rekabet', 'Hızlı Tur'], icon: 'trend', auth: true },
+    { id: 'chess', title: 'Satranç', route: '/games/chess', description: 'Bahissiz, bahisli ve bot modlarını destekleyen strateji oyunu.', tags: ['PvP', 'Strateji', 'Arena'], icon: 'chess', auth: true },
+    { id: 'pisti', title: 'Pişti', route: '/games/pisti', description: 'Klasik kart oyunu deneyimi.', tags: ['Kart', 'Klasik', 'Çok Oyunculu'], icon: 'cards', auth: true },
+    { id: 'pattern', title: 'Pattern Master', route: '/games/pattern-master', description: 'Hafıza ve örüntü takibi üzerine klasik oyun.', tags: ['Klasik', 'Zeka', 'Skor'], icon: 'grid', auth: true },
+    { id: 'space', title: 'Space Pro', route: '/games/space-pro', description: 'Uzay temalı refleks ve kaçınma oyunu.', tags: ['Klasik', 'Refleks', 'Uzay'], icon: 'rocket', auth: true },
+    { id: 'snake', title: 'Snake Pro', route: '/games/snake-pro', description: 'Modernleştirilmiş yılan oyunu.', tags: ['Klasik', 'Mobil', 'Skor'], icon: 'snake', auth: true }
   ];
 
   const state = {
@@ -534,41 +534,6 @@
     }
   }
 
-  function openPlayerStats(userLike) {
-    const user = normalizeUser(userLike || state.user || {});
-    if (!user || !user.username) return;
-    renderAvatar('playerStatsAvatar', { avatar: user.avatar, frame: selectedFrameFor(user), label: user.username });
-    const title = $('playerStatsTitle');
-    const sub = $('playerStatsSub');
-    const grid = $('playerStatsGrid');
-    if (title) title.textContent = user.username;
-    if (sub) sub.textContent = `${formatNumber(user.balance)} MC · Lv. ${user.accountLevel} · ${formatNumber(user.xp)} XP`;
-    if (grid) {
-      const total = user.gameStats?.total || {};
-      const rows = [
-        ['Hesap Seviyesi', `Lv. ${user.accountLevel}`],
-        ['Hesap XP', formatNumber(user.xp)],
-        ['MC Bakiyesi', `${formatNumber(user.balance)} MC`],
-        ['Aylık Aktivite', formatNumber(user.monthlyActiveScore)],
-        ['Seviye İlerlemesi', `%${Number(user.progressPercent || 0).toFixed(1)}`],
-        ['Toplam Oyun', formatNumber(first(total.rounds, user.raw?.totalRounds, 0))],
-        ['Galibiyet', formatNumber(first(total.wins, user.raw?.totalWins, 0))],
-        ['E-posta', user.emailVerified ? 'Doğrulandı' : 'Gizli / Beklemede']
-      ];
-      grid.replaceChildren(...rows.map(([label, value]) => {
-        const card = document.createElement('article');
-        card.className = 'pm-playerStatsCard';
-        const strong = document.createElement('strong');
-        strong.textContent = value;
-        const span = document.createElement('span');
-        span.textContent = label;
-        card.append(strong, span);
-        return card;
-      }));
-    }
-    openLayer('playerStatsModal');
-  }
-
   function renderLeaderboard() {
     const list = $('leaderboardList');
     if (!list) return;
@@ -580,14 +545,11 @@
     }
     list.replaceChildren(...items.slice(0, 8).map((item, index) => {
       const user = normalizeUser(item);
-      const row = document.createElement('button');
-      row.type = 'button';
+      const row = document.createElement('article');
       row.className = 'pm-leaderItem';
-      row.setAttribute('aria-label', `${user.username} istatistiklerini aç`);
-      const metric = tab === 'activity' ? `${formatNumber(item.monthlyActiveScore || user.monthlyActiveScore || 0)} Aktiflik` : `Lv. ${user.accountLevel}`;
-      row.innerHTML = `<span class="pm-rank">#${index + 1}</span><span class="pm-avatarSlot pm-avatarSlot--leader"></span><span class="pm-leaderInfo"><strong>${user.username}</strong><small>${formatNumber(user.balance)} MC · ${formatNumber(user.xp)} XP</small></span><span class="pm-statusPill">${metric}</span>`;
+      const metric = tab === 'activity' ? formatNumber(item.monthlyActiveScore || user.monthlyActiveScore || 0) : `Lv. ${user.accountLevel}`;
+      row.innerHTML = `<span class="pm-rank">#${index + 1}</span><span class="pm-avatarSlot pm-avatarSlot--leader"></span><span><strong>${user.username}</strong><small>${formatNumber(user.balance)} MC · ${formatNumber(user.xp)} XP</small></span><span class="pm-statusPill">${metric}</span>`;
       row.querySelector('.pm-avatarSlot').appendChild(createAvatarNode({ avatar: user.avatar, frame: selectedFrameFor(user), label: user.username }));
-      row.addEventListener('click', () => openPlayerStats(item));
       return row;
     }));
   }
@@ -785,9 +747,6 @@
     $('openFrameBtn')?.addEventListener('click', () => { if (!state.user) return openAuth('login'); renderFramePicker(); openLayer('frameModal'); });
     $('globalOverlay')?.addEventListener('click', closeLayer);
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeLayer(); });
-    document.addEventListener('gesturestart', (event) => event.preventDefault());
-    let lastTouchEnd = 0;
-    document.addEventListener('touchend', (event) => { const now = Date.now(); if (now - lastTouchEnd <= 320) event.preventDefault(); lastTouchEnd = now; }, { passive: false });
     document.addEventListener('click', (event) => {
       const close = event.target.closest('[data-close-layer]');
       if (close) { closeLayer(); return; }
@@ -805,7 +764,6 @@
         if (value === 'login') openAuth('login');
         if (value === 'support') openLayer('supportModal');
         if (value === 'account') navigateTo('account');
-        if (value === 'account-stats') openPlayerStats(state.user || {});
         if (value === 'avatar') { renderAvatarPicker(); openLayer('avatarModal'); }
         if (value === 'frame') { renderFramePicker(); openLayer('frameModal'); }
         if (value === 'logout') logout();

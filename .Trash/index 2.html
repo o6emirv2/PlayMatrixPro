@@ -15,8 +15,8 @@
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
   <link rel="preload" href="./public/assets/images/hero-01-signup-50k.png" as="image" />
   <link rel="preload" href="./public/assets/images/logo.png" as="image" />
-  <link rel="stylesheet" href="./style.css?v=pm-home-final-49" />
-  <script src="./script.js?v=pm-home-final-49" defer></script>
+  <link rel="stylesheet" href="./style.css?v=pm-home-final-47" />
+  <script src="./script.js?v=pm-home-final-47" defer></script>
 </head>
 <body data-page="home" data-auth-state="guest">
   <div class="pm-page" id="anasayfa">
@@ -169,7 +169,7 @@
     <div class="pm-drawer__panel pm-accountDrawerPanel">
       <button class="pm-iconButton pm-drawerClose" type="button" data-close-layer aria-label="Hesap panelini kapat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       <div class="pm-accountDrawer__profile"><span class="pm-avatarSlot pm-avatarSlot--drawer" id="drawerAvatarSlot"></span><h3 id="drawerUsername">Misafir</h3><p id="drawerMeta">Oturum bekleniyor</p><button class="pm-goldButton" type="button" data-nav-target="#promolar">Bonus / Promo</button></div>
-      <div class="pm-drawerList"><button type="button" data-action="account-stats">Hesap Özeti</button><button type="button" data-action="avatar">Avatar Seç</button><button type="button" data-action="frame">Çerçeve Seç</button><button type="button" data-nav-target="#oyunlar">Oyunlar</button><button type="button" data-nav-target="#liderlik">Liderlik</button><button type="button" data-nav-target="#promolar">Promosyon Kodu</button><button type="button" data-action="support">Destek Talebi</button><button type="button" data-action="logout">Çıkış Yap</button></div>
+      <div class="pm-drawerList"><button type="button" data-nav-target="#hesabim">Profilim</button><button type="button" data-action="avatar">Avatar Seç</button><button type="button" data-action="frame">Çerçeve Seç</button><button type="button" data-nav-target="#liderlik">Liderlik</button><button type="button" data-nav-target="#promolar">Promosyon Kodu</button><button type="button" data-action="support">Destek Talebi</button><button type="button" data-action="logout">Çıkış Yap</button></div>
     </div>
   </aside>
 
@@ -219,22 +219,6 @@
 
   <section class="pm-modal pm-pickerModal" id="frameModal" aria-hidden="true" aria-labelledby="frameTitle" role="dialog">
     <div class="pm-modal__panel pm-pickerPanel"><button class="pm-iconButton pm-modal__close" type="button" data-close-layer aria-label="Kapat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button><h2 id="frameTitle">Çerçevenizi Seçin</h2><div class="pm-pickerGrid pm-pickerGrid--frames" id="frameGrid"></div></div>
-  </section>
-
-
-  <section class="pm-modal" id="playerStatsModal" aria-hidden="true" aria-labelledby="playerStatsTitle" role="dialog">
-    <div class="pm-modal__panel pm-playerStatsPanel">
-      <button class="pm-iconButton pm-modal__close" type="button" data-close-layer aria-label="Kapat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-      <div class="pm-playerStatsHead">
-        <span class="pm-avatarSlot pm-avatarSlot--stats" id="playerStatsAvatar"></span>
-        <div>
-          <span class="pm-kicker">OYUNCU PROFİLİ</span>
-          <h2 id="playerStatsTitle">Oyuncu İstatistikleri</h2>
-          <p id="playerStatsSub">Canlı liderlik verisi</p>
-        </div>
-      </div>
-      <div class="pm-playerStatsGrid" id="playerStatsGrid"></div>
-    </div>
   </section>
 
   <div class="pm-toastHost" id="toastHost" aria-live="polite" aria-atomic="true"></div>
