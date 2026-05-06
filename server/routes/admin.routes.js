@@ -216,6 +216,15 @@ router.get('/admin/matrix/issues', (_req, res) => {
     .sort((a,b)=>(b.createdAt || b.at || 0) - (a.createdAt || a.at || 0))
     .slice(0,120);
   const gameTitle = (game) => String(game || '').toLowerCase() === 'chess' ? 'Satranç' : String(game || '').toLowerCase() === 'crash' ? 'Crash' : String(game || '').toLowerCase() === 'home' ? 'AnaSayfa' : 'Sistem';
+  const resolveIssueSolution = (x = {}, game = '', message = '', scope = '') => {
+    const text = `${message} ${scope} ${x.path || ''} ${x.endpoint || ''} ${x.source || ''}`.toLowerCase();
+    if (game === 'home' && text.includes('oturum bulunamadı')) return 'AnaSayfa private widget oturum hazır olmadan çalışmamalı; auth state hazır değilse giriş gerekli görünümü gösterilmeli.';
+    if (game === 'home' && (text.includes('http_405') || Number(x.status || 0) === 405)) return 'Client endpoint methodu ve API base fallback sırası kontrol edilmeli; eski cache/script kaynağı temizlenmeli.';
+    if (game === 'home' && text.includes('network-request-failed')) return 'Firebase Auth network erişimi, authorized domain ve cihaz bağlantısı kontrol edilmeli.';
+    if (game === 'crash') return 'Crash ilgili API route, risk/round state, bet/cashout transaction ve client payload birlikte kontrol edilmeli.';
+    if (game === 'chess') return 'Satranç room stateVersion, socket ACK, hamle payload ve backend oda durumu birlikte kontrol edilmeli.';
+    return 'Sistem kaydı kaynak, endpoint, status ve güvenli stack bilgisiyle ayrıca incelenmeli.';
+  };
   const normalizeIssue = (x = {}) => {
     const game = String(x.game || '').toLowerCase();
     const message = String(x.message || x.error || x.reason || JSON.stringify(x.details || x.payload || {})).slice(0, 360) || 'Kayıt';
@@ -228,7 +237,7 @@ router.get('/admin/matrix/issues', (_req, res) => {
       area: x.area || (game === 'chess' ? 'Satranç' : game === 'crash' ? 'Crash' : game === 'home' ? 'AnaSayfa' : 'Sistem'),
       error: x.error || message,
       reason: x.reason || (x.status ? `HTTP ${x.status} / ${scope}${path ? ` / ${path}` : ''}` : scope),
-      solution: x.solution || (game === 'chess' || game === 'crash' || game === 'home' ? 'Dosya, endpoint, status ve stack bilgisiyle yalnızca gerçek hata kaynağı kontrol edilmeli; beklenen oyun uyarısı hata olarak işlenmemeli.' : 'Sistem kaydı ayrı incelenmeli.'),
+      solution: x.solution || resolveIssueSolution(x, game, message, scope),
       message,
       path,
       status: x.status || '',

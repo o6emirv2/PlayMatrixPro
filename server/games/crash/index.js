@@ -56,7 +56,10 @@ const state = {
   io: null,
   timer: null,
   autoTimers: new Map(),
-  subscribers: new Set()
+  subscribers: new Set(),
+  nextCrashPointOverride: 0,
+  nextCrashPointUpdatedBy: '',
+  nextCrashPointUpdatedAt: 0
 };
 
 function makeHttpError(message, statusCode = 400) {
@@ -167,6 +170,13 @@ async function persistRiskTable(rows, actorUid) {
 }
 
 function pickCrashPoint() {
+  if (Number.isFinite(Number(state.nextCrashPointOverride)) && Number(state.nextCrashPointOverride) >= 1.01) {
+    const forced = round(Math.min(MAX_MULT, Math.max(1.01, Number(state.nextCrashPointOverride))), 2);
+    state.nextCrashPointOverride = 0;
+    state.nextCrashPointUpdatedBy = '';
+    state.nextCrashPointUpdatedAt = 0;
+    return forced;
+  }
   const rows = validateRiskTable(state.risk, { useDefaultOnInvalid: true }).rows;
   const total = rows.reduce((sum, row) => sum + row.weight, 0);
   let roll = secureRandomFloat() * total;
@@ -586,8 +596,6 @@ async function cashoutBet(bet, { automatic = false, forcedMultiplier = null } = 
 
 function tick() {
   state.multiplier = currentMultiplier();
-  // Auto cashout tek kaynaklıdır: scheduleAutoCashout() timer'ı tam hedef çarpana kurulur.
-  // Tick içinde tekrar cashout denemesi yapılmaz; bu sayede 409 duplicate/pending kayıtları azalır.
   if (state.multiplier >= state.crashPoint) endRound().catch((error) => console.error('[crash:end:error]', JSON.stringify({ message: error.message })));
   else emitState();
 }
@@ -673,16 +681,52 @@ router.post('/refund-active', requireAuth, async (req, res, next) => {
     res.json({ ok: true, refunded, refundedBets, balance: await readBalance(uid), hasActiveBet: false });
   } catch (error) { next(error); }
 });
-router.get('/admin/risk-table', requireAuth, requireAdmin, async (_req, res, next) => { try { await loadRiskTable(); res.json({ ok: true, riskTable: state.risk }); } catch (error) { next(error); } });
+router.get('/admin/risk-table', requireAuth, requireAdmin, async (_req, res, next) => {
+  try {
+    await loadRiskTable();
+    res.json({
+      ok: true,
+      riskTable: state.risk,
+      defaultRisk: DEFAULT_RISK.map((row) => ({ ...row })),
+      nextCrashPointOverride: state.nextCrashPointOverride || 0,
+      phase: state.phase,
+      roundId: state.roundId,
+      multiplier: currentMultiplier(),
+      crashPoint: state.phase === 'CRASHED' ? state.crashPoint : null
+    });
+  } catch (error) { next(error); }
+});
 router.post('/admin/risk-table', requireAuth, requireAdmin, async (req, res, next) => {
   try {
-    const parsed = validateRiskTable(req.body.rows || req.body.riskTable || [], { useDefaultOnInvalid: false });
+    const sourceRows = req.body?.resetDefault === true ? DEFAULT_RISK : (req.body.rows || req.body.riskTable || []);
+    const parsed = validateRiskTable(sourceRows, { useDefaultOnInvalid: false });
     if (!parsed.ok) return res.status(400).json({ ok: false, error: 'INVALID_RISK_TABLE', details: parsed.errors });
     state.risk = parsed.rows;
     const persisted = await persistRiskTable(state.risk, req.user?.uid);
-    console.info('[admin:crash-risk-table]', JSON.stringify({ uid: req.user.uid, ranges: state.risk.length, persisted }));
-    res.json({ ok: true, persisted, riskTable: state.risk });
+    console.info('[admin:crash-risk-table]', JSON.stringify({ uid: req.user.uid, ranges: state.risk.length, persisted, resetDefault: req.body?.resetDefault === true }));
+    res.json({ ok: true, persisted, riskTable: state.risk, defaultRisk: DEFAULT_RISK.map((row) => ({ ...row })) });
   } catch (error) { console.error('[crash:risk-table:persist:error]', JSON.stringify({ message: error.message })); next(error); }
+});
+router.post('/admin/next-crash-point', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const raw = Number(req.body?.multiplier);
+    if (!Number.isFinite(raw)) return res.status(400).json({ ok: false, error: 'INVALID_MULTIPLIER' });
+    const multiplier = round(Math.min(MAX_MULT, Math.max(1.01, raw)), 2);
+    state.nextCrashPointOverride = multiplier;
+    state.nextCrashPointUpdatedBy = req.user?.uid || '';
+    state.nextCrashPointUpdatedAt = now();
+    console.info('[admin:crash-next-point]', JSON.stringify({ uid: req.user?.uid || '', multiplier }));
+    res.json({ ok: true, nextCrashPointOverride: multiplier });
+  } catch (error) { next(error); }
+});
+router.delete('/admin/next-crash-point', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    state.nextCrashPointOverride = 0;
+    state.nextCrashPointUpdatedBy = req.user?.uid || '';
+    state.nextCrashPointUpdatedAt = now();
+    console.info('[admin:crash-next-point:clear]', JSON.stringify({ uid: req.user?.uid || '' }));
+    res.json({ ok: true, nextCrashPointOverride: 0 });
+  } catch (error) { next(error); }
 });
 
 async function authenticateCrashSocket(socket) {

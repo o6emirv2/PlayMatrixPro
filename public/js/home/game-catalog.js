@@ -12,12 +12,12 @@ export const HOME_GAME_ROUTES = Object.freeze({
 });
 
 export const HOME_GAMES = Object.freeze([
-  { key: "crash", name: "Crash", category: "online", access: "auth", url: HOME_GAME_ROUTES.crash, icon: "fa-arrow-trend-up" },
-  { key: "satranc", name: "Satranç", category: "online", access: "auth", url: HOME_GAME_ROUTES.satranc, icon: "fa-chess" },
-  { key: "pisti", name: "Pişti", category: "online", access: "auth", url: HOME_GAME_ROUTES.pisti, icon: "fa-layer-group" },
-  { key: "patternmaster", name: "Pattern Master", category: "classic", access: "auth", url: HOME_GAME_ROUTES.patternmaster, icon: "fa-shapes" },
-  { key: "spacepro", name: "Space Pro", category: "classic", access: "auth", url: HOME_GAME_ROUTES.spacepro, icon: "fa-user-astronaut" },
-  { key: "snakepro", name: "Snake Pro", category: "classic", access: "auth", url: HOME_GAME_ROUTES.snakepro, icon: "fa-wave-square" }
+  { key: "crash", name: "Crash", category: "online", access: "auth", url: HOME_GAME_ROUTES.crash, color: "69,162,255", icon: "fa-arrow-trend-up", desc: "Gerçek para içermeyen, refleks ve zamanlama odaklı hızlı tempo multiplier oyunu.", tags: ["Canlı Oyun", "Rekabet", "Hızlı Tur"], keywords: "crash multiplier online rocket roket çarpan" },
+  { key: "satranc", name: "Satranç", category: "online", access: "auth", url: HOME_GAME_ROUTES.satranc, color: "104,178,255", icon: "fa-chess", desc: "Klasik satranç deneyimini modern arayüz ve giriş tabanlı rekabet akışıyla oyna.", tags: ["PvP", "Strateji", "Arena"], keywords: "chess online pvp satranç" },
+  { key: "pisti", name: "Pişti", category: "online", access: "auth", url: HOME_GAME_ROUTES.pisti, color: "93,95,254", icon: "fa-layer-group", desc: "Kart takibi ve tempo yönetimi isteyen online pişti deneyimi.", tags: ["Kart", "Online", "Klasik"], keywords: "card kart multiplayer online pisti pişti" },
+  { key: "patternmaster", name: "Pattern Master", category: "classic", access: "auth", url: HOME_GAME_ROUTES.patternmaster, color: "97,220,176", icon: "fa-shapes", desc: "Dikkat ve görsel hafıza odaklı ücretsiz pattern oyunu.", tags: ["Ücretsiz", "Zeka", "Refleks"], keywords: "arcade pattern master ücretsiz zeka" },
+  { key: "spacepro", name: "Space Pro", category: "classic", access: "auth", url: HOME_GAME_ROUTES.spacepro, color: "103,170,255", icon: "fa-user-astronaut", desc: "Tarayıcıda anında açılan hafif ve hızlı klasik arcade uzay oyunu.", tags: ["Arcade", "Retro", "Ücretsiz"], keywords: "arcade pro space uzay" },
+  { key: "snakepro", name: "Snake Pro", category: "classic", access: "auth", url: HOME_GAME_ROUTES.snakepro, color: "85,214,140", icon: "fa-wave-square", desc: "Retro hisli, akıcı ve ücretsiz snake deneyimi.", tags: ["Retro", "Arcade", "Ücretsiz"], keywords: "arcade pro retro snake yılan" }
 ]);
 
 export function normalizeGameRoute(rawUrl = "") {

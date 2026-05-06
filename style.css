@@ -1,5 +1,5 @@
 
-/* public/css/tokens.css */
+
 :root{
       --bg:#0b0e11;
       --bg-soft:#11141b;
@@ -32,7 +32,7 @@
     }
 
 
-/* public/css/base.css */
+
 html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
@@ -120,7 +120,7 @@ body {
 }
 
 
-/* public/css/layout.css */
+
 button,
 a,
 [role="button"],
@@ -329,7 +329,7 @@ main.container{display:block}
 .sheet-panel{max-width:100vw}
 
 
-/* public/css/components.css */
+
 input, select, textarea {
     font-size: 16px !important;
     touch-action: manipulation !important;
@@ -752,7 +752,7 @@ button, a, input, select, textarea, [role="button"] {
 [data-busy="1"]{cursor:wait;opacity:.72;pointer-events:none;}
 
 
-/* public/css/home.css */
+
 main,section,article,aside,nav,header,footer{min-width:0}
 
 .hero{padding-top:32px}
@@ -1386,7 +1386,7 @@ body.pm-level-up-flash::after {
 .lb-state--empty{border-color:rgba(255,255,255,.10)}
 
 
-/* public/css/social.css */
+
 .ps-list-container, .ps-chat-stream, .sheet-content {
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
@@ -2690,7 +2690,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 
-/* public/css/profile.css */
+
 a,button,[role="button"],.mobile-tab,.drop-item,.avatar-option,.game-cta,.sheet-close,.sheet-handle,.filter-chip{touch-action:manipulation}
 
 .avatar{
@@ -3304,7 +3304,7 @@ a,button,[role="button"],.mobile-tab,.drop-item,.avatar-option,.game-cta,.sheet-
 .progress-fill[data-progress]{width:var(--pm-progress, 0%);}
 
 
-/* public/css/games.css */
+
 img,
 svg,
 canvas {
@@ -3336,7 +3336,7 @@ img, video, canvas, svg {
 }
 
 
-/* public/css/responsive.css */
+
 @media (max-width:1180px){
   .pm-social-layout{grid-template-columns:58px 260px minmax(0,1fr)}
 }
@@ -3654,7 +3654,7 @@ img, video, canvas, svg {
 @media (max-width: 560px){.home-stats-grid{grid-template-columns:1fr}.home-widget-head{align-items:stretch}.home-widget-state{justify-content:center;width:100%}}
 
 
-/* public/avatar-frame.css */
+
 html,
 body {
   overscroll-behavior-x: none !important;
@@ -4272,8 +4272,8 @@ img,
 }
 
 
-/* public/css/components/avatar-picker.css */
-/* Video-style profile avatar picker */
+
+
 .avatar-picker-modal {
   background: rgba(5, 10, 18, .56);
   backdrop-filter: blur(18px);
@@ -4495,7 +4495,7 @@ img,
 }
 
 
-/* public/shell-enhancements.css */
+
 
 :root{
   --pm-bg-0:#060914;
@@ -5068,8 +5068,8 @@ body{
 }
 
 
-/* public/css/clean-inline.css */
-/* Auto-generated CSP-safe replacements for legacy inline style attributes. */
+
+
 .pm-csp-inline-31511c60d5{width: 100%; height: 100%; object-fit: contain; border-radius: inherit;}
 .pm-csp-inline-d2c171b18b{margin-top:10px;}
 .pm-csp-inline-87e24b1b05{--stagger:0;}
@@ -5151,7 +5151,7 @@ body{
 .pm-lb-fallback-item { opacity: 1 !important; transform: none !important; }
 .avatar-picker-empty { padding: 24px; color: var(--muted, #94a3b8); text-align: center; font-weight: 800; }
 
-/* Live game account sync + healthy player stats modal. */
+
 .pm-live-sync-pulse { animation: pmLiveSyncPulse .62s ease both; }
 @keyframes pmLiveSyncPulse { 0%{filter:brightness(1);transform:scale(1)} 42%{filter:brightness(1.35);transform:scale(1.035)} 100%{filter:brightness(1);transform:scale(1)} }
 #playerStatsModal.ps-modal.active,
@@ -5423,8 +5423,8 @@ body.pm-modal-scroll-locked{
 
 
 
-/* style.css */
-/* PlayMatrix v5 clean patches */
+
+
 :root{--pm-safe-top:env(safe-area-inset-top,0px);--pm-safe-bottom:env(safe-area-inset-bottom,0px)}
 body{min-height:100svh;overflow-x:hidden}.pm-avatar-shell,.pm-game-avatar-shell{aspect-ratio:1/1;overflow:visible;isolation:isolate}.pm-avatar-shell img,.pm-game-avatar-shell img{object-fit:cover}.pm-frame-image,.pm-game-frame{pointer-events:none;user-select:none}.modal,.pm-modal{max-height:calc(100svh - 24px);overflow:auto}.game-card{contain:layout paint}.game-card .game-cta{min-height:42px}.frame-card.is-locked,.frame-option.is-locked{pointer-events:none;filter:none;opacity:.72}.frame-card.is-locked img,.frame-option.is-locked img{filter:none;opacity:1}@media(max-width:720px){.modal,.pm-modal{width:min(94vw,520px);margin:12px auto}.game-grid{grid-template-columns:1fr}.topbar,.navbar{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}}
 
@@ -5447,7 +5447,7 @@ body{min-height:100svh;overflow-x:hidden}.pm-avatar-shell,.pm-game-avatar-shell{
 .frame-picker-card:disabled .frame-picker-preview .pm-frame-image { opacity:.92 !important; filter:drop-shadow(0 8px 16px rgba(0,0,0,.22)) saturate(.82) !important; }
 .frame-picker-card.is-locked .frame-picker-preview > [data-pm-avatar="true"],
 .frame-picker-card:disabled .frame-picker-preview > [data-pm-avatar="true"] { opacity:.78 !important; filter:saturate(.75) brightness(.96) !important; }
-/* V8 hardening: frame picker and avatar overlay visibility */
+
 .frame-picker-preview,
 .frame-picker-summary-preview,
 .pm-avatar-host,
@@ -5511,14 +5511,14 @@ body{min-height:100svh;overflow-x:hidden}.pm-avatar-shell,.pm-game-avatar-shell{
   contain: paint layout !important;
 }
 
-/* V9 mobile scroll hardening */
+
 html, body { min-height: 100%; overflow-x: hidden; overscroll-behavior-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 body { padding-bottom: max(96px, env(safe-area-inset-bottom)); }
 .modal-overlay, .profile-sheet, .ps-modal, .avatar-picker-modal, .frame-picker-modal, .sheet-content, .modal-content { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
 .avatar-picker-grid, .frame-picker-grid, .avatar-grid, .frame-grid, .ps-modal-body, .sheet-body { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
 
 
-/* Android/iOS smooth scroll hardening */
+
 html, body { min-height:100%; overflow-x:hidden; overscroll-behavior-y:contain; -webkit-overflow-scrolling:touch; touch-action:pan-y manipulation; }
 body, main, .app, .page, .content, .section, .modal, .modal-body, .sheet, .drawer, .profile-sheet, .pm-modal, .pm-scrollable { -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
 button, a, input, textarea, select, [role="button"], .game-card, .nav-item { touch-action:manipulation; }
@@ -5526,7 +5526,7 @@ button, a, input, textarea, select, [role="button"], .game-card, .nav-item { tou
 .progress-fill, .pm-level-progress-fill, [id$="ProgressFill"], [id*="ProgressFill"] { transition:width .65s cubic-bezier(.2,.9,.22,1), transform .65s cubic-bezier(.2,.9,.22,1); will-change:width; }
 
 
-/* PLAYMATRIX_HOME_FINAL_FIX_V8: gerçek AnaSayfa DOM selectorları, sosyal mobil alan, koyu modal ve üst bar avatar standardı */
+
 #sheetShell.is-social{height:100dvh;max-height:100dvh;overflow:hidden;}
 #sheetShell.is-social .sheet-panel,
 #sheetShell.is-social .sheet-content{min-height:0;overflow:hidden;}
@@ -5630,7 +5630,7 @@ body.modal-open, body.sheet-open { overflow: hidden; }
   .chip-balance { min-width: 72px; }
 }
 
-/* PlayMatrix Home production repair: mobile-safe sheet, profile dropdown, frame picker and market states. */
+
 :root {
   --pm-home-sheet-gap: 12px;
   --pm-home-panel-bg: rgba(12, 18, 33, .96);
@@ -5960,7 +5960,7 @@ body.modal-open, body.sheet-open { overflow: hidden; }
 }
 
 
-/* === PLAYMATRIX FINAL HOME / CRASH / CHESS INTEGRATION OVERRIDES === */
+
 :root{
   --pm-mobile-dropdown-width: min(342px, calc(100vw - 18px));
   --pm-mobile-topbar-gap: 8px;

@@ -1,4 +1,3 @@
-/* PlayMatrix clean: real home orchestrator. Each imported module owns one UI responsibility; legacy runtime remains the compatibility layer until later phases remove the final monolith. */
 import { reportHomeError } from "./dom-utils.js";
 import { installHomeWidgetContract } from "./widget-contract.js";
 import { installGameRouteNormalizer } from "./game-catalog.js";

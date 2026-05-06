@@ -1,15 +1,14 @@
-/* PlayMatrix Crash application module. */
 window.__PLAYMATRIX_ROUTE_NORMALIZER_DISABLED__ = true;
     import { initPlayMatrixOnlineCore } from "../../../pm-online-core.js";
 
 const __PM_CRASH_CLIENT_REPORTER__ = (() => {
-  const EXPECTED = new Set(['LOAD FAILED','FAILED TO FETCH','NETWORKERROR','ABORTERROR','CASHOUT_NOT_AVAILABLE','CASHOUT_TOO_LATE','BET_ALREADY_LOST','BET_REFUNDED','REFUND_IN_PROGRESS','AUTO_CASHOUT_MISSED','SOCKET_TIMEOUT','SOCKET_OFFLINE']);
+  const EXPECTED_FLOW = new Set(['CASHOUT_NOT_AVAILABLE','CASHOUT_TOO_LATE','BET_ALREADY_LOST','BET_REFUNDED','REFUND_IN_PROGRESS','AUTO_CASHOUT_MISSED']);
   const seen = new Map();
   function apiBase(){ try { return window.__PLAYMATRIX_API_URL__ || window.__PM_RUNTIME?.apiBase || window.location.origin; } catch (_) { return window.location.origin; } }
   function shouldReport(scope, payload = {}) {
     const message = String(payload.message || payload.error || '').trim();
     const upper = message.toUpperCase();
-    if (EXPECTED.has(upper) || /load failed|failed to fetch|networkerror|abort/i.test(message)) return false;
+    if (EXPECTED_FLOW.has(upper)) return false;
     const source = String(payload.source || '').toLowerCase();
     if (source && !source.includes('/games/crash') && !source.includes('crash-app') && !source.includes('/api/crash')) return false;
     const key = `${scope}:${upper}:${source}:${payload.line || ''}`;

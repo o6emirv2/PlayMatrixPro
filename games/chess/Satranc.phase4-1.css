@@ -463,7 +463,7 @@
   .pm-game-topbar-avatar-host .pm-avatar { width: 38px; height: 38px; }
 }
 
-/* PlayMatrix Chess hardening additions */
+
 .chess-room-controls{
   width:min(560px,100%);
   display:grid;
@@ -524,7 +524,7 @@
   .btn-draw,.btn-resign{font-size:11px;padding:11px 10px}
 }
 
-/* Chess v2 focused hardening: stable player identity, mode-aware controls, no visual jump */
+
 .player-plate,
 .player-plate.active{
   transform:none !important;
@@ -579,7 +579,7 @@
 }
 
 
-/* Chess v3 audio/realtime/visual polish */
+
 .action-icon-btn{border:0;text-decoration:none;}
 .action-icon-btn.red{cursor:pointer;}
 .pm-game-topbar-avatar-host,.pm-game-topbar-avatar-host *{box-sizing:border-box;}
@@ -604,7 +604,7 @@
 @media (max-width:560px){.player-info{grid-template-columns:54px minmax(0,1fr) 24px!important;gap:10px!important;}.pm-game-avatar-shell{width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;}.pm-game-avatar-shell .pm-game-frame,.pm-game-avatar-shell .pm-frame,.pm-game-avatar-shell [class*="frame"]{width:52px!important;height:52px!important;}.pm-game-avatar-shell .p-avatar,.pm-game-avatar-shell .pm-avatar-img,.pm-game-avatar-shell > .pm-avatar img:first-child{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;}#chessboard{border-width:8px!important;}}
 
 
-/* Chess v4 final avatar/frame and issue-visibility polish */
+
 .player-plate,
 .player-plate.active{transform:none!important;will-change:auto!important;}
 .player-info{grid-template-columns:64px minmax(0,1fr) 26px!important;gap:12px!important;align-items:center!important;overflow:hidden!important;}
@@ -632,7 +632,7 @@
 }
 
 
-/* FINAL: Satranç avatar/çerçeve tek-görsel standardı */
+
 .player-plate.active{transform:none!important;will-change:auto!important;}
 .player-info{grid-template-columns:72px minmax(0,1fr) 28px!important;gap:12px!important;align-items:center!important;overflow:visible!important;}
 #myAvatarHost,#oppAvatarHost{inline-size:64px!important;block-size:64px!important;min-inline-size:64px!important;min-block-size:64px!important;max-inline-size:64px!important;max-block-size:64px!important;display:grid!important;place-items:center!important;position:relative!important;overflow:visible!important;contain:none!important;isolation:isolate!important;}

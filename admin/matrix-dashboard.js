@@ -64,6 +64,28 @@ function panelTemplate() {
         </section>
       </div>
 
+      <section class="panel stack crash-control-panel">
+        <div>
+          <h2>CRASH ÇARPAN / RİSK KONTROLÜ</h2>
+          <p class="lead">Crash risk aralıklarını ve tek round geçerli sonraki crash çarpanını backend doğrulamasıyla yönetin.</p>
+        </div>
+        <div class="crash-control-summary" id="crashRiskSummary">Backend verisi bekleniyor.</div>
+        <div class="field-grid">
+          <div class="field"><label for="nextCrashPointInput">Sonraki Round Crash Çarpanı</label><input id="nextCrashPointInput" type="number" min="1.01" max="10000" step="0.01" placeholder="Örn: 2.50" /></div>
+          <div class="field"><label for="crashRiskConfirm">Yazılı Onay</label><input id="crashRiskConfirm" type="text" placeholder="ONAYLIYORUM" /></div>
+        </div>
+        <div class="action-row">
+          <button id="setNextCrashPointBtn" type="button">SONRAKİ ÇARPANI AYARLA</button>
+          <button id="clearNextCrashPointBtn" class="ghost" type="button">ÇARPAN OVERRIDE TEMİZLE</button>
+        </div>
+        <div class="table-wrap crash-risk-table-wrap"><table class="crash-risk-table"><thead><tr><th>Min</th><th>Max</th><th>Ağırlık</th></tr></thead><tbody id="crashRiskRows"></tbody></table></div>
+        <div class="action-row">
+          <button id="saveCrashRiskBtn" type="button">RİSK TABLOSUNU KAYDET</button>
+          <button id="resetCrashRiskBtn" class="warn" type="button">VARSAYILAN RİSK TABLOSUNA DÖN</button>
+        </div>
+        <div class="status" id="crashRiskStatus"></div>
+      </section>
+
       <div class="layout-grid-3">
         <section class="panel stack">
           <div>
@@ -144,7 +166,7 @@ function panelTemplate() {
             <div class="issue-panel"><h3>OYUN = HATA = NEDEN = ÇÖZÜM</h3><div class="issue-list" id="gameIssueList"></div></div>
             <div class="issue-panel"><h3>HATALI ALAN = HATA = NEDEN = ÇÖZÜM</h3><div class="issue-list" id="systemIssueList"></div></div>
           </div>
-          <div class="table-wrap"><table><thead><tr><th>Zaman</th><th>Kapsam</th><th>Hata</th></tr></thead><tbody id="recentErrorRows"></tbody></table></div>
+          <div class="runtime-card-list" id="recentErrorCards"></div><div class="table-wrap runtime-table"><table><thead><tr><th>Zaman</th><th>Kapsam</th><th>Hata</th></tr></thead><tbody id="recentErrorRows"></tbody></table></div>
         </section>
       </div>
     </div>
@@ -245,6 +267,94 @@ function renderIssueList(target, items = []) {
   replaceWithChildren(target, cards.length ? cards : [el('div', 'issue', 'Kayıt yok.')]);
 }
 
+
+function formatMultiplier(value = 0) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) && n > 0 ? `${n.toFixed(2)}x` : 'Yok';
+}
+
+function normalizeRiskRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    min: Number(row?.min || 0),
+    max: Number(row?.max || 0),
+    weight: Number(row?.weight || 0)
+  })).filter((row) => Number.isFinite(row.min) && Number.isFinite(row.max) && Number.isFinite(row.weight));
+}
+
+function buildRiskRow(row = {}, index = 0) {
+  const tr = document.createElement('tr');
+  tr.dataset.riskIndex = String(index);
+  ['min', 'max', 'weight'].forEach((key) => {
+    const td = document.createElement('td');
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = key === 'weight' ? '0.1' : '0.01';
+    input.min = key === 'min' ? '1.01' : key === 'max' ? '1.01' : '0.1';
+    if (key === 'max') input.max = '10000';
+    input.value = String(row[key] ?? '');
+    input.dataset.riskField = key;
+    input.setAttribute('aria-label', `Crash risk ${key}`);
+    td.appendChild(input);
+    tr.appendChild(td);
+  });
+  return tr;
+}
+
+function renderCrashRiskPanel(payload = {}) {
+  const rows = normalizeRiskRows(payload.riskTable || payload.risk || []);
+  const riskRowsEl = document.getElementById('crashRiskRows');
+  renderTableRows(riskRowsEl, rows.map(buildRiskRow), 'Risk tablosu bulunamadı.', 3);
+  const summary = document.getElementById('crashRiskSummary');
+  if (summary) {
+    summary.textContent = `Durum: ${payload.phase || '—'} · Round: ${payload.roundId || '—'} · Anlık: ${formatMultiplier(payload.multiplier)} · Bekleyen override: ${formatMultiplier(payload.nextCrashPointOverride)}`;
+  }
+  const nextInput = document.getElementById('nextCrashPointInput');
+  if (nextInput && Number(payload.nextCrashPointOverride || 0) > 0) nextInput.value = Number(payload.nextCrashPointOverride).toFixed(2);
+}
+
+async function loadCrashRiskPanel() {
+  try {
+    const payload = await adminFetch('/api/crash/admin/risk-table');
+    renderCrashRiskPanel(payload || {});
+    setStatus('crashRiskStatus', 'Crash risk kontrol verisi yüklendi.', 'ok');
+    return payload;
+  } catch (error) {
+    setStatus('crashRiskStatus', error.message || 'Crash risk kontrol verisi alınamadı.', 'error');
+    return null;
+  }
+}
+
+function collectCrashRiskRows() {
+  return Array.from(document.querySelectorAll('#crashRiskRows tr')).map((row) => {
+    const out = {};
+    row.querySelectorAll('input[data-risk-field]').forEach((input) => { out[input.dataset.riskField] = Number(input.value || 0); });
+    return out;
+  }).filter((row) => Number.isFinite(row.min) && Number.isFinite(row.max) && Number.isFinite(row.weight));
+}
+
+function requireCrashRiskConfirm() {
+  const confirmText = document.getElementById('crashRiskConfirm')?.value.trim().toUpperCase();
+  if (confirmText !== 'ONAYLIYORUM') throw new Error('Crash kontrol işlemi için yazılı onay gerekli.');
+}
+
+function renderRecentErrorCards(target, items = []) {
+  const rows = Array.isArray(items) ? items : [];
+  if (!target) return;
+  if (!rows.length) {
+    replaceWithChildren(target, [el('div', 'runtime-card', 'Kritik hata kaydı yok.')]);
+    return;
+  }
+  replaceWithChildren(target, rows.map((item) => {
+    const card = el('article', 'runtime-card');
+    card.append(
+      el('span', 'runtime-card-time', formatWhen(item.createdAt || item.timestamp)),
+      el('strong', '', item.scope || item.event || 'system'),
+      el('p', '', item.message || item.error?.message || item.reason || '—')
+    );
+    return card;
+  }));
+}
+
 async function autoBootstrapAdminSession() {
   const bridge = window.PM_ADMIN_AUTH;
   if (!bridge?.waitForReady || !bridge?.getFreshToken) return false;
@@ -318,11 +428,14 @@ async function loadDashboard() {
   ])), 'Promo kod bulunmuyor.', 4);
   renderIssueList(document.getElementById('gameIssueList'), issues.games || []);
   renderIssueList(document.getElementById('systemIssueList'), issues.systems || []);
-  renderTableRows(document.getElementById('recentErrorRows'), (issues.recentErrors || []).map((item) => buildRow([
+  const recentErrors = issues.recentErrors || [];
+  renderRecentErrorCards(document.getElementById('recentErrorCards'), recentErrors);
+  renderTableRows(document.getElementById('recentErrorRows'), recentErrors.map((item) => buildRow([
     buildCell(formatWhen(item.createdAt || item.timestamp)),
     buildCell(item.scope || item.event || 'system'),
     buildCell(item.message || item.error?.message || item.reason || '—')
   ])), 'Kritik hata kaydı yok.', 3);
+  await loadCrashRiskPanel();
 }
 
 function getCheckedResetFields() {
@@ -414,9 +527,43 @@ async function handleAction(action) {
       setStatus('promoStatus', 'Promosyon kodu oluşturuldu.', 'ok');
       return loadDashboard();
     }
+    if (action === 'crash-risk-save') {
+      requireCrashRiskConfirm();
+      const rows = collectCrashRiskRows();
+      if (!rows.length) throw new Error('Risk tablosu boş olamaz.');
+      const payload = await adminFetch('/api/crash/admin/risk-table', { method: 'POST', body: JSON.stringify({ rows }) });
+      renderCrashRiskPanel(payload || {});
+      setStatus('crashRiskStatus', 'Crash risk tablosu kaydedildi.', 'ok');
+      return;
+    }
+    if (action === 'crash-risk-reset') {
+      requireCrashRiskConfirm();
+      const payload = await adminFetch('/api/crash/admin/risk-table', { method: 'POST', body: JSON.stringify({ resetDefault: true }) });
+      renderCrashRiskPanel(payload || {});
+      setStatus('crashRiskStatus', 'Varsayılan Crash risk tablosu yüklendi.', 'ok');
+      return;
+    }
+    if (action === 'crash-next-set') {
+      requireCrashRiskConfirm();
+      const multiplier = Number(document.getElementById('nextCrashPointInput')?.value || 0);
+      if (!Number.isFinite(multiplier) || multiplier < 1.01 || multiplier > 10000) throw new Error('Sonraki çarpan 1.01 ile 10000 arasında olmalı.');
+      const payload = await adminFetch('/api/crash/admin/next-crash-point', { method: 'POST', body: JSON.stringify({ multiplier }) });
+      setStatus('crashRiskStatus', `Sonraki round crash çarpanı ${formatMultiplier(payload.nextCrashPointOverride)} olarak ayarlandı.`, 'ok');
+      await loadCrashRiskPanel();
+      return;
+    }
+    if (action === 'crash-next-clear') {
+      requireCrashRiskConfirm();
+      await adminFetch('/api/crash/admin/next-crash-point', { method: 'DELETE' });
+      const nextInput = document.getElementById('nextCrashPointInput');
+      if (nextInput) nextInput.value = '';
+      setStatus('crashRiskStatus', 'Sonraki round çarpan override temizlendi.', 'ok');
+      await loadCrashRiskPanel();
+      return;
+    }
   } catch (error) {
     const map = {
-      reset: 'resetStatus', 'save-maintenance': 'maintenanceStatus', 'reward-user': 'rewardStatus', 'reward-all': 'rewardAllStatus', 'promo-create': 'promoStatus'
+      reset: 'resetStatus', 'save-maintenance': 'maintenanceStatus', 'reward-user': 'rewardStatus', 'reward-all': 'rewardAllStatus', 'promo-create': 'promoStatus', 'crash-risk-save': 'crashRiskStatus', 'crash-risk-reset': 'crashRiskStatus', 'crash-next-set': 'crashRiskStatus', 'crash-next-clear': 'crashRiskStatus'
     };
     const statusId = map[action] || (action.startsWith('restrict:') ? 'restrictStatus' : 'maintenanceStatus');
     setStatus(statusId, error.message || 'İşlem başarısız.', 'error');
@@ -433,6 +580,10 @@ root.addEventListener('click', (event) => {
   if (button.id === 'grantUserRewardBtn') return handleAction('reward-user');
   if (button.id === 'grantAllRewardBtn') return handleAction('reward-all');
   if (button.id === 'createPromoBtn') return handleAction('promo-create');
+  if (button.id === 'saveCrashRiskBtn') return handleAction('crash-risk-save');
+  if (button.id === 'resetCrashRiskBtn') return handleAction('crash-risk-reset');
+  if (button.id === 'setNextCrashPointBtn') return handleAction('crash-next-set');
+  if (button.id === 'clearNextCrashPointBtn') return handleAction('crash-next-clear');
   if (button.id === 'runRestrictBtn') {
     const mode = selectedRestrictionAction();
     if (!mode) return setStatus('restrictStatus', 'Kısıtlama türü seçin.', 'error');

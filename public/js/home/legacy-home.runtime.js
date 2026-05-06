@@ -1,4 +1,4 @@
-import { loadFirebaseWebConfig } from "../../firebase-runtime.js"; import { AVATARS, AVATAR_CATEGORIES, DEFAULT_AVATAR, AVATAR_FALLBACK, normalizeAvatarUrl, isCatalogAvatarUrl } from "../../data/avatar-catalog.js"; import { createAvatarPicker } from "../profile/avatar-picker.js"; import { createFramePicker } from "../profile/frame-picker.js"; import { ACCOUNT_PROGRESSION_VERSION, ACCOUNT_LEVEL_CURVE_MODE, normalizeAccountXpExact, getAccountLevelFromXp, getAccountLevelProgressFromXp } from "../../data/progression-policy.js";
+import { loadFirebaseWebConfig } from "../../firebase-runtime.js"; import { HOME_GAMES } from "./game-catalog.js"; import { AVATARS, AVATAR_CATEGORIES, DEFAULT_AVATAR, AVATAR_FALLBACK, normalizeAvatarUrl, isCatalogAvatarUrl } from "../../data/avatar-catalog.js"; import { createAvatarPicker } from "../profile/avatar-picker.js"; import { createFramePicker } from "../profile/frame-picker.js"; import { ACCOUNT_PROGRESSION_VERSION, ACCOUNT_LEVEL_CURVE_MODE, normalizeAccountXpExact, getAccountLevelFromXp, getAccountLevelProgressFromXp } from "../../data/progression-policy.js";
  let initializeApp = null; let firebaseGetAuth = null; let firebaseOnAuthStateChanged = null; let firebaseSignOut = null;
 let firebaseSignInWithEmailAndPassword = null; let firebaseCreateUserWithEmailAndPassword = null; let firebaseSendEmailVerification = null; let firebaseSendPasswordResetEmail = null; let firebaseVerifyBeforeUpdateEmail = null;
 let firebaseGetIdToken = null; let firebaseReload = null;      const $ = (id) => document.getElementById(id);     const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -82,21 +82,7 @@ let firebaseGetIdToken = null; let firebaseReload = null;      const $ = (id) =>
       { label:"10.000 MC", val:10000, color:"rgba(255,255,255,0.14)" },       { label:"20.000 MC", val:20000, color:"rgba(255,255,255,0.09)" },       { label:"25.000 MC", val:25000, color:"rgba(255,255,255,0.14)" },
       { label:"45.000 MC", val:45000, color:"rgba(255,255,255,0.09)" },       { label:"65.000 MC", val:65000, color:"rgba(255,255,255,0.14)" },       { label:"90.000 MC", val:90000, color:"rgba(255,255,255,0.09)" },
       { label:"120.000 MC", val:120000, color:"rgba(255,255,255,0.14)" },       { label:"1.000.000 MC", val:1000000, color:"rgba(255,255,255,0.09)" }
-    ];        const GAMES = [
-      {         name: "Crash",         category: "online",         access: "auth",         url: "/games/crash",
-        color: "69,162,255",         icon: "fa-arrow-trend-up",         desc: "Gerçek para içermeyen, refleks ve zamanlama odaklı hızlı tempo multiplier oyunu.",         tags: ["Canlı Oyun", "Rekabet", "Hızlı Tur"],         keywords: "crash multiplier online rocket roket çarpan"
-      },       {         name: "Satranç",         category: "online",         access: "auth",
-        url: "/games/chess",         color: "104,178,255",         icon: "fa-chess",         desc: "Klasik satranç deneyimini modern arayüz ve giriş tabanlı rekabet akışıyla oyna.",         tags: ["PvP", "Strateji", "Arena"],
-        keywords: "chess online pvp satranç"       },       {         name: "Pişti",         category: "online",
-        access: "auth",         url: "/games/pisti",         color: "93,95,254",         icon: "fa-layer-group",         desc: "Kart takibi ve tempo yönetimi isteyen online pişti deneyimi.",
-        tags: ["Kart", "Online", "Klasik"],         keywords: "card kart multiplayer online pisti pişti"       },       {         name: "Pattern Master",
-        category: "classic",         access: "auth",         url: "/games/pattern-master",         color: "97,220,176",         icon: "fa-shapes",
-        desc: "Dikkat ve görsel hafıza odaklı ücretsiz pattern oyunu.",         tags: ["Ücretsiz", "Zeka", "Refleks"],         keywords: "arcade pattern master ücretsiz zeka"       },       {
-        name: "Space Pro",         category: "classic",         access: "auth",         url: "/games/space-pro",         color: "103,170,255",
-        icon: "fa-user-astronaut",         desc: "Tarayıcıda anında açılan hafif ve hızlı klasik arcade uzay oyunu.",         tags: ["Arcade", "Retro", "Ücretsiz"],         keywords: "arcade pro space uzay"       },
-      {         name: "Snake Pro",         category: "classic",         access: "auth",         url: "/games/snake-pro",
-        color: "85,214,140",         icon: "fa-wave-square",         desc: "Retro hisli, akıcı ve ücretsiz snake deneyimi.",         tags: ["Retro", "Arcade", "Ücretsiz"],         keywords: "arcade pro retro snake yılan"
-      },     ];       const createSocialState = () => ({
+    ];        const GAMES = HOME_GAMES.map((game) => ({ ...game, tags: Array.isArray(game.tags) ? [...game.tags] : [] }));       const createSocialState = () => ({
       activeTab: "global",       selectedKey: "global:lobby",       directMessages: {},       unreadDirect: {},       mobilePanelOpen: false,
       currentActiveDmUid: null,       directHistoryLoadedAt: {},       directHistoryPending: {},       typingTimerId: 0,       pendingInviteNavigation: null,
       pendingMatchmaking: null,       matchmakingToastEl: null,       centerSummary: null,       centerLoading: false,       centerError: "",
@@ -1199,7 +1185,7 @@ function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) r
         return row;       };        const renderStatusBody = (iconClass, message, tone = 'info') => {         const body = document.createElement('div');
         body.className = 'ps-modal-body player-stats-status-body';         const wrap = document.createElement('div');         const icon = createFaIcon(iconClass);         if (iconClass.includes('spinner')) icon.classList.add('fa-spin', 'fa-2x');         icon.classList.add('player-stats-status-icon');
         icon.dataset.tone = tone;         const text = document.createElement('p');         text.textContent = message;         wrap.append(icon, text);         body.appendChild(wrap);
-        return body;       };        content.replaceChildren(createHeader(), renderStatusBody('fa-spinner', 'İstatistikler çekiliyor...', 'info'));       openMatrixModal('playerStatsModal');
+        return body;       };        if (!auth.currentUser) {         content.replaceChildren(createHeader(), renderStatusBody('fa-user-lock', 'Oyuncu istatistikleri için oturum açmalısın.', 'warning'));         openMatrixModal('playerStatsModal');         return;       }        content.replaceChildren(createHeader(), renderStatusBody('fa-spinner', 'İstatistikler çekiliyor...', 'info'));       openMatrixModal('playerStatsModal');
        try {         const payload = await fetchPrivate(`/api/user-stats/${encodeURIComponent(targetUid)}`);         const p = normalizeApiUser(payload?.data || {});         const level = getUserLevel(p);
         const isSelf = !!auth.currentUser && auth.currentUser.uid === String(p.uid || targetUid);          const body = document.createElement('div');         body.className = 'ps-modal-body player-stats-modal-body'; 
         const summary = document.createElement('section');         summary.className = 'player-stats-summary-card';         const avatarShell = document.createElement('div');         avatarShell.className = 'player-stats-avatar-shell';         avatarShell.appendChild(createAvatarShellNode(p.avatar || AVATARS[0], resolveAvatarFrameLevel(p, 0), 80, 'pm-avatar--profile'));

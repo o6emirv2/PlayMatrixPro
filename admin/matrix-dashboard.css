@@ -79,7 +79,7 @@ table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:12px 10p
 @media (max-width:1320px){.summary-strip{grid-template-columns:repeat(4,minmax(0,1fr))}.layout-hero,.layout-grid-3,.layout-grid-2,.issue-columns{grid-template-columns:1fr}}
 @media (max-width:760px){.admin-shell{padding:12px 10px 24px}.topbar{position:static;padding:16px;align-items:flex-start;flex-direction:column}.top-actions{width:100%}.top-actions button{flex:1 1 100%}.summary-strip,.field-grid,.maintenance-grid{grid-template-columns:1fr}.summary-pill{min-height:90px}.matrix-loader-card{padding:24px}.loader-lines span{font-size:20px}.loader-lines b{font-size:24px}}
 
-/* FAZ 10 — Admin panel mobil taşma koruması */
+
 .admin-app,.panel,.topbar,.summary-pill,.issue,.maintenance-toggle{min-width:0}
 .admin-app{max-width:100%;overflow-x:hidden}
 .panel{overflow:hidden}
@@ -103,3 +103,8 @@ table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:12px 10p
 }
 .issue-reason { margin-top: 6px; color: var(--muted); }
 .issue-solution { margin-top: 4px; }
+.crash-control-summary{padding:14px 16px;border-radius:18px;border:1px solid rgba(126,228,255,.16);background:rgba(126,228,255,.05);color:var(--cyan);font-weight:800;line-height:1.45;overflow-wrap:anywhere}
+.crash-risk-table input{min-width:92px;text-align:right;padding:10px 12px;border-radius:12px}
+.crash-risk-table-wrap table{min-width:520px}
+.runtime-card-list{display:none;gap:10px}.runtime-card{padding:12px 14px;border-radius:16px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.025);display:grid;gap:6px;overflow-wrap:anywhere}.runtime-card-time{color:var(--gold-soft);font-size:12px;font-weight:900;letter-spacing:.08em}.runtime-card p{margin:0;color:var(--muted);line-height:1.4}
+@media (max-width:760px){.runtime-card-list{display:grid}.runtime-table{display:none}.crash-risk-table-wrap table{min-width:0}.crash-risk-table th,.crash-risk-table td{padding:8px 6px}.crash-risk-table input{min-width:0;width:100%;font-size:14px}.crash-control-summary{font-size:13px}}

@@ -854,7 +854,6 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
         });
         chessSocket.on('chess:lobby', () => { if (!currentRoomId) fetchLobby(false).catch(() => null); });
         chessSocket.on('chess:room', (room) => { if (room?.id && room.id === currentRoomId) { syncBoardUI(room); showGameNotice(''); } });
-        /* Satranç kişisel state artık chess:room üzerinden gelir; public oda yayını dinlenmez. */
         return chessSocket;
       } catch (_) { return null; }
     }
@@ -1254,8 +1253,6 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
     };
 
     window.addEventListener('beforeunload', () => {
-      // Sayfa yenileme veya mobil arka plana alma artık doğrudan kayıp sayılmaz.
-      // Backend reconnect grace penceresi ping/socket kopuşuna göre karar verir.
     });
 
     document.getElementById('matrixModalCloseBtn')?.addEventListener('click', closeMatrixModal);

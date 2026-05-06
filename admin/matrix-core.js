@@ -11,7 +11,7 @@ function writeSessionToken(value = '') {
   const token = String(value || '').trim();
   if (!token) return;
   try { sessionStorage.setItem(PM_SESSION_TOKEN_KEY, token); } catch (_) {}
-  try { localStorage.setItem(PM_SESSION_TOKEN_KEY, token); } catch (_) {}
+  try { localStorage.removeItem(PM_SESSION_TOKEN_KEY); } catch (_) {}
 }
 
 function clearSessionToken() {

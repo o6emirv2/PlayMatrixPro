@@ -1,10 +1,7 @@
 import { bootHomeApplication } from '/public/js/home/app.js';
+import { HOME_GAME_ROUTES } from '/public/js/home/game-catalog.js';
 
-const PM_GAME_ROUTES = Object.freeze({
-  crash: '/games/crash', chess: '/games/chess', satranc: '/games/chess', pisti: '/games/pisti',
-  pattern: '/games/pattern-master', patternmaster: '/games/pattern-master', space: '/games/space-pro', spacepro: '/games/space-pro',
-  snake: '/games/snake-pro', snakepro: '/games/snake-pro'
-});
+const PM_GAME_ROUTES = HOME_GAME_ROUTES;
 
 window.__PLAYMATRIX_ROUTES__ = PM_GAME_ROUTES;
 window.__PLAYMATRIX_API_BASE__ = window.__PLAYMATRIX_API_BASE__ || window.location.origin;
