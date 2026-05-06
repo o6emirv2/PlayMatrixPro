@@ -707,7 +707,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
     function startLobbyPolling() {
       clearInterval(pollingInterval);
       fetchLobby(true).catch(() => null);
-      pollingInterval = setInterval(() => { if (!document.hidden) fetchLobby(false).catch(() => null); }, 3500);
+      pollingInterval = setInterval(() => { if (!document.hidden && !chessSocket?.connected) fetchLobby(false).catch(() => null); }, 8000);
     }
 
     function roomMatchesSearch(r){
@@ -907,7 +907,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
             showMatrixModal("OYUN İPTAL", res.room.message, "error", true);
           }
         } catch(e) {}
-      }, 5000);
+      }, 15000);
     }
 
     function enterGame(roomData) {
@@ -932,7 +932,7 @@ Object.assign(window, { closeConfirmModal, showConfirmModal, closeMatrixModal, s
       playSfx('start');
       syncBoardUI(roomData);
       showGameNotice('');
-      pollingInterval = setInterval(pollGameState, 6000);
+      pollingInterval = setInterval(() => { if (!chessSocket?.connected) pollGameState(); }, 9000);
       startGamePing();
     }
 

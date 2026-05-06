@@ -10,7 +10,7 @@ const __PM_CRASH_CLIENT_REPORTER__ = (() => {
     const upper = message.toUpperCase();
     if (EXPECTED_FLOW.has(upper)) return false;
     const source = String(payload.source || '').toLowerCase();
-    if (source && !source.includes('/games/crash') && !source.includes('crash-app') && !source.includes('/api/crash')) return false;
+    if (source && !source.includes('/games/crash') && !source.includes('crash-app') && !source.includes('/api/crash') && !source.includes('playmatrix-runtime') && !source.includes('playmatrix-api') && !source.includes('avatar-frame') && !source.includes('game-topbar')) return false;
     const key = `${scope}:${upper}:${source}:${payload.line || ''}`;
     const last = seen.get(key) || 0;
     if (Date.now() - last < 10 * 60 * 1000) return false;
@@ -1212,19 +1212,50 @@ function setBootActions({ showEnter = false, showRetry = false, enterLabel = 'CR
         lastRenderedTableData = signature;
         if (elLiveBetCount) elLiveBetCount.innerHTML = `<i class="fa-solid fa-user"></i>${rows.length} oyuncu`;
         if (elLiveCashoutCount) elLiveCashoutCount.innerHTML = `<i class="fa-solid fa-user"></i>${rows.filter((p) => p.cashed).length} çıkış aldı`;
-        elLiveTableBody.innerHTML = rows.map((player) => {
-            const amount = Number(player.bet ?? player.amount ?? 0) || 0;
-            const mult = Number(player.cashoutMult || 0) || 0;
-            const win = Number(player.win ?? player.winAmount ?? 0) || 0;
-            const avatar = renderCrashAvatar(player, player.avatar || DEFAULT_AVATAR);
-            const name = player.isMine ? (userInfo.username || 'Sen') : (player.username || 'Oyuncu');
-            return `<div class="table-row ${player.cashed ? 'row-cashed' : ''}">
-                <div class="t-user">${avatar}<div class="t-meta"><span class="t-name">${escapeHTML(name)}</span><span class="t-tier">${player.isMine ? 'SEN' : 'OYUNCU'}</span></div></div>
-                <div class="t-bet">${formatCompactMc(amount)}</div>
-                <div class="t-mult">${mult > 0 ? `${safeFloat(mult).toFixed(2)}x` : '-'}</div>
-                <div class="t-win">${win > 0 ? '+' + formatCompactMc(win) : '-'}</div>
-            </div>`;
-        }).join('') || '<div class="table-row"><div class="t-user"><div class="t-meta"><span class="t-name">Tur bekleniyor</span><span class="t-tier">Henüz bahis yok</span></div></div><div class="t-bet">-</div><div class="t-mult">-</div><div class="t-win">-</div></div>';
+        const fragment = document.createDocumentFragment();
+        const makeCell = (className, text) => {
+            const node = document.createElement('div');
+            node.className = className;
+            node.textContent = text;
+            return node;
+        };
+        if (!rows.length) {
+            const empty = document.createElement('div');
+            empty.className = 'table-row';
+            const user = document.createElement('div');
+            user.className = 't-user';
+            const meta = document.createElement('div');
+            meta.className = 't-meta';
+            meta.append(makeCell('t-name', 'Tur bekleniyor'), makeCell('t-tier', 'Henüz bahis yok'));
+            user.appendChild(meta);
+            empty.append(user, makeCell('t-bet', '-'), makeCell('t-mult', '-'), makeCell('t-win', '-'));
+            fragment.appendChild(empty);
+        } else {
+            rows.forEach((player) => {
+                const amount = Number(player.bet ?? player.amount ?? 0) || 0;
+                const mult = Number(player.cashoutMult || 0) || 0;
+                const win = Number(player.win ?? player.winAmount ?? 0) || 0;
+                const name = player.isMine ? (userInfo.username || 'Sen') : (player.username || 'Oyuncu');
+                const row = document.createElement('div');
+                row.className = `table-row ${player.cashed ? 'row-cashed' : ''}`.trim();
+                const user = document.createElement('div');
+                user.className = 't-user';
+                const avatarHost = document.createElement('div');
+                avatarHost.innerHTML = renderCrashAvatar(player, player.avatar || DEFAULT_AVATAR);
+                const meta = document.createElement('div');
+                meta.className = 't-meta';
+                meta.append(makeCell('t-name', name), makeCell('t-tier', player.isMine ? 'SEN' : 'OYUNCU'));
+                user.append(avatarHost.firstElementChild || document.createTextNode(''), meta);
+                row.append(
+                    user,
+                    makeCell('t-bet', formatCompactMc(amount)),
+                    makeCell('t-mult', mult > 0 ? `${safeFloat(mult).toFixed(2)}x` : '-'),
+                    makeCell('t-win', win > 0 ? '+' + formatCompactMc(win) : '-')
+                );
+                fragment.appendChild(row);
+            });
+        }
+        elLiveTableBody.replaceChildren(fragment);
     }
 
     function updateHud() {

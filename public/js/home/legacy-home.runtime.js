@@ -1230,8 +1230,11 @@ function getLeaderboardListForTab(tabType){       if (!currentLeaderboardData) r
         if (!isSelf) {           const addFriendButton = document.createElement('button');
           addFriendButton.className = 'btn btn-primary player-stats-action';           addFriendButton.id = 'playerStatsAddFriendBtn';           addFriendButton.type = 'button';           addFriendButton.append(createFaIcon('fa-user-plus'), document.createTextNode('Arkadaş Ekle'));           addFriendButton.addEventListener('click', () => sendFriendRequest(String(p.uid || targetUid)));
           body.appendChild(addFriendButton);         }          content.replaceChildren(createHeader(), body);       } catch (error) {
-        reportClientError('home.player_stats', error, { source: 'legacy-home.runtime.js', targetUid });
-        content.replaceChildren(createHeader(), renderStatusBody('fa-triangle-exclamation', error.message || 'Veri çekilemedi.', 'error'));       }     }     window.showPlayerStats = showPlayerStats;     window.openPlayerProfile = showPlayerStats;
+        const message = String(error?.message || '');
+        if (!/Oturum bulunamadı|UNAUTHENTICATED|AUTH_REQUIRED/i.test(message)) {
+          reportClientError('home.player_stats', error, { source: 'legacy-home.runtime.js', targetUid });
+        }
+        content.replaceChildren(createHeader(), renderStatusBody('fa-triangle-exclamation', /Oturum bulunamadı/i.test(message) ? 'Oyuncu istatistikleri için oturum açmalısın.' : (message || 'Veri çekilemedi.'), /Oturum bulunamadı/i.test(message) ? 'warning' : 'error'));       }     }     window.showPlayerStats = showPlayerStats;     window.openPlayerProfile = showPlayerStats;
     window.showPlayerProfile = showPlayerStats;      function renderLeaderboardTab(tabType = "level"){
       if (!currentLeaderboardData) return;
       currentLeaderboardTab = tabType;

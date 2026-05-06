@@ -1883,20 +1883,20 @@ body.pm-level-up-flash::after {
     flex-direction: column !important;
 }
 
-.pubg-theme * { color: #e0e0e0; -webkit-tap-highlight-color: transparent; touch-action: auto; }
+.pm-social-theme * { color: #e0e0e0; -webkit-tap-highlight-color: transparent; touch-action: auto; }
 
-.pubg-theme button, .pubg-theme input { touch-action: manipulation !important; }
+.pm-social-theme button, .pm-social-theme input { touch-action: manipulation !important; }
 
-.pubg-theme .ps-list-container, .pubg-theme .ps-chat-stream {
+.pm-social-theme .ps-list-container, .pm-social-theme .ps-chat-stream {
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     overscroll-behavior-y: contain !important;
     touch-action: pan-y !important; 
 }
 
-.sheet-section.pubg-theme { width: 100%; height: 100% !important; flex-direction: column; display: none; }
+.sheet-section.pm-social-theme { width: 100%; height: 100% !important; flex-direction: column; display: none; }
 
-.sheet-section.pubg-theme.is-active { display: flex !important; }
+.sheet-section.pm-social-theme.is-active { display: flex !important; }
 
 .sheet-shell.is-social .pm-social-layout { 
     
@@ -1924,33 +1924,33 @@ body.pm-level-up-flash::after {
 
 .ps-back-button:active { background: rgba(150, 30, 30, 1) !important; }
 
-.pubg-theme .ps-sidebar { background: rgba(20, 24, 30, 0.9) !important; border-right: 1px solid rgba(255,255,255,0.1) !important; padding: 0 !important; gap: 0 !important; align-items: stretch !important; }
+.pm-social-theme .ps-sidebar { background: rgba(20, 24, 30, 0.9) !important; border-right: 1px solid rgba(255,255,255,0.1) !important; padding: 0 !important; gap: 0 !important; align-items: stretch !important; }
 
-.pubg-theme .ps-tab { width: 100% !important; height: 55px !important; border-radius: 0 !important; background: transparent !important; color: #9aa0a6 !important; font-weight: 800 !important; font-size: 0.85rem !important; border: none !important; border-bottom: 1px solid rgba(255,255,255,0.05) !important; display: flex !important; align-items: center !important; justify-content: center !important; box-shadow: none !important; }
+.pm-social-theme .ps-tab { width: 100% !important; height: 55px !important; border-radius: 0 !important; background: transparent !important; color: #9aa0a6 !important; font-weight: 800 !important; font-size: 0.85rem !important; border: none !important; border-bottom: 1px solid rgba(255,255,255,0.05) !important; display: flex !important; align-items: center !important; justify-content: center !important; box-shadow: none !important; }
 
-.pubg-theme .ps-tab span { display: block !important; color: inherit !important; }
+.pm-social-theme .ps-tab span { display: block !important; color: inherit !important; }
 
-.pubg-theme .ps-tab i { display: none !important; }
+.pm-social-theme .ps-tab i { display: none !important; }
 
-.pubg-theme .ps-tab.is-active { background: rgba(255, 255, 255, 0.1) !important; color: #ffffff !important; border-left: 4px solid #f2a900 !important; }
+.pm-social-theme .ps-tab.is-active { background: rgba(255, 255, 255, 0.1) !important; color: #ffffff !important; border-left: 4px solid #f2a900 !important; }
 
-.pubg-theme .ps-mid-panel { background: rgba(15, 18, 22, 0.85) !important; border-right: 1px solid rgba(255,255,255,0.1) !important; display: flex !important; flex-direction: column !important; }
+.pm-social-theme .ps-mid-panel { background: rgba(15, 18, 22, 0.85) !important; border-right: 1px solid rgba(255,255,255,0.1) !important; display: flex !important; flex-direction: column !important; }
 
-.pubg-theme .ps-mid-header { background: rgba(0,0,0,0.3) !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; justify-content: center !important; min-height: 45px !important; flex-shrink: 0 !important; display: flex !important; align-items: center !important; }
+.pm-social-theme .ps-mid-header { background: rgba(0,0,0,0.3) !important; border-bottom: 1px solid rgba(255,255,255,0.1) !important; justify-content: center !important; min-height: 45px !important; flex-shrink: 0 !important; display: flex !important; align-items: center !important; }
 
-.pubg-theme #psMidTitle { color: #e0e0e0 !important; font-size: 0.85rem !important; font-weight: 600 !important; }
+.pm-social-theme #psMidTitle { color: #e0e0e0 !important; font-size: 0.85rem !important; font-weight: 600 !important; }
 
-.pubg-theme .ps-list-item { background: rgba(255,255,255,0.05) !important; border: 1px solid transparent !important; border-radius: 4px !important; margin-bottom: 4px !important; }
+.pm-social-theme .ps-list-item { background: rgba(255,255,255,0.05) !important; border: 1px solid transparent !important; border-radius: 4px !important; margin-bottom: 4px !important; }
 
-.pubg-theme .ps-list-item.is-active { background: rgba(255,255,255,0.15) !important; border-color: #555 !important; }
+.pm-social-theme .ps-list-item.is-active { background: rgba(255,255,255,0.15) !important; border-color: #555 !important; }
 
-.pubg-theme .ps-list-title { color: #fff !important; font-weight: 700 !important; }
+.pm-social-theme .ps-list-title { color: #fff !important; font-weight: 700 !important; }
 
-.pubg-theme .ps-list-sub { color: #aaa !important; }
+.pm-social-theme .ps-list-sub { color: #aaa !important; }
 
-.pubg-theme .ps-main-panel { background: rgba(10, 12, 15, 0.75) !important; display: flex !important; flex-direction: column !important; height: 100% !important; min-height: 0 !important; min-width: 0 !important; }
+.pm-social-theme .ps-main-panel { background: rgba(10, 12, 15, 0.75) !important; display: flex !important; flex-direction: column !important; height: 100% !important; min-height: 0 !important; min-width: 0 !important; }
 
-.pubg-theme .ps-chat-header { 
+.pm-social-theme .ps-chat-header { 
     display: flex !important; 
     background: rgba(0, 0, 0, 0.25) !important; 
     backdrop-filter: blur(8px) !important; -webkit-backdrop-filter: blur(8px) !important;
@@ -1963,7 +1963,7 @@ body.pm-level-up-flash::after {
     min-width: 0 !important; 
 }
 
-.pubg-theme #psMobileBackBtn { 
+.pm-social-theme #psMobileBackBtn { 
     display: none !important; 
     background: transparent !important; 
     border: none !important; 
@@ -1974,7 +1974,7 @@ body.pm-level-up-flash::after {
     box-shadow: none !important;
 }
 
-.pubg-theme .ps-chat-title-wrap { 
+.pm-social-theme .ps-chat-title-wrap { 
     display: flex !important; 
     flex-direction: row !important; 
     align-items: center !important; 
@@ -1983,7 +1983,7 @@ body.pm-level-up-flash::after {
     flex: 1 1 auto !important; 
 }
 
-.pubg-theme #psChatTitle { 
+.pm-social-theme #psChatTitle { 
     color: #ffffff !important; 
     font-weight: 800 !important; 
     font-size: 1.1rem !important; 
@@ -1991,7 +1991,7 @@ body.pm-level-up-flash::after {
     white-space: nowrap !important; 
 }
 
-.pubg-theme #psChatSubtitle { 
+.pm-social-theme #psChatSubtitle { 
     color: #f2a900 !important; 
     font-size: 0.95rem !important; 
     font-weight: 700 !important;
@@ -2001,21 +2001,21 @@ body.pm-level-up-flash::after {
     text-overflow: ellipsis !important; 
 }
 
-.pubg-theme .ps-chat-stream { flex: 1 !important; padding: 15px !important; }
+.pm-social-theme .ps-chat-stream { flex: 1 !important; padding: 15px !important; }
 
-.pubg-theme .ps-chat-bubble { max-width: 90% !important; }
+.pm-social-theme .ps-chat-bubble { max-width: 90% !important; }
 
-.pubg-theme .ps-chat-avatar { width: 44px !important; height: 44px !important; border-radius: 4px !important; border: 2px solid #555 !important; }
+.pm-social-theme .ps-chat-avatar { width: 44px !important; height: 44px !important; border-radius: 4px !important; border: 2px solid #555 !important; }
 
-.pubg-theme .ps-chat-main { background: rgba(255, 255, 255, 0.1) !important; border: 1px solid rgba(255,255,255,0.2) !important; border-radius: 0 !important; color: #fff !important; padding: 10px 14px !important; box-shadow: none !important; }
+.pm-social-theme .ps-chat-main { background: rgba(255, 255, 255, 0.1) !important; border: 1px solid rgba(255,255,255,0.2) !important; border-radius: 0 !important; color: #fff !important; padding: 10px 14px !important; box-shadow: none !important; }
 
-.pubg-theme .ps-chat-bubble.is-self .ps-chat-main { background: rgba(58, 85, 123, 0.9) !important; color: #fff !important; border-color: rgba(44, 66, 99, 0.9) !important; }
+.pm-social-theme .ps-chat-bubble.is-self .ps-chat-main { background: rgba(58, 85, 123, 0.9) !important; color: #fff !important; border-color: rgba(44, 66, 99, 0.9) !important; }
 
-.pubg-theme .ps-chat-text { font-weight: 600 !important; font-size: 0.95rem !important; color: #fff !important; }
+.pm-social-theme .ps-chat-text { font-weight: 600 !important; font-size: 0.95rem !important; color: #fff !important; }
 
-.pubg-theme .ps-chat-name { color: #bbb !important; font-size: 0.8rem !important; text-transform: uppercase; }
+.pm-social-theme .ps-chat-name { color: #bbb !important; font-size: 0.8rem !important; text-transform: uppercase; }
 
-.pubg-theme .ps-chat-input-area { background: rgba(20, 24, 30, 0.95) !important; border-top: 1px solid rgba(255,255,255,0.1) !important; padding: 8px 12px !important; padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important; gap: 10px !important; height: auto !important; min-height: 56px !important; flex-shrink: 0 !important; }
+.pm-social-theme .ps-chat-input-area { background: rgba(20, 24, 30, 0.95) !important; border-top: 1px solid rgba(255,255,255,0.1) !important; padding: 8px 12px !important; padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important; gap: 10px !important; height: auto !important; min-height: 56px !important; flex-shrink: 0 !important; }
 
 .pubg-icons { display: flex !important; gap: 12px !important; align-items: center !important; flex-shrink: 0 !important; }
 
@@ -2023,11 +2023,11 @@ body.pm-level-up-flash::after {
 
 .pubg-icons button:active { opacity: 1 !important; transform: scale(0.95) !important; }
 
-.pubg-theme .ps-chat-input-area input { background: rgba(0,0,0,0.5) !important; border: 1px solid #555 !important; border-radius: 2px !important; color: #fff !important; height: 38px !important; font-weight: 600 !important; }
+.pm-social-theme .ps-chat-input-area input { background: rgba(0,0,0,0.5) !important; border: 1px solid #555 !important; border-radius: 2px !important; color: #fff !important; height: 38px !important; font-weight: 600 !important; }
 
-.pubg-theme .ps-chat-input-area input::placeholder { color: #888 !important; }
+.pm-social-theme .ps-chat-input-area input::placeholder { color: #888 !important; }
 
-.pubg-theme .ps-send-btn { background: transparent !important; color: #ccc !important; font-size: 1.4rem !important; width: auto !important; box-shadow: none !important; }
+.pm-social-theme .ps-send-btn { background: transparent !important; color: #ccc !important; font-size: 1.4rem !important; width: auto !important; box-shadow: none !important; }
 
 .ps-modal {
     position: fixed;
@@ -2355,7 +2355,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 .ps-chat-header,
-.pubg-theme .ps-chat-header {
+.pm-social-theme .ps-chat-header {
   display: flex !important;
   align-items: center !important;
   gap: 10px !important;
@@ -2368,7 +2368,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 .ps-chat-title-wrap,
-.pubg-theme .ps-chat-title-wrap {
+.pm-social-theme .ps-chat-title-wrap {
   display: grid !important;
   gap: 2px !important;
   flex: 1 1 auto !important;
@@ -2376,7 +2376,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 #psChatTitle,
-.pubg-theme #psChatTitle {
+.pm-social-theme #psChatTitle {
   display: block !important;
   color: #fff !important;
   font-weight: 800 !important;
@@ -2388,7 +2388,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 #psChatSubtitle,
-.pubg-theme #psChatSubtitle {
+.pm-social-theme #psChatSubtitle {
   display: block !important;
   color: rgba(255,255,255,.68) !important;
   font-weight: 600 !important;
@@ -2408,7 +2408,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 .ps-chat-actions .icon-btn,
-.pubg-theme .ps-chat-actions .icon-btn {
+.pm-social-theme .ps-chat-actions .icon-btn {
   width: 40px !important;
   height: 40px !important;
   min-height: 40px !important;
@@ -2421,18 +2421,18 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 .ps-chat-stream,
-.pubg-theme .ps-chat-stream {
+.pm-social-theme .ps-chat-stream {
   padding: 16px 14px 10px !important;
 }
 
 .ps-chat-bubble,
-.pubg-theme .ps-chat-bubble {
+.pm-social-theme .ps-chat-bubble {
   width: min(92%, 520px) !important;
   max-width: min(92%, 520px) !important;
 }
 
 .ps-chat-bubble.is-global,
-.pubg-theme .ps-chat-bubble.is-global {
+.pm-social-theme .ps-chat-bubble.is-global {
   width: min(100%, 760px) !important;
   max-width: min(100%, 760px) !important;
 }
@@ -2450,7 +2450,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 .ps-chat-avatar,
-.pubg-theme .ps-chat-avatar {
+.pm-social-theme .ps-chat-avatar {
   width: 42px !important;
   height: 42px !important;
   min-width: 42px !important;
@@ -2468,7 +2468,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 .ps-chat-main,
-.pubg-theme .ps-chat-main {
+.pm-social-theme .ps-chat-main {
   position: relative !important;
   display: grid !important;
   gap: 6px !important;
@@ -2480,7 +2480,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
 }
 
 .ps-chat-bubble.is-self .ps-chat-main,
-.pubg-theme .ps-chat-bubble.is-self .ps-chat-main {
+.pm-social-theme .ps-chat-bubble.is-self .ps-chat-main {
   border-radius: 22px 22px 10px 22px !important;
   background: linear-gradient(180deg, rgba(56,114,255,.24), rgba(93,95,254,.15)) !important;
   border-color: rgba(93,95,254,.28) !important;
@@ -2536,7 +2536,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
   font-size: .78rem !important;
 }
 
-.pubg-theme .ps-chat-input-area,
+.pm-social-theme .ps-chat-input-area,
 .ps-chat-input-area {
   background: linear-gradient(180deg, rgba(6,10,17,.92), rgba(8,12,20,.98)) !important;
   gap: 8px !important;
@@ -2562,7 +2562,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
   padding: 0 !important;
 }
 
-.pubg-theme .ps-chat-input-area input,
+.pm-social-theme .ps-chat-input-area input,
 .ps-chat-input-area input {
   height: 46px !important;
   border-radius: 16px !important;
@@ -2572,7 +2572,7 @@ a, button, input, textarea, select, .btn, .game-card, .sheet, .social-shell, .pm
   font-weight: 700 !important;
 }
 
-.pubg-theme .ps-send-btn,
+.pm-social-theme .ps-send-btn,
 .ps-send-btn {
   width: 46px !important;
   height: 46px !important;
@@ -3509,20 +3509,20 @@ img, video, canvas, svg {
 
 @media (max-width: 900px) {
     .sheet-shell.is-social .pm-social-layout { display: flex !important; flex-direction: row !important; height: 100% !important; width: 100% !important; }
-    .pubg-theme .ps-sidebar { width: 110px !important; flex-shrink: 0 !important; }
-    .pubg-theme .ps-tab { font-size: 0.75rem !important; text-align: center !important; padding: 5px !important; white-space: normal !important; line-height: 1.2 !important; }
-    .pubg-theme .ps-sidebar span { display: block !important; } 
+    .pm-social-theme .ps-sidebar { width: 110px !important; flex-shrink: 0 !important; }
+    .pm-social-theme .ps-tab { font-size: 0.75rem !important; text-align: center !important; padding: 5px !important; white-space: normal !important; line-height: 1.2 !important; }
+    .pm-social-theme .ps-sidebar span { display: block !important; } 
     
     .ps-back-button { height: 64px !important; }
     
-    .pubg-theme .ps-mid-panel { display: flex !important; flex-direction: column !important; flex-grow: 1 !important; width: calc(100% - 110px) !important; }
-    .pubg-theme .ps-main-panel { display: none !important; width: 100% !important; }
+    .pm-social-theme .ps-mid-panel { display: flex !important; flex-direction: column !important; flex-grow: 1 !important; width: calc(100% - 110px) !important; }
+    .pm-social-theme .ps-main-panel { display: none !important; width: 100% !important; }
 
     .sheet-shell.is-social .pm-social-layout.is-chat-active .ps-sidebar { display: none !important; }
     .sheet-shell.is-social .pm-social-layout.is-chat-active .ps-mid-panel { display: none !important; }
     .sheet-shell.is-social .pm-social-layout.is-chat-active .ps-main-panel { display: flex !important; }
 
-    .pubg-theme #psMobileBackBtn { display: flex !important; align-items: center !important; justify-content: center !important; }
+    .pm-social-theme #psMobileBackBtn { display: flex !important; align-items: center !important; justify-content: center !important; }
 
     .pubg-icons { gap: 8px !important; }
     .pubg-icons button { font-size: 1.1rem !important; }
@@ -3566,26 +3566,26 @@ img, video, canvas, svg {
 
 @media (max-width: 760px) {
   .ps-chat-actions .icon-btn,
-  .pubg-theme .ps-chat-actions .icon-btn {
+  .pm-social-theme .ps-chat-actions .icon-btn {
     width: 36px !important;
     height: 36px !important;
     min-height: 36px !important;
   }
 
   .ps-chat-bubble,
-  .pubg-theme .ps-chat-bubble {
+  .pm-social-theme .ps-chat-bubble {
     width: min(96%, 520px) !important;
     max-width: min(96%, 520px) !important;
   }
 
   .ps-chat-header,
-  .pubg-theme .ps-chat-header {
+  .pm-social-theme .ps-chat-header {
     padding: 10px 12px !important;
     gap: 8px !important;
   }
 
   #psChatTitle,
-  .pubg-theme #psChatTitle {
+  .pm-social-theme #psChatTitle {
     font-size: .98rem !important;
   }
 }

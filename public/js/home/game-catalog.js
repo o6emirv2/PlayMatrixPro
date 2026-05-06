@@ -73,13 +73,13 @@ function installOnlineGameAuthGuard(root = document) {
   if (document.body?.dataset.onlineGameAuthGuardBound === '1') return;
   if (document.body) document.body.dataset.onlineGameAuthGuardBound = '1';
   root.addEventListener('click', (event) => {
-    const trigger = event.target?.closest?.('a[href*="games"], [data-requires-auth="true"]');
+    const trigger = event.target?.closest?.('[data-access="auth"], [data-requires-auth="true"]');
     if (!trigger) return;
     const href = trigger.getAttribute?.('href') || '';
     if (!href && trigger.dataset.requiresAuth !== 'true') return;
     const normalized = normalizeGameRoute(href || trigger.dataset.href || '');
     const isProtectedGame = /\/games\/(crash|chess|pisti|pattern-master|space-pro|snake-pro)$/i.test(normalized);
-    if (!isProtectedGame && trigger.dataset.requiresAuth !== 'true') return;
+    if (!isProtectedGame && trigger.dataset.requiresAuth !== 'true' && trigger.dataset.access !== 'auth') return;
     if (getCurrentHomeUser()) return;
     event.preventDefault();
     event.stopPropagation();
