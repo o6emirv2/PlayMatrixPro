@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PlayMatrix | AnaSayfa</title>
+  <meta name="description" content="PlayMatrix AnaSayfa; oyunlar, ödüller, liderlik ve sosyal bağlantılar için mobil uyumlu merkez." />
+  <meta name="theme-color" content="#070a12" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no" />
+  <link rel="icon" href="/favicon.ico" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body data-page="home">
+  <div class="pm-bg" aria-hidden="true"></div>
+
+  <main class="pm-page" id="top">
+    <header class="pm-header" aria-label="PlayMatrix üst alanı">
+      <button class="pm-brand" type="button" data-scroll-target="top" aria-label="PlayMatrix AnaSayfa">
+        <img class="pm-brand-logo" src="/public/assets/images/logo.png" alt="PlayMatrix" />
+        <span class="pm-brand-text">PlayMatrix</span>
+      </button>
+
+      <section class="pm-account-strip" aria-label="Hesap özeti">
+        <div class="pm-balance-pill" title="MC Bakiyesi">
+          <span class="pm-balance-value" id="balanceValue" data-full-value="0">0</span>
+          <span class="pm-mc-chip">MC</span>
+        </div>
+        <button class="pm-avatar-button" type="button" id="profileButton" aria-label="Profil menüsünü aç">
+          <img class="pm-avatar-img" id="profileAvatar" src="/public/assets/avatars/system/fallback.svg" alt="Profil" />
+        </button>
+      </section>
+    </header>
+
+    <nav class="pm-nav" aria-label="Ana gezinme">
+      <button class="pm-nav-item is-active" type="button" data-scroll-target="top">
+        <i class="fa-solid fa-house"></i><span>AnaSayfa</span>
+      </button>
+      <button class="pm-nav-item" type="button" data-action="games">
+        <i class="fa-solid fa-gamepad"></i><span>Oyunlar</span>
+      </button>
+      <button class="pm-nav-item" type="button" data-action="leaderboard">
+        <i class="fa-solid fa-trophy"></i><span>Liderlik</span>
+      </button>
+      <button class="pm-nav-item" type="button" data-action="promos">
+        <i class="fa-solid fa-gift"></i><span>Promolar</span>
+      </button>
+      <button class="pm-nav-item" type="button" data-scroll-target="socialLinks">
+        <i class="fa-solid fa-share-nodes"></i><span>Sosyal Linkler</span>
+      </button>
+    </nav>
+
+    <section class="pm-hero" aria-label="PlayMatrix ödül görselleri">
+      <div class="pm-hero-viewport" id="heroViewport">
+        <div class="pm-hero-track" id="heroTrack">
+          <article class="pm-hero-slide is-active" aria-label="50.000 MC kayıt ödülü">
+            <img src="/public/assets/images/hero-50000-kayit-odulu.jpeg" alt="50.000 MC Kayıt Ödülü" />
+          </article>
+          <article class="pm-hero-slide" aria-label="100.000 MC e-posta doğrulama ödülü">
+            <img src="/public/assets/images/hero-100000-eposta-dogrulama.jpeg" alt="100.000 MC E-posta Doğrulama Ödülü" />
+          </article>
+          <article class="pm-hero-slide" aria-label="Aylık en aktif 5 oyuncuya aktivite ödülü">
+            <img src="/public/assets/images/hero-aylik-aktivite-odulu.jpeg" alt="Aylık En Aktif 5 Oyuncuya Aktivite Ödülü" />
+          </article>
+        </div>
+      </div>
+      <div class="pm-hero-dots" id="heroDots" aria-label="Hero görsel seçimi">
+        <button class="pm-dot is-active" type="button" data-slide="0" aria-label="50.000 MC Kayıt Ödülü"></button>
+        <button class="pm-dot" type="button" data-slide="1" aria-label="100.000 MC E-posta Doğrulama Ödülü"></button>
+        <button class="pm-dot" type="button" data-slide="2" aria-label="Aylık aktivite ödülü"></button>
+      </div>
+    </section>
+
+    <section class="pm-social" id="socialLinks" aria-label="Destek ve sosyal bağlantılar">
+      <a class="pm-social-card" id="supportLink" href="#support" data-action="support">
+        <span class="pm-social-icon"><i class="fa-solid fa-headset"></i></span>
+        <span class="pm-social-text">Destek Talebi</span>
+      </a>
+      <a class="pm-social-card" id="instagramLink" href="https://instagram.com/" target="_blank" rel="noopener noreferrer">
+        <span class="pm-social-icon"><i class="fa-brands fa-instagram"></i></span>
+        <span class="pm-social-text">Instagram</span>
+      </a>
+      <a class="pm-social-card" id="telegramLink" href="https://t.me/" target="_blank" rel="noopener noreferrer">
+        <span class="pm-social-icon"><i class="fa-brands fa-telegram"></i></span>
+        <span class="pm-social-text">Telegram</span>
+      </a>
+      <a class="pm-social-card" id="tiktokLink" href="https://www.tiktok.com/" target="_blank" rel="noopener noreferrer">
+        <span class="pm-social-icon"><i class="fa-brands fa-tiktok"></i></span>
+        <span class="pm-social-text">TikTok</span>
+      </a>
+    </section>
+  </main>
+
+  <nav class="pm-bottom-nav" aria-label="Sabit alt gezinme">
+    <button class="pm-bottom-item is-active" type="button" data-action="games">
+      <i class="fa-solid fa-gamepad"></i><span>Oyunlar</span>
+    </button>
+    <button class="pm-bottom-item" type="button" data-action="leaderboard">
+      <i class="fa-solid fa-trophy"></i><span>Liderlik</span>
+    </button>
+    <button class="pm-bottom-item" type="button" data-action="social">
+      <i class="fa-solid fa-arrow-right-to-bracket"></i><span>Sosyal Mer...</span>
+    </button>
+    <button class="pm-bottom-item" type="button" data-action="profile">
+      <i class="fa-solid fa-plus"></i><span>Hesabım</span>
+    </button>
+    <button class="pm-bottom-item" type="button" data-action="support">
+      <i class="fa-solid fa-headset"></i><span>Destek</span>
+    </button>
+  </nav>
+
+  <div class="pm-modal" id="pmModal" aria-hidden="true">
+    <div class="pm-modal-backdrop" data-close-modal></div>
+    <section class="pm-modal-card" role="dialog" aria-modal="true" aria-labelledby="pmModalTitle">
+      <button class="pm-modal-close" type="button" data-close-modal aria-label="Kapat"><i class="fa-solid fa-xmark"></i></button>
+      <h2 id="pmModalTitle">PlayMatrix</h2>
+      <p id="pmModalText">Bu alan hazırlanıyor.</p>
+      <button class="pm-modal-cta" type="button" data-close-modal>Tamam</button>
+    </section>
+  </div>
+
+  <script type="module" src="/script.js"></script>
+</body>
+</html>
