@@ -1,20 +1,11 @@
-import { qsa } from './dom-utils.js';
+import { qsa } from "./dom-utils.js";
 
 export function installModalSafety(root = document) {
-  const preventTextSelect = (event) => {
-    if (event.target.closest('input, textarea, [contenteditable="true"]')) return;
-    event.preventDefault();
-  };
-  root.addEventListener('selectstart', preventTextSelect, { passive: false });
-  root.addEventListener('dragstart', (event) => event.preventDefault(), { passive: false });
-  qsa('button, a, [role="button"]', root).forEach((element) => {
-    element.setAttribute('draggable', 'false');
-    element.style.touchAction = 'manipulation';
+  qsa(".ps-modal:not(.active)", root).forEach((modal) => {
+    modal.setAttribute("aria-hidden", "true");
+    modal.hidden = true;
   });
-  let lastTouch = 0;
-  root.addEventListener('touchend', (event) => {
-    const now = Date.now();
-    if (now - lastTouch < 280 && event.target.closest('button, a, [role="button"]')) event.preventDefault();
-    lastTouch = now;
-  }, { passive: false });
+  qsa(".sheet-shell:not(.is-open)", root).forEach((sheet) => {
+    sheet.setAttribute("aria-hidden", "true");
+  });
 }

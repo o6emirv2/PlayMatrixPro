@@ -1,3 +1,10 @@
+import { byId } from "./dom-utils.js";
+
 export function installInviteUiGuards() {
-  window.__PM_INVITE_UI_READY__ = true;
+  ["inviteCode", "inviteLink"].forEach((id) => {
+    const node = byId(id);
+    if (!node) return;
+    node.readOnly = true;
+    node.setAttribute("aria-readonly", "true");
+  });
 }
